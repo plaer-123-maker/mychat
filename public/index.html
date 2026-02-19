@@ -6,7 +6,7 @@
 <title>MyChat</title>
 <script src="/socket.io/socket.io.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Geologica:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
+<style> 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
@@ -233,9 +233,23 @@
   <div class="login-card">
     <div class="login-logo">💬</div>
     <div class="login-title">MyChat</div>
-    <div class="login-sub">Введи своё имя чтобы войти</div>
-    <input class="login-input" id="nameInput" type="text" placeholder="Твоё имя..." maxlength="20" />
-    <button class="login-btn" onclick="joinChat()">Войти в чат →</button>
+    <div class="login-sub">Введи логин и пароль, чтобы войти</div>
+    <input class="login-input" id="usernameInput" type="text" placeholder="Логин" maxlength="20" required />
+    <input class="login-input" id="passwordInput" type="password" placeholder="Пароль" required />
+    <button class="login-btn" onclick="registerOrLogin()">Войти в чат →</button>
+    <div class="login-sub">Ещё нет аккаунта? <span onclick="showRegisterForm()" style="color: var(--accent); cursor: pointer;">Зарегистрироваться</span></div>
+  </div>
+</div>
+
+<!-- Регистрация (сейчас скрыта) -->
+<div id="registerScreen" style="display:none;">
+  <div class="login-card">
+    <div class="login-logo">💬</div>
+    <div class="login-title">Регистрация</div>
+    <input class="login-input" id="newUsernameInput" type="text" placeholder="Новый логин" maxlength="20" required />
+    <input class="login-input" id="newPasswordInput" type="password" placeholder="Новый пароль" required />
+    <button class="login-btn" onclick="register()">Зарегистрироваться</button>
+    <div class="login-sub">Уже есть аккаунт? <span onclick="showLoginForm()" style="color: var(--accent); cursor: pointer;">Войти</span></div>
   </div>
 </div>
 
@@ -279,150 +293,58 @@
 </div>
 
 <script>
-const socket = io();
-let myName = '';
-let typingTimeout = null;
-let isTyping = false;
-const typingUsers = new Set();
-let pendingImage = null;
+// Логика регистрации и входа
+let users = {}; // Для хранения пользователей
 
-function joinChat() {
-  const name = document.getElementById('nameInput').value.trim();
-  if (!name) return;
-  myName = name;
-  socket.emit('join', name);
+function register() {
+  const newUsername = document.getElementById('newUsernameInput').value.trim();
+  const newPassword = document.getElementById('newPasswordInput').value.trim();
+
+  if (!newUsername || !newPassword) return;
+
+  // Проверка на существование пользователя
+  if (users[newUsername]) {
+    alert('Пользователь с таким логином уже существует');
+    return;
+  }
+
+  // Сохраняем пользователя
+  users[newUsername] = newPassword;
+  alert('Регистрация успешна!');
+  showLoginForm();
+}
+
+function registerOrLogin() {
+  const username = document.getElementById('usernameInput').value.trim();
+  const password = document.getElementById('passwordInput').value.trim();
+
+  if (!username || !password) return;
+
+  // Проверка на существование пользователя
+  if (users[username] === password) {
+    alert('Добро пожаловать в чат!');
+    joinChat(username);
+  } else {
+    alert('Неверный логин или пароль');
+  }
+}
+
+function showRegisterForm() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('registerScreen').style.display = 'flex';
+}
+
+function showLoginForm() {
+  document.getElementById('registerScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+}
+
+function joinChat(username) {
+  myName = username;
+  socket.emit('join', username);
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('chatScreen').style.display = 'flex';
   document.getElementById('msgInput').focus();
-}
-
-document.getElementById('nameInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') joinChat();
-});
-
-socket.on('history', (msgs) => { msgs.forEach(addMessage); scrollBottom(); });
-socket.on('message', (msg) => {
-  typingUsers.delete(msg.username);
-  updateTyping();
-  addMessage(msg);
-  scrollBottom();
-});
-socket.on('user_joined', ({ username, users, count }) => { addSystem(`${username} вошёл в чат`); updateUsers(users, count); });
-socket.on('user_left', ({ username, users, count }) => { addSystem(`${username} вышел из чата`); updateUsers(users, count); });
-socket.on('typing', (username) => { typingUsers.add(username); updateTyping(); });
-socket.on('stop_typing', (username) => { typingUsers.delete(username); updateTyping(); });
-
-function updateTyping() {
-  const el = document.getElementById('typingIndicator');
-  el.textContent = typingUsers.size ? `${[...typingUsers].join(', ')} печатает...` : '';
-}
-
-// Выбор фото
-function handleImageSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { alert('Фото слишком большое! Максимум 5MB'); return; }
-
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    pendingImage = ev.target.result;
-    document.getElementById('previewImg').src = pendingImage;
-    document.getElementById('imagePreview').style.display = 'flex';
-  };
-  reader.readAsDataURL(file);
-  e.target.value = '';
-}
-
-function removePreview() {
-  pendingImage = null;
-  document.getElementById('imagePreview').style.display = 'none';
-  document.getElementById('previewImg').src = '';
-}
-
-// Отправка
-function sendMessage() {
-  if (pendingImage) {
-    socket.emit('image', pendingImage);
-    removePreview();
-    return;
-  }
-  const input = document.getElementById('msgInput');
-  const text = input.value.trim();
-  if (!text) return;
-  socket.emit('message', text);
-  socket.emit('stop_typing');
-  isTyping = false;
-  input.value = '';
-  input.style.height = 'auto';
-}
-
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-}
-
-function handleTyping(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  if (!isTyping) { isTyping = true; socket.emit('typing'); }
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(() => { isTyping = false; socket.emit('stop_typing'); }, 1500);
-}
-
-function addMessage(msg) {
-  const container = document.getElementById('messages');
-  const isMe = msg.username === myName;
-  const div = document.createElement('div');
-  div.className = `message ${isMe ? 'out' : 'in'}`;
-
-  let content = '';
-  if (msg.type === 'image') {
-    content = `<div class="bubble image-bubble"><img src="${msg.image}" onclick="openLightbox('${msg.image}')" loading="lazy" /></div>`;
-  } else {
-    content = `<div class="bubble">${escapeHtml(msg.text)}</div>`;
-  }
-
-  div.innerHTML = `
-    ${!isMe ? `<div class="msg-sender">${escapeHtml(msg.username)}</div>` : ''}
-    ${content}
-    <div class="msg-time">${msg.time}</div>
-  `;
-  container.appendChild(div);
-}
-
-function addSystem(text) {
-  const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'system-msg';
-  div.textContent = text;
-  container.appendChild(div);
-  scrollBottom();
-}
-
-function updateUsers(users, count) {
-  document.getElementById('onlineCount').textContent = `${count} онлайн`;
-  document.getElementById('usersBar').innerHTML = users.map(u => `
-    <div class="user-chip ${u === myName ? 'me' : ''}">
-      <div class="dot"></div>${escapeHtml(u)}${u === myName ? ' (ты)' : ''}
-    </div>
-  `).join('');
-}
-
-// Лайтбокс
-function openLightbox(src) {
-  document.getElementById('lightboxImg').src = src;
-  document.getElementById('lightbox').classList.add('open');
-}
-function closeLightbox() {
-  document.getElementById('lightbox').classList.remove('open');
-}
-
-function scrollBottom() {
-  const msgs = document.getElementById('messages');
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function escapeHtml(text) {
-  return String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 </script>
 </body>

@@ -1,77 +1,63 @@
 const express = require('express');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  maxHttpBufferSize: 5e6 // 5MB для фото
+const bodyParser = require('body-parser');
+const bcrypt = require('bcrypt'); // Для безопасного хранения паролей
+const socketIo = require('socket.io');
+const server = require('http').Server(app);
+const io = socketIo(server);
+
+app.use(bodyParser.json());
+
+let users = {}; // В этой структуре будут храниться пользователи (логин и пароль)
+
+// Endpoint для регистрации
+app.post('/register', async (req, res) => {
+  const { username, password } = req.body;
+
+  // Проверка на существование пользователя
+  if (users[username]) {
+    return res.status(400).send('Пользователь с таким логином уже существует');
+  }
+
+  // Хэшируем пароль
+  const hashedPassword = await bcrypt.hash(password, 10);
+  users[username] = hashedPassword; // Сохраняем пользователя
+
+  res.status(201).send('Регистрация успешна');
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+// Endpoint для входа
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
 
-const users = {};
-const messages = [];
+  if (!users[username]) {
+    return res.status(400).send('Пользователь не найден');
+  }
 
+  // Проверка пароля
+  const isMatch = await bcrypt.compare(password, users[username]);
+  if (!isMatch) {
+    return res.status(400).send('Неверный пароль');
+  }
+
+  res.status(200).send('Вход успешен');
+});
+
+// WebSocket для общения в чате
 io.on('connection', (socket) => {
-  console.log('Новый пользователь:', socket.id);
+  console.log('A user connected');
 
-  socket.on('join', (username) => {
-    users[socket.id] = username;
-    socket.username = username;
-    socket.emit('history', messages);
-    io.emit('user_joined', {
-      username,
-      users: Object.values(users),
-      count: Object.keys(users).length
-    });
-  });
-
-  // Текстовое сообщение
-  socket.on('message', (text) => {
-    const msg = {
-      id: Date.now(),
-      username: socket.username || 'Аноним',
-      text,
-      type: 'text',
-      time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    };
-    messages.push(msg);
-    if (messages.length > 100) messages.shift();
+  // Пример сообщения, отправляемого в чат
+  socket.on('message', (msg) => {
     io.emit('message', msg);
   });
-
-  // Фото
-  socket.on('image', (data) => {
-    const msg = {
-      id: Date.now(),
-      username: socket.username || 'Аноним',
-      image: data,
-      type: 'image',
-      time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-    };
-    messages.push(msg);
-    if (messages.length > 100) messages.shift();
-    io.emit('message', msg);
-  });
-
-  socket.on('typing', () => socket.broadcast.emit('typing', socket.username));
-  socket.on('stop_typing', () => socket.broadcast.emit('stop_typing', socket.username));
 
   socket.on('disconnect', () => {
-    if (socket.username) {
-      delete users[socket.id];
-      io.emit('user_left', {
-        username: socket.username,
-        users: Object.values(users),
-        count: Object.keys(users).length
-      });
-    }
+    console.log('User disconnected');
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`✅ Чат запущен: http://localhost:${PORT}`);
+// Запуск сервера на порту 3000
+server.listen(3000, () => {
+  console.log('Server is running on port 3000');
 });
