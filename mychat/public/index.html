@@ -227,7 +227,9 @@ currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
 // === WEBRTC CONFIG & STATE ===
 var localStream, remoteStream, peerConnection, incomingCallData=null;
 var currentFacingMode = 'user';
-var pendingIce = []; // Queue for ICE candidates
+var pendingIce = []; 
+var earlyCandidates = []; // Queue for ICE candidates before answer
+
 const rtcConfig = { 
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -692,7 +694,6 @@ function loadTab(tab){
 }
 
 // === IMPROVED CALL LOGIC ===
-// Draggable local video
 const dragVideo = document.getElementById('localVideo');
 let isDragging = false;
 let startX, startY, initialLeft, initialTop;
@@ -752,22 +753,29 @@ function startCall(userToCall, type){
     }
 
     peerConnection=new RTCPeerConnection(rtcConfig);
-    
     pendingIce = [];
+    earlyCandidates = []; // Reset early candidates
     
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
     
-    // Improved ontrack: manual MediaStream creation
-    remoteStream = new MediaStream();
-    document.getElementById('remoteVideo').srcObject = remoteStream;
-    
+    // Improved ontrack logic: force play and check streams
     peerConnection.ontrack=function(e){
-      remoteStream.addTrack(e.track);
+      const remoteVideo = document.getElementById('remoteVideo');
+      if (e.streams && e.streams[0]) {
+        remoteVideo.srcObject = e.streams[0];
+      } else {
+        if (!remoteVideo.srcObject) {
+          remoteVideo.srcObject = new MediaStream();
+        }
+        remoteVideo.srcObject.addTrack(e.track);
+      }
+      remoteVideo.play().catch(e => console.log('Autoplay blocked', e));
     };
 
     localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
     
-    peerConnection.createOffer().then(function(offer){
+    peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
+    .then(function(offer){
       return peerConnection.setLocalDescription(offer);
     }).then(function() {
       socket.emit('callUser',{userToCall:userToCall, signalData:peerConnection.localDescription, callType: type});
@@ -781,6 +789,7 @@ socket.on('incomingCall',function(d){
   let typeText = d.callType === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
   document.getElementById('incomingCallerName').textContent = typeText + ' от: ' + d.fromNickname;
   document.getElementById('incomingCallModal').classList.add('show');
+  earlyCandidates = []; // Clear old candidates from previous calls
 });
 
 function acceptCall(){
@@ -801,20 +810,28 @@ function acceptCall(){
     }
 
     peerConnection=new RTCPeerConnection(rtcConfig);
-    pendingIce = [];
+    
+    // Transfer early candidates to pending queue now that we have a connection
+    pendingIce = [...earlyCandidates];
+    earlyCandidates = [];
 
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:incomingCallData.from});};
     
-    remoteStream = new MediaStream();
-    document.getElementById('remoteVideo').srcObject = remoteStream;
-    
     peerConnection.ontrack=function(e){
-      remoteStream.addTrack(e.track);
+      const remoteVideo = document.getElementById('remoteVideo');
+      if (e.streams && e.streams[0]) {
+        remoteVideo.srcObject = e.streams[0];
+      } else {
+        if (!remoteVideo.srcObject) {
+          remoteVideo.srcObject = new MediaStream();
+        }
+        remoteVideo.srcObject.addTrack(e.track);
+      }
+      remoteVideo.play().catch(e => console.log('Autoplay blocked', e));
     };
 
     localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
     
-    // IMPORTANT: Set Remote -> Create Answer -> Set Local
     peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal))
     .then(function() {
       flushPendingIce();
@@ -851,6 +868,9 @@ socket.on('iceCandidate',function(candidate){
     } else {
       pendingIce.push(candidate);
     }
+  } else {
+    // If no peerConnection yet (waiting to accept), save for later
+    earlyCandidates.push(candidate);
   }
 });
 
