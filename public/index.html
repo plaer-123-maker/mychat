@@ -7,7 +7,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100vh; display:flex; justify-content:center; align-items:center; }
+body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100vh; overflow:hidden; }
 
 /* AUTH */
 .auth-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:#1a1a2e; display:flex; justify-content:center; align-items:center; z-index:1000; }
@@ -27,33 +27,61 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
 .nick-field.show { display:block; }
 
 /* CHAT */
-.chat-container { display:none; flex-direction:column; width:100%; height:100vh; max-width:800px; margin:0 auto; }
+.chat-container { display:none; flex-direction:column; width:100%; height:100vh; }
 .chat-container.active { display:flex; }
-.chat-header { background:#16213e; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; }
+.chat-header { background:#16213e; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; flex-shrink:0; }
 .chat-header h3 { font-size:18px; }
-.header-btns { display:flex; gap:10px; }
-.header-btns button { background:#0f3460; border:1px solid #333; color:#fff; padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; }
+.header-btns { display:flex; gap:8px; }
+.header-btns button { background:#0f3460; border:1px solid #333; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; }
 .header-btns button:hover { background:#e94560; }
-.messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:8px; }
-.message { max-width:70%; padding:10px 14px; border-radius:12px; font-size:14px; word-wrap:break-word; }
-.message.mine { align-self:flex-end; background:#e94560; }
-.message.other { align-self:flex-start; background:#16213e; }
-.message .name { font-size:11px; color:#aaa; margin-bottom:4px; }
-.message .text { line-height:1.4; }
-.message img { max-width:250px; border-radius:8px; cursor:pointer; }
-.message audio { max-width:250px; }
-.message .del-btn { font-size:11px; color:#ff6b6b; cursor:pointer; margin-top:4px; display:block; text-align:right; }
-.input-area { background:#16213e; padding:12px 16px; display:flex; gap:10px; align-items:center; border-top:1px solid #333; }
-.input-area input[type="text"] { flex:1; padding:12px; border:1px solid #333; border-radius:10px; background:#0f3460; color:#fff; font-size:14px; outline:none; }
-.input-area button { width:42px; height:42px; border:none; border-radius:50%; background:#e94560; color:#fff; font-size:18px; cursor:pointer; }
-.input-area label { width:42px; height:42px; border:none; border-radius:50%; background:#0f3460; color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; border:1px solid #333; }
-.input-area input[type="file"] { display:none; }
 .online-count { font-size:12px; color:#888; }
+
+/* MESSAGES */
+.messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:8px; background:#1a1a2e; }
+.message { max-width:70%; padding:10px 14px; border-radius:12px; font-size:14px; word-wrap:break-word; position:relative; }
+.message.mine { align-self:flex-end; background:#e94560; border-bottom-right-radius:4px; }
+.message.other { align-self:flex-start; background:#16213e; border-bottom-left-radius:4px; }
+.message .name { font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px; }
+.message .text { line-height:1.4; }
+.message img { max-width:250px; border-radius:8px; cursor:pointer; display:block; margin-top:4px; }
+.message audio { max-width:250px; margin-top:4px; }
+.message .del-btn { font-size:11px; color:#ff6b6b; cursor:pointer; margin-top:6px; display:block; text-align:right; opacity:0.7; }
+.message .del-btn:hover { opacity:1; }
+
+/* INPUT AREA */
+.input-area { background:#16213e; padding:12px 16px; display:flex; gap:8px; align-items:center; border-top:1px solid #333; flex-shrink:0; }
+.input-area input[type="text"] { flex:1; padding:12px; border:1px solid #333; border-radius:10px; background:#0f3460; color:#fff; font-size:14px; outline:none; }
+.input-area input[type="text"]:focus { border-color:#e94560; }
+.input-area button, .input-area label.icon-btn { width:42px; height:42px; border:none; border-radius:50%; color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.input-area .send-btn { background:#e94560; }
+.input-area .send-btn:hover { background:#c73652; }
+.input-area label.icon-btn { background:#0f3460; border:1px solid #333; }
+.input-area label.icon-btn:hover { background:#1a4a8a; }
+.input-area .mic-btn { background:#0f3460; border:1px solid #333; }
+.input-area .mic-btn:hover { background:#1a4a8a; }
+.input-area .mic-btn.recording { background:#e94560; animation:pulse 1s infinite; }
+.input-area input[type="file"] { display:none; }
+
+/* RECORDING BAR */
+.recording-bar { display:none; background:#16213e; padding:12px 16px; border-top:1px solid #333; align-items:center; gap:10px; flex-shrink:0; }
+.recording-bar.active { display:flex; }
+.recording-bar .rec-dot { width:12px; height:12px; background:#e94560; border-radius:50%; animation:pulse 1s infinite; }
+.recording-bar .rec-time { font-size:14px; flex:1; }
+.recording-bar button { padding:8px 16px; border:none; border-radius:8px; color:#fff; cursor:pointer; font-size:14px; }
+.recording-bar .rec-cancel { background:#333; }
+.recording-bar .rec-send { background:#e94560; }
+
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+
+/* SCROLLBAR */
+.messages::-webkit-scrollbar { width:6px; }
+.messages::-webkit-scrollbar-track { background:transparent; }
+.messages::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
 </style>
 </head>
 <body>
 
-<!-- AUTH SCREEN -->
+<!-- AUTH -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
     <h2 id="authTitle">Вход в MyChat</h2>
@@ -61,7 +89,7 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
     <div class="error" id="authError"></div>
     <input type="text" id="authLogin" placeholder="Логин">
     <input type="password" id="authPassword" placeholder="Пароль">
-    <input type="text" id="authNickname" placeholder="Ник (будет виден в чате)" class="nick-field" id="nickField">
+    <input type="text" id="authNickname" placeholder="Ник (будет виден в чате)" class="nick-field">
     <button class="btn" id="authBtn" type="button">Войти →</button>
     <div class="switch">
       <span id="switchText">Нет аккаунта?</span>
@@ -70,7 +98,7 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
   </div>
 </div>
 
-<!-- CHAT SCREEN -->
+<!-- CHAT -->
 <div class="chat-container" id="chatContainer">
   <div class="chat-header">
     <div>
@@ -83,42 +111,42 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
     </div>
   </div>
   <div class="messages" id="messages"></div>
-  <div class="input-area">
-    <label for="photoInput">📷</label>
+  <div class="recording-bar" id="recordingBar">
+    <div class="rec-dot"></div>
+    <span class="rec-time" id="recTime">0:00</span>
+    <button class="rec-cancel" id="recCancel">Отмена</button>
+    <button class="rec-send" id="recSend">Отправить ➤</button>
+  </div>
+  <div class="input-area" id="inputArea">
+    <label class="icon-btn" for="photoInput">📷</label>
     <input type="file" id="photoInput" accept="image/*">
     <input type="text" id="msgInput" placeholder="Сообщение...">
-    <button id="sendBtn">➤</button>
+    <button class="mic-btn" id="micBtn" type="button">🎤</button>
+    <button class="send-btn" id="sendBtn" type="button">➤</button>
   </div>
 </div>
 
 <script>
-const socket = io();
-let isLoginMode = true;
-let myNickname = '';
+var socket = io();
+var isLoginMode = true;
+var myNickname = '';
+var mediaRecorder = null;
+var audioChunks = [];
+var recInterval = null;
+var recSeconds = 0;
 
-// AUTH ELEMENTS
-const authOverlay = document.getElementById('authOverlay');
-const authTitle = document.getElementById('authTitle');
-const authSubtitle = document.getElementById('authSubtitle');
-const authError = document.getElementById('authError');
-const authLogin = document.getElementById('authLogin');
-const authPassword = document.getElementById('authPassword');
-const authNickname = document.getElementById('authNickname');
-const authBtn = document.getElementById('authBtn');
-const switchText = document.getElementById('switchText');
-const switchLink = document.getElementById('switchLink');
+// === AUTH ===
+var authOverlay = document.getElementById('authOverlay');
+var authTitle = document.getElementById('authTitle');
+var authSubtitle = document.getElementById('authSubtitle');
+var authError = document.getElementById('authError');
+var authLogin = document.getElementById('authLogin');
+var authPassword = document.getElementById('authPassword');
+var authNickname = document.getElementById('authNickname');
+var authBtn = document.getElementById('authBtn');
+var switchText = document.getElementById('switchText');
+var switchLink = document.getElementById('switchLink');
 
-// CHAT ELEMENTS
-const chatContainer = document.getElementById('chatContainer');
-const messagesDiv = document.getElementById('messages');
-const msgInput = document.getElementById('msgInput');
-const sendBtn = document.getElementById('sendBtn');
-const photoInput = document.getElementById('photoInput');
-const onlineCount = document.getElementById('onlineCount');
-const nickBtn = document.getElementById('nickBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-
-// SWITCH LOGIN/REGISTER
 switchLink.addEventListener('click', function() {
   isLoginMode = !isLoginMode;
   if (isLoginMode) {
@@ -139,10 +167,10 @@ switchLink.addEventListener('click', function() {
   authError.textContent = '';
 });
 
-// AUTH BUTTON
 authBtn.addEventListener('click', function() {
   var login = authLogin.value.trim();
   var password = authPassword.value.trim();
+  authError.textContent = '';
   if (isLoginMode) {
     if (!login || !password) { authError.textContent = 'Заполни все поля'; return; }
     socket.emit('login', { login: login, password: password });
@@ -153,7 +181,6 @@ authBtn.addEventListener('click', function() {
   }
 });
 
-// AUTH RESPONSE
 socket.on('authSuccess', function(data) {
   myNickname = data.nickname;
   authOverlay.classList.add('hidden');
@@ -163,6 +190,22 @@ socket.on('authSuccess', function(data) {
 socket.on('authError', function(msg) {
   authError.textContent = msg;
 });
+
+// === CHAT ===
+var chatContainer = document.getElementById('chatContainer');
+var messagesDiv = document.getElementById('messages');
+var msgInput = document.getElementById('msgInput');
+var sendBtn = document.getElementById('sendBtn');
+var photoInput = document.getElementById('photoInput');
+var onlineCount = document.getElementById('onlineCount');
+var nickBtn = document.getElementById('nickBtn');
+var logoutBtn = document.getElementById('logoutBtn');
+var micBtn = document.getElementById('micBtn');
+var recordingBar = document.getElementById('recordingBar');
+var recTime = document.getElementById('recTime');
+var recCancel = document.getElementById('recCancel');
+var recSend = document.getElementById('recSend');
+var inputArea = document.getElementById('inputArea');
 
 // MESSAGES
 socket.on('messageHistory', function(msgs) {
@@ -195,7 +238,7 @@ function addMessage(msg) {
   } else if (msg.type === 'voice' && msg.voice) {
     html += '<audio controls src="' + msg.voice + '"></audio>';
   } else {
-    html += '<div class="text">' + msg.text + '</div>';
+    html += '<div class="text">' + (msg.text || '') + '</div>';
   }
   if (msg.username === myNickname) {
     html += '<span class="del-btn" onclick="deleteMsg(' + msg.id + ')">Удалить</span>';
@@ -224,6 +267,7 @@ msgInput.addEventListener('keypress', function(e) {
 photoInput.addEventListener('change', function() {
   var file = this.files[0];
   if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { alert('Макс 10MB'); return; }
   var reader = new FileReader();
   reader.onload = function(e) {
     socket.emit('chatMessage', { image: e.target.result, type: 'image' });
@@ -231,6 +275,68 @@ photoInput.addEventListener('change', function() {
   reader.readAsDataURL(file);
   this.value = '';
 });
+
+// VOICE RECORDING
+micBtn.addEventListener('click', function() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') return;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = function(e) {
+      audioChunks.push(e.data);
+    };
+    mediaRecorder.onstop = function() {
+      stream.getTracks().forEach(function(t) { t.stop(); });
+    };
+    mediaRecorder.start();
+    micBtn.classList.add('recording');
+    inputArea.style.display = 'none';
+    recordingBar.classList.add('active');
+    recSeconds = 0;
+    recTime.textContent = '0:00';
+    recInterval = setInterval(function() {
+      recSeconds++;
+      var m = Math.floor(recSeconds / 60);
+      var s = recSeconds % 60;
+      recTime.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    }, 1000);
+  }).catch(function(err) {
+    alert('Нет доступа к микрофону');
+  });
+});
+
+recCancel.addEventListener('click', function() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.onstop = function() {
+      mediaRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
+    };
+    mediaRecorder.stop();
+  }
+  stopRecordingUI();
+});
+
+recSend.addEventListener('click', function() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.onstop = function() {
+      mediaRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
+      var blob = new Blob(audioChunks, { type: 'audio/webm' });
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        socket.emit('chatMessage', { voice: e.target.result, type: 'voice' });
+      };
+      reader.readAsDataURL(blob);
+    };
+    mediaRecorder.stop();
+  }
+  stopRecordingUI();
+});
+
+function stopRecordingUI() {
+  clearInterval(recInterval);
+  micBtn.classList.remove('recording');
+  recordingBar.classList.remove('active');
+  inputArea.style.display = 'flex';
+}
 
 // CHANGE NICKNAME
 nickBtn.addEventListener('click', function() {
