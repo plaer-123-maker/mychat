@@ -219,7 +219,7 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 </div>
 <div class="admin-overlay" id="adminOverlay"><div class="admin-panel"><span class="admin-close" id="adminClose">✕</span><div class="admin-tabs" id="adminTabs"><button class="active" data-tab="stats">📊 Стат</button><button data-tab="users">👥 Юзеры</button><button data-tab="logs">📋 Логи</button><button data-tab="announce">📢 Объявл</button><button data-tab="danger">⚠️ Опасно</button></div><div class="admin-content" id="adminContent"></div></div></div>
 <script>
-var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
+var socket=io('https://mychat-production-4ec8.up.railway.app', {transports: ['websocket', 'polling']}),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
