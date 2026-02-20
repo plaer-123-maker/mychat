@@ -224,18 +224,18 @@ currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=n
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
 
-// === IMPROVED WEBRTC CONFIG ===
+// === WEBRTC CONFIG & STATE ===
 var localStream, remoteStream, peerConnection, incomingCallData=null;
 var currentFacingMode = 'user';
+var pendingIce = []; // Queue for ICE candidates
 const rtcConfig = { 
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' }
+    { urls: 'stun:stun1.l.google.com:19302' }
   ] 
 };
 
+// AUTO LOGIN
 (function(){var token=localStorage.getItem('mychat_token');if(token)socket.emit('autoLogin',token);})();
 
 document.getElementById('switchLink').addEventListener('click',function(){
@@ -289,15 +289,10 @@ function switchToGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabGeneral');
   document.getElementById('searchInput').value='';
-  
-  // Добавляем обработчик onclick для открытия на мобильном
   document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
-  
-  // ЛОГИКА ДЛЯ МОБИЛЬНЫХ: НЕ ОТКРЫВАТЬ ЧАТ АВТОМАТИЧЕСКИ
   if(window.innerWidth > 600) {
-    openGeneral(); // На ПК открываем сразу
+    openGeneral();
   } else {
-    // На мобильном — скрываем чат, показываем только список
     document.getElementById('mainChat').classList.remove('show');
     document.getElementById('noChat').style.display='none'; 
   }
@@ -308,9 +303,7 @@ function switchToPrivate(){
   setActiveTab('tabPrivate');
   document.getElementById('searchInput').value='';
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  // На мобильном скрываем чат
   if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
-  
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='none';
@@ -322,9 +315,7 @@ function switchToRooms(){
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  // На мобильном скрываем чат
   if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
-  
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='none';
@@ -700,7 +691,7 @@ function loadTab(tab){
   else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');});}
 }
 
-// === CALL LOGIC (FIXED) ===
+// === IMPROVED CALL LOGIC ===
 // Draggable local video
 const dragVideo = document.getElementById('localVideo');
 let isDragging = false;
@@ -734,14 +725,20 @@ function stopDrag() {
   document.removeEventListener('touchmove', moveDrag);document.removeEventListener('touchend', stopDrag);document.removeEventListener('mousemove', moveDrag);document.removeEventListener('mouseup', stopDrag);
 }
 
+function flushPendingIce() {
+  if(pendingIce.length > 0 && peerConnection && peerConnection.remoteDescription) {
+    while(pendingIce.length > 0) {
+      var candidate = pendingIce.shift();
+      peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>console.log(e));
+    }
+  }
+}
+
 function startCall(userToCall, type){
   currentPrivateLogin=userToCall;
   document.getElementById('callOverlay').classList.add('show');
   
-  const constraints = {
-    audio: true,
-    video: { facingMode: currentFacingMode }
-  };
+  const constraints = { audio: true, video: { facingMode: currentFacingMode } };
   
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
     localStream=stream;
@@ -755,12 +752,25 @@ function startCall(userToCall, type){
     }
 
     peerConnection=new RTCPeerConnection(rtcConfig);
+    
+    pendingIce = [];
+    
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
-    peerConnection.ontrack=function(e){document.getElementById('remoteVideo').srcObject=e.streams[0];};
+    
+    // Improved ontrack: manual MediaStream creation
+    remoteStream = new MediaStream();
+    document.getElementById('remoteVideo').srcObject = remoteStream;
+    
+    peerConnection.ontrack=function(e){
+      remoteStream.addTrack(e.track);
+    };
+
     localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
+    
     peerConnection.createOffer().then(function(offer){
-      peerConnection.setLocalDescription(offer);
-      socket.emit('callUser',{userToCall:userToCall, signalData:offer, callType: type});
+      return peerConnection.setLocalDescription(offer);
+    }).then(function() {
+      socket.emit('callUser',{userToCall:userToCall, signalData:peerConnection.localDescription, callType: type});
     });
   }).catch(function(e){alert('Нет доступа к камере/микрофону: ' + e);endCall();});
 }
@@ -777,10 +787,7 @@ function acceptCall(){
   document.getElementById('incomingCallModal').classList.remove('show');
   document.getElementById('callOverlay').classList.add('show');
   
-  const constraints = {
-    audio: true,
-    video: { facingMode: currentFacingMode }
-  };
+  const constraints = { audio: true, video: { facingMode: currentFacingMode } };
 
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
     localStream=stream;
@@ -794,13 +801,30 @@ function acceptCall(){
     }
 
     peerConnection=new RTCPeerConnection(rtcConfig);
+    pendingIce = [];
+
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:incomingCallData.from});};
-    peerConnection.ontrack=function(e){document.getElementById('remoteVideo').srcObject=e.streams[0];};
+    
+    remoteStream = new MediaStream();
+    document.getElementById('remoteVideo').srcObject = remoteStream;
+    
+    peerConnection.ontrack=function(e){
+      remoteStream.addTrack(e.track);
+    };
+
     localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
-    peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal));
-    peerConnection.createAnswer().then(function(answer){
-      peerConnection.setLocalDescription(answer);
-      socket.emit('answerCall',{signal:answer,to:incomingCallData.from});
+    
+    // IMPORTANT: Set Remote -> Create Answer -> Set Local
+    peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal))
+    .then(function() {
+      flushPendingIce();
+      return peerConnection.createAnswer();
+    })
+    .then(function(answer){
+      return peerConnection.setLocalDescription(answer);
+    })
+    .then(function() {
+      socket.emit('answerCall',{signal:peerConnection.localDescription,to:incomingCallData.from});
     });
   });
 }
@@ -814,11 +838,20 @@ function rejectCall(){
 window.rejectCall=rejectCall;
 
 socket.on('callAccepted',function(signal){
-  peerConnection.setRemoteDescription(new RTCSessionDescription(signal));
+  peerConnection.setRemoteDescription(new RTCSessionDescription(signal))
+  .then(function() {
+    flushPendingIce();
+  });
 });
 
 socket.on('iceCandidate',function(candidate){
-  if(peerConnection)peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+  if(peerConnection) {
+    if(peerConnection.remoteDescription) {
+      peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>console.log(e));
+    } else {
+      pendingIce.push(candidate);
+    }
+  }
 });
 
 socket.on('callEnded',function(){ endCall(); });
