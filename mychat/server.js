@@ -36,6 +36,30 @@ async function initDB() {
     type VARCHAR(20) DEFAULT 'text', timestamp BIGINT NOT NULL,
     read BOOLEAN DEFAULT false
   )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(20) NOT NULL,
+    owner_login VARCHAR(50) NOT NULL,
+    comments_enabled BOOLEAN DEFAULT true,
+    timestamp BIGINT NOT NULL
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS room_members (
+    id SERIAL PRIMARY KEY,
+    room_id INT NOT NULL,
+    user_login VARCHAR(50) NOT NULL,
+    role VARCHAR(20) DEFAULT 'member',
+    UNIQUE(room_id, user_login)
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS room_messages (
+    id SERIAL PRIMARY KEY,
+    room_id INT NOT NULL,
+    user_login VARCHAR(50) NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    text TEXT, image TEXT, voice TEXT,
+    type VARCHAR(20) DEFAULT 'text',
+    timestamp BIGINT NOT NULL
+  )`);
   await pool.query(`CREATE TABLE IF NOT EXISTS logs (
     id SERIAL PRIMARY KEY, action VARCHAR(50) NOT NULL,
     username VARCHAR(100), detail TEXT, ip VARCHAR(50),
@@ -205,7 +229,6 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('searchResults', []); }
   });
 
-  // GET MY CONVERSATIONS (people I already chatted with)
   socket.on('getMyChats', async () => {
     if (!socket.userLogin) return;
     try {
@@ -216,7 +239,6 @@ io.on('connection', (socket) => {
       var logins = res.rows.map(r => r.other_login);
       if (logins.length === 0) return socket.emit('myChats', []);
       var users = await pool.query('SELECT login, nickname FROM users WHERE login = ANY($1)', [logins]);
-      // Get last message and unread count for each
       var chats = [];
       for (var u of users.rows) {
         var last = await pool.query(
@@ -286,6 +308,244 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
+  // =============================================
+  // === ROOMS (GROUPS & CHANNELS) ===
+  // =============================================
+
+  // CREATE ROOM
+  socket.on('createRoom', async ({ name, type }) => {
+    if (!socket.userLogin || !name) return;
+    if (type !== 'group' && type !== 'channel') return;
+    try {
+      const res = await pool.query(
+        'INSERT INTO rooms (name, type, owner_login, comments_enabled, timestamp) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        [name, type, socket.userLogin, true, Date.now()]);
+      var roomId = res.rows[0].id;
+      await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)',
+        [roomId, socket.userLogin, 'admin']);
+      socket.emit('roomCreated', { id: roomId, name, type });
+      await addLog('create_room', socket.username, type + ': ' + name, ip);
+    } catch(e) { console.error(e); }
+  });
+
+  // GET MY ROOMS
+  socket.on('getMyRooms', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query(`
+        SELECT r.*, rm.role as my_role,
+        (SELECT COUNT(*) FROM room_members WHERE room_id=r.id) as member_count
+        FROM rooms r
+        JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
+        ORDER BY r.timestamp DESC
+      `, [socket.userLogin]);
+      socket.emit('myRooms', res.rows);
+    } catch(e) { socket.emit('myRooms', []); }
+  });
+
+  // SEARCH ROOMS
+  socket.on('searchRooms', async (query) => {
+    if (!query) return;
+    try {
+      const res = await pool.query(
+        'SELECT id, name, type FROM rooms WHERE LOWER(name) LIKE LOWER($1) LIMIT 10',
+        ['%' + query + '%']);
+      socket.emit('roomSearchResults', res.rows);
+    } catch(e) { socket.emit('roomSearchResults', []); }
+  });
+
+  // JOIN ROOM
+  socket.on('joinRoom', async (roomId) => {
+    if (!socket.userLogin) return;
+    try {
+      var check = await pool.query('SELECT * FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (check.rows.length === 0) {
+        await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, socket.userLogin, 'member']);
+      }
+      socket.join('room_' + roomId);
+      socket.emit('joinedRoom', roomId);
+    } catch(e) { console.error(e); }
+  });
+
+  // LEAVE ROOM
+  socket.on('leaveRoom', async (roomId) => {
+    if (!socket.userLogin) return;
+    try {
+      var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
+      if (room.rows.length > 0 && room.rows[0].owner_login === socket.userLogin) {
+        return socket.emit('chatError', 'Владелец не может покинуть комнату. Удалите её.');
+      }
+      await pool.query('DELETE FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      socket.leave('room_' + roomId);
+      socket.emit('leftRoom', roomId);
+    } catch(e) {}
+  });
+
+  // OPEN ROOM (load history + info)
+  socket.on('openRoom', async (roomId) => {
+    if (!socket.userLogin) return;
+    try {
+      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник');
+      var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
+      if (room.rows.length === 0) return;
+      var msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY timestamp ASC LIMIT 200', [roomId]);
+      var members = await pool.query(`
+        SELECT rm.user_login, rm.role, u.nickname 
+        FROM room_members rm JOIN users u ON rm.user_login = u.login 
+        WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname
+      `, [roomId]);
+      socket.join('room_' + roomId);
+      socket.emit('roomData', {
+        room: room.rows[0],
+        myRole: member.rows[0].role,
+        messages: msgs.rows,
+        members: members.rows
+      });
+    } catch(e) { console.error(e); }
+  });
+
+  // SEND ROOM MESSAGE
+  socket.on('roomMessage', async (data) => {
+    if (!socket.userLogin || !data.roomId) return;
+    try {
+      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [data.roomId, socket.userLogin]);
+      if (member.rows.length === 0) return;
+      var myRole = member.rows[0].role;
+      var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [data.roomId]);
+      if (room.rows.length === 0) return;
+
+      // Channel: only admin can post
+      if (room.rows[0].type === 'channel' && myRole !== 'admin') {
+        return socket.emit('chatError', 'В канале писать может только админ');
+      }
+
+      var msg = {
+        room_id: data.roomId, user_login: socket.userLogin, username: socket.username,
+        text: data.text||'', image: data.image||null, voice: data.voice||null,
+        type: data.type||'text', timestamp: Date.now()
+      };
+      var res = await pool.query(
+        'INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      msg.id = res.rows[0].id;
+      io.to('room_' + data.roomId).emit('roomNewMessage', msg);
+    } catch(e) { console.error(e); }
+  });
+
+  // DELETE ROOM MESSAGE
+  socket.on('deleteRoomMessage', async ({ roomId, msgId }) => {
+    if (!socket.userLogin) return;
+    try {
+      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (member.rows.length === 0) return;
+      var myRole = member.rows[0].role;
+      if (myRole === 'admin') {
+        await pool.query('DELETE FROM room_messages WHERE id=$1 AND room_id=$2', [msgId, roomId]);
+      } else {
+        await pool.query('DELETE FROM room_messages WHERE id=$1 AND room_id=$2 AND user_login=$3', [msgId, roomId, socket.userLogin]);
+      }
+      io.to('room_' + roomId).emit('roomMessageDeleted', { roomId, msgId });
+    } catch(e) {}
+  });
+
+  // ADD MEMBER TO ROOM
+  socket.on('roomAddMember', async ({ roomId, login }) => {
+    if (!socket.userLogin) return;
+    try {
+      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (member.rows.length === 0 || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может добавлять');
+      var userExists = await pool.query('SELECT login FROM users WHERE login=$1', [login]);
+      if (userExists.rows.length === 0) return socket.emit('chatError', 'Пользователь не найден');
+      var already = await pool.query('SELECT * FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
+      if (already.rows.length > 0) return socket.emit('chatError', 'Уже участник');
+      await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, login, 'member']);
+      // Reload members
+      var members = await pool.query(`
+        SELECT rm.user_login, rm.role, u.nickname 
+        FROM room_members rm JOIN users u ON rm.user_login = u.login 
+        WHERE rm.room_id=$1
+      `, [roomId]);
+      io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
+      socket.emit('chatError', login + ' добавлен');
+    } catch(e) { console.error(e); }
+  });
+
+  // REMOVE MEMBER FROM ROOM
+  socket.on('roomRemoveMember', async ({ roomId, login }) => {
+    if (!socket.userLogin) return;
+    try {
+      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (member.rows.length === 0 || member.rows[0].role !== 'admin') return;
+      var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
+      if (room.rows[0].owner_login === login) return socket.emit('chatError', 'Нельзя удалить владельца');
+      await pool.query('DELETE FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
+      var targetSocket = findSocketByLogin(login);
+      if (targetSocket) { targetSocket.leave('room_' + roomId); targetSocket.emit('kickedFromRoom', roomId); }
+      var members = await pool.query(`
+        SELECT rm.user_login, rm.role, u.nickname 
+        FROM room_members rm JOIN users u ON rm.user_login = u.login 
+        WHERE rm.room_id=$1
+      `, [roomId]);
+      io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
+    } catch(e) {}
+  });
+
+  // SET MEMBER ROLE IN ROOM
+  socket.on('roomSetRole', async ({ roomId, login, role }) => {
+    if (!socket.userLogin) return;
+    try {
+      var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
+      if (room.rows.length === 0) return;
+      if (room.rows[0].owner_login !== socket.userLogin) return socket.emit('chatError', 'Только владелец может менять роли');
+      if (role !== 'admin' && role !== 'member') return;
+      await pool.query('UPDATE room_members SET role=$1 WHERE room_id=$2 AND user_login=$3', [role, roomId, login]);
+      var members = await pool.query(`
+        SELECT rm.user_login, rm.role, u.nickname 
+        FROM room_members rm JOIN users u ON rm.user_login = u.login 
+        WHERE rm.room_id=$1
+      `, [roomId]);
+      io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
+      socket.emit('chatError', login + ' теперь ' + role);
+    } catch(e) {}
+  });
+
+  // TOGGLE COMMENTS (channels only)
+  socket.on('roomToggleComments', async (roomId) => {
+    if (!socket.userLogin) return;
+    try {
+      var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
+      if (room.rows.length === 0) return;
+      if (room.rows[0].owner_login !== socket.userLogin) return;
+      var newVal = !room.rows[0].comments_enabled;
+      await pool.query('UPDATE rooms SET comments_enabled=$1 WHERE id=$2', [newVal, roomId]);
+      io.to('room_' + roomId).emit('roomSettingsUpdated', { roomId, comments_enabled: newVal });
+      socket.emit('chatError', 'Комментарии ' + (newVal ? 'включены' : 'выключены'));
+    } catch(e) {}
+  });
+
+  // DELETE ROOM
+  socket.on('deleteRoom', async (roomId) => {
+    if (!socket.userLogin) return;
+    try {
+      var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
+      if (room.rows.length === 0) return;
+      if (room.rows[0].owner_login !== socket.userLogin && !isSuperAdmin(socket)) return;
+      await pool.query('DELETE FROM room_messages WHERE room_id=$1', [roomId]);
+      await pool.query('DELETE FROM room_members WHERE room_id=$1', [roomId]);
+      await pool.query('DELETE FROM rooms WHERE id=$1', [roomId]);
+      io.to('room_' + roomId).emit('roomDeleted', roomId);
+    } catch(e) {}
+  });
+
+  // ROOM TYPING
+  socket.on('roomTyping', (roomId) => {
+    if (socket.username) socket.to('room_' + roomId).emit('roomUserTyping', { roomId, nickname: socket.username });
+  });
+  socket.on('roomStopTyping', (roomId) => {
+    if (socket.username) socket.to('room_' + roomId).emit('roomUserStopTyping', { roomId, nickname: socket.username });
+  });
+
   // === ADMIN ===
   socket.on('adminGetUsers', async () => {
     if (!isAdmin(socket)) return;
@@ -301,7 +561,8 @@ io.on('connection', (socket) => {
       const users = await pool.query('SELECT COUNT(*) as c FROM users');
       const msgs = await pool.query('SELECT COUNT(*) as c FROM messages');
       const pms = await pool.query('SELECT COUNT(*) as c FROM private_messages');
-      socket.emit('adminStats', { users: users.rows[0].c, messages: msgs.rows[0].c, pms: pms.rows[0].c, online: onlineUsers.size });
+      const rooms = await pool.query('SELECT COUNT(*) as c FROM rooms');
+      socket.emit('adminStats', { users: users.rows[0].c, messages: msgs.rows[0].c, pms: pms.rows[0].c, rooms: rooms.rows[0].c, online: onlineUsers.size });
     } catch(e) {}
   });
 
@@ -327,7 +588,6 @@ io.on('connection', (socket) => {
     if (!isAdmin(socket)) return;
     try {
       await pool.query('UPDATE users SET banned=false WHERE login=$1', [login]);
-      await addLog('unban', socket.username, 'Unbanned ' + login, ip);
       socket.emit('adminDone', 'Разбанен: ' + login);
     } catch(e) {}
   });
@@ -336,16 +596,7 @@ io.on('connection', (socket) => {
     if (!isAdmin(socket)) return;
     try {
       await pool.query('UPDATE users SET muted_until=$1 WHERE login=$2', [Date.now() + minutes * 60000, login]);
-      await addLog('mute', socket.username, 'Muted ' + login + ' ' + minutes + 'min', ip);
       socket.emit('adminDone', 'Замучен: ' + login);
-    } catch(e) {}
-  });
-
-  socket.on('adminUnmuteUser', async (login) => {
-    if (!isAdmin(socket)) return;
-    try {
-      await pool.query('UPDATE users SET muted_until=0 WHERE login=$1', [login]);
-      socket.emit('adminDone', 'Размучен: ' + login);
     } catch(e) {}
   });
 
@@ -354,9 +605,9 @@ io.on('connection', (socket) => {
     if (login === ADMIN_LOGIN) return;
     try {
       await pool.query('DELETE FROM private_messages WHERE from_login=$1 OR to_login=$1', [login]);
+      await pool.query('DELETE FROM room_members WHERE user_login=$1', [login]);
       await pool.query('DELETE FROM users WHERE login=$1', [login]);
       var s = findSocketByLogin(login); if (s) s.emit('kicked', 'Аккаунт удалён');
-      await addLog('delete', socket.username, 'Deleted ' + login, ip);
       socket.emit('adminDone', 'Удалён: ' + login);
     } catch(e) {}
   });
@@ -367,10 +618,11 @@ io.on('connection', (socket) => {
       await pool.query('DELETE FROM users WHERE login != $1', [ADMIN_LOGIN]);
       await pool.query('DELETE FROM messages');
       await pool.query('DELETE FROM private_messages');
+      await pool.query('DELETE FROM room_members WHERE user_login != $1', [ADMIN_LOGIN]);
       for (let [sid, info] of onlineUsers) {
         if (info.login !== ADMIN_LOGIN) { var s = socketUsers.get(sid); if (s) s.emit('kicked', 'Все аккаунты удалены'); }
       }
-      socket.emit('adminDone', 'Все аккаунты удалены');
+      socket.emit('adminDone', 'Все удалены');
     } catch(e) {}
   });
 
@@ -386,7 +638,7 @@ io.on('connection', (socket) => {
       const res = await pool.query('INSERT INTO messages (username,text,type,timestamp) VALUES ($1,$2,$3,$4) RETURNING id',
         [msg.username, msg.text, msg.type, msg.timestamp]);
       msg.id = res.rows[0].id; io.emit('chatMessage', msg);
-      socket.emit('adminDone', 'Объявление отправлено');
+      socket.emit('adminDone', 'Отправлено');
     } catch(e) {}
   });
 
