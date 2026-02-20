@@ -16,7 +16,6 @@
   }
   body { font-family: 'Geologica', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 
-  /* LOGIN */
   #loginScreen { display: flex; flex-direction: column; align-items: center; animation: fadeIn 0.4s ease; }
   .login-card { background: var(--sidebar-bg); border: 1px solid var(--border); border-radius: 20px; padding: 40px; width: 360px; display: flex; flex-direction: column; gap: 20px; }
   .login-logo { width: 64px; height: 64px; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 0 auto; }
@@ -28,7 +27,6 @@
   .login-btn { width: 100%; background: var(--accent); border: none; border-radius: 12px; padding: 13px; color: white; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
   .login-btn:hover { background: #1d4ed8; }
 
-  /* CHAT */
   #chatScreen { display: none; width: 100vw; height: 100vh; flex-direction: column; }
   .chat-header { background: var(--sidebar-bg); border-bottom: 1px solid var(--border); padding: 14px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
   .header-logo { width: 40px; height: 40px; background: linear-gradient(135deg, #2563eb, #7c3aed); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
@@ -40,19 +38,31 @@
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   @keyframes msgIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes msgOut { from{opacity:1;transform:scale(1)} to{opacity:0;transform:scale(0.8)} }
 
   .messages-wrap { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 4px; }
   .messages-wrap::-webkit-scrollbar { width: 4px; }
   .messages-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 
   .system-msg { text-align: center; font-size: 12px; color: var(--text-muted); padding: 6px 12px; background: var(--sidebar-bg); border-radius: 20px; align-self: center; margin: 6px 0; }
-  .message { display: flex; flex-direction: column; max-width: 65%; animation: msgIn 0.2s ease; }
+  
+  .message { display: flex; flex-direction: column; max-width: 65%; animation: msgIn 0.2s ease; position: relative; }
   .message.out { align-self: flex-end; align-items: flex-end; }
   .message.in { align-self: flex-start; align-items: flex-start; }
   .msg-sender { font-size: 11px; color: var(--accent); margin-bottom: 3px; padding: 0 4px; font-weight: 500; }
-  .bubble { padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; }
+  
+  .bubble { padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.5; word-break: break-word; cursor: pointer; user-select: none; transition: opacity 0.15s; }
+  .bubble:active { opacity: 0.75; }
   .message.out .bubble { background: var(--bubble-out); border-bottom-right-radius: 4px; color: white; }
   .message.in .bubble { background: var(--bubble-in); border-bottom-left-radius: 4px; }
+
+  /* Контекстное меню удаления */
+  .delete-menu { display: none; position: absolute; background: #1e2535; border: 1px solid var(--border); border-radius: 10px; padding: 4px; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+  .message.out .delete-menu { right: 0; bottom: calc(100% + 4px); }
+  .message.in .delete-menu { left: 0; bottom: calc(100% + 4px); }
+  .delete-menu.show { display: block; }
+  .delete-btn { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--red); white-space: nowrap; transition: background 0.15s; }
+  .delete-btn:hover { background: rgba(239,68,68,0.1); }
 
   /* Фото */
   .bubble.photo { padding: 4px; background: transparent !important; }
@@ -61,7 +71,7 @@
   .message.in .bubble.photo img { border-bottom-left-radius: 4px; }
 
   /* Голосовое */
-  .voice-bubble { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 16px; min-width: 220px; }
+  .voice-bubble { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 16px; min-width: 220px; cursor: pointer; }
   .message.out .voice-bubble { background: var(--bubble-out); border-bottom-right-radius: 4px; }
   .message.in .voice-bubble { background: var(--bubble-in); border-bottom-left-radius: 4px; }
   .play-btn { width: 36px; height: 36px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; transition: transform 0.1s; }
@@ -70,15 +80,11 @@
   .play-btn:active { transform: scale(0.92); }
   .voice-info { display: flex; flex-direction: column; gap: 2px; flex: 1; }
   .voice-wave { display: flex; align-items: center; gap: 2px; height: 20px; }
-  .voice-wave span { width: 3px; border-radius: 3px; background: currentColor; opacity: 0.6; animation: none; }
+  .voice-wave span { width: 3px; border-radius: 3px; opacity: 0.6; }
   .voice-wave span.playing { animation: wave 0.6s ease-in-out infinite alternate; }
-  .voice-wave span:nth-child(2) { animation-delay: 0.1s; }
-  .voice-wave span:nth-child(3) { animation-delay: 0.2s; }
-  .voice-wave span:nth-child(4) { animation-delay: 0.15s; }
-  .voice-wave span:nth-child(5) { animation-delay: 0.05s; }
-  @keyframes wave {
-    from { height: 4px; } to { height: 16px; }
-  }
+  .voice-wave span:nth-child(2){animation-delay:0.1s} .voice-wave span:nth-child(3){animation-delay:0.2s}
+  .voice-wave span:nth-child(4){animation-delay:0.15s} .voice-wave span:nth-child(5){animation-delay:0.05s}
+  @keyframes wave { from{height:4px} to{height:16px} }
   .voice-dur { font-size: 11px; opacity: 0.7; font-family: 'JetBrains Mono', monospace; }
   .message.out .voice-wave span { background: white; }
   .message.in .voice-wave span { background: var(--text); }
@@ -86,21 +92,17 @@
   .msg-time { font-size: 11px; color: var(--text-muted); margin-top: 3px; padding: 0 4px; font-family: 'JetBrains Mono', monospace; }
   #typingIndicator { font-size: 12px; color: var(--text-muted); padding: 0 20px 8px; height: 22px; font-style: italic; flex-shrink: 0; }
 
-  /* Превью фото */
   #photoPreview { display: none; padding: 10px 16px; background: var(--sidebar-bg); border-top: 1px solid var(--border); flex-shrink: 0; }
   .preview-inner { position: relative; display: inline-block; }
   .preview-inner img { max-height: 100px; border-radius: 8px; }
   .preview-cancel { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; background: var(--red); border-radius: 50%; border: none; color: white; font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
 
-  /* Запись голосового */
   #voiceRecording { display: none; padding: 10px 16px; background: var(--sidebar-bg); border-top: 1px solid var(--border); flex-shrink: 0; align-items: center; gap: 12px; }
   .rec-dot { width: 10px; height: 10px; background: var(--red); border-radius: 50%; animation: pulse 1s infinite; flex-shrink: 0; }
   .rec-time { font-size: 14px; font-family: 'JetBrains Mono', monospace; color: var(--red); }
   .rec-cancel { margin-left: auto; background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; color: var(--text-muted); font-family: inherit; font-size: 13px; cursor: pointer; }
-  .rec-cancel:hover { color: var(--text); }
   .rec-send { background: var(--online); border: none; border-radius: 8px; padding: 6px 14px; color: white; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 
-  /* INPUT */
   .input-area { padding: 12px 16px; border-top: 1px solid var(--border); background: var(--sidebar-bg); display: flex; align-items: flex-end; gap: 10px; flex-shrink: 0; }
   .msg-input { flex: 1; background: var(--input-bg); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; color: var(--text); font-family: inherit; font-size: 14px; outline: none; resize: none; max-height: 120px; line-height: 1.5; transition: border-color 0.2s; }
   .msg-input:focus { border-color: var(--accent); }
@@ -112,7 +114,6 @@
   .send-btn:hover { background: #1d4ed8; }
   .send-btn:active { transform: scale(0.95); }
 
-  /* Лайтбокс */
   #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; align-items: center; justify-content: center; cursor: zoom-out; }
   #lightbox.open { display: flex; }
   #lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 12px; }
@@ -126,7 +127,6 @@
 </head>
 <body>
 
-<!-- LOGIN -->
 <div id="loginScreen">
   <div class="login-card">
     <div class="login-logo">💬</div>
@@ -137,7 +137,6 @@
   </div>
 </div>
 
-<!-- CHAT -->
 <div id="chatScreen">
   <div class="chat-header">
     <div class="header-logo">💬</div>
@@ -154,7 +153,6 @@
   <div class="messages-wrap" id="messages"></div>
   <div id="typingIndicator"></div>
 
-  <!-- Превью фото -->
   <div id="photoPreview">
     <div class="preview-inner">
       <img id="previewImg" src="" alt="preview" />
@@ -162,7 +160,6 @@
     </div>
   </div>
 
-  <!-- Запись голосового -->
   <div id="voiceRecording">
     <div class="rec-dot"></div>
     <span class="rec-time" id="recTime">0:00</span>
@@ -171,7 +168,7 @@
   </div>
 
   <div class="input-area">
-    <button class="icon-btn" id="voiceBtn" onclick="toggleVoice()" title="Голосовое сообщение">🎤</button>
+    <button class="icon-btn" id="voiceBtn" onclick="toggleVoice()" title="Голосовое">🎤</button>
     <button class="icon-btn" onclick="document.getElementById('fileInput').click()" title="Фото">📷</button>
     <input type="file" id="fileInput" accept="image/*" onchange="handlePhoto(event)" />
     <textarea class="msg-input" id="msgInput" placeholder="Написать сообщение..." rows="1"
@@ -182,7 +179,6 @@
   <div class="users-bar" id="usersBar"></div>
 </div>
 
-<!-- Лайтбокс -->
 <div id="lightbox" onclick="closeLightbox()">
   <img id="lightboxImg" src="" alt="" />
 </div>
@@ -194,12 +190,11 @@ let typingTimeout = null;
 let isTyping = false;
 const typingUsers = new Set();
 let pendingImage = null;
-
-// Голосовое
 let mediaRecorder = null;
 let audioChunks = [];
 let recInterval = null;
 let recSeconds = 0;
+let activeMenu = null;
 
 function joinChat() {
   const name = document.getElementById('nameInput').value.trim();
@@ -211,16 +206,26 @@ function joinChat() {
   document.getElementById('msgInput').focus();
 }
 
-document.getElementById('nameInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') joinChat();
-});
+document.getElementById('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') joinChat(); });
+
+// Закрываем меню при клике в другое место
+document.addEventListener('click', () => { closeAllMenus(); });
 
 socket.on('history', (msgs) => { msgs.forEach(addMessage); scrollBottom(); });
 socket.on('message', (msg) => { typingUsers.delete(msg.username); updateTyping(); addMessage(msg); scrollBottom(); });
 socket.on('user_joined', ({ username, users, count }) => { addSystem(username + ' вошёл в чат'); updateUsers(users, count); });
 socket.on('user_left', ({ username, users, count }) => { addSystem(username + ' вышел из чата'); updateUsers(users, count); });
-socket.on('typing', (username) => { typingUsers.add(username); updateTyping(); });
-socket.on('stop_typing', (username) => { typingUsers.delete(username); updateTyping(); });
+socket.on('typing', (u) => { typingUsers.add(u); updateTyping(); });
+socket.on('stop_typing', (u) => { typingUsers.delete(u); updateTyping(); });
+
+// Удаление сообщения у всех
+socket.on('message_deleted', (msgId) => {
+  const el = document.getElementById('msg_' + msgId);
+  if (el) {
+    el.style.animation = 'msgOut 0.2s ease forwards';
+    setTimeout(() => el.remove(), 200);
+  }
+});
 
 function updateTyping() {
   const el = document.getElementById('typingIndicator');
@@ -249,65 +254,41 @@ function cancelPhoto() {
 
 // ГОЛОСОВОЕ
 async function toggleVoice() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') {
-    sendVoice();
-    return;
-  }
+  if (mediaRecorder && mediaRecorder.state === 'recording') { sendVoice(); return; }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    recSeconds = 0;
-
+    audioChunks = []; recSeconds = 0;
     mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-
     mediaRecorder.start();
-
-    // UI
     document.getElementById('voiceRecording').style.display = 'flex';
     document.getElementById('voiceBtn').classList.add('recording');
     document.getElementById('msgInput').disabled = true;
-
     recInterval = setInterval(() => {
       recSeconds++;
-      const m = Math.floor(recSeconds / 60);
-      const s = recSeconds % 60;
+      const m = Math.floor(recSeconds / 60), s = recSeconds % 60;
       document.getElementById('recTime').textContent = m + ':' + String(s).padStart(2, '0');
     }, 1000);
-
-  } catch(e) {
-    alert('Нет доступа к микрофону. Разреши доступ в браузере!');
-  }
+  } catch(e) { alert('Нет доступа к микрофону!'); }
 }
 
 function sendVoice() {
   if (!mediaRecorder) return;
   mediaRecorder.stop();
   clearInterval(recInterval);
-
   mediaRecorder.onstop = () => {
     const blob = new Blob(audioChunks, { type: 'audio/webm' });
     const reader = new FileReader();
-    reader.onload = (e) => {
-      socket.emit('voice', {
-        audioData: e.target.result,
-        duration: recSeconds
-      });
-    };
+    reader.onload = (e) => { socket.emit('voice', { audioData: e.target.result, duration: recSeconds }); };
     reader.readAsDataURL(blob);
     mediaRecorder.stream.getTracks().forEach(t => t.stop());
     mediaRecorder = null;
   };
-
   stopRecordingUI();
 }
 
 function cancelVoice() {
-  if (mediaRecorder) {
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach(t => t.stop());
-    mediaRecorder = null;
-  }
+  if (mediaRecorder) { mediaRecorder.stop(); mediaRecorder.stream.getTracks().forEach(t => t.stop()); mediaRecorder = null; }
   clearInterval(recInterval);
   stopRecordingUI();
 }
@@ -320,11 +301,7 @@ function stopRecordingUI() {
 
 // ОТПРАВКА
 function sendMessage() {
-  if (pendingImage) {
-    socket.emit('image', { imageData: pendingImage });
-    cancelPhoto();
-    return;
-  }
+  if (pendingImage) { socket.emit('image', { imageData: pendingImage }); cancelPhoto(); return; }
   const input = document.getElementById('msgInput');
   const text = input.value.trim();
   if (!text) return;
@@ -335,9 +312,7 @@ function sendMessage() {
   input.style.height = 'auto';
 }
 
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-}
+function handleKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
 function handleTyping(el) {
   el.style.height = 'auto';
@@ -347,122 +322,126 @@ function handleTyping(el) {
   typingTimeout = setTimeout(() => { isTyping = false; socket.emit('stop_typing'); }, 1500);
 }
 
+// УДАЛЕНИЕ — долгое нажатие или правая кнопка
+function closeAllMenus() {
+  document.querySelectorAll('.delete-menu.show').forEach(m => m.classList.remove('show'));
+  activeMenu = null;
+}
+
+function showDeleteMenu(msgId, isOwner, event) {
+  if (!isOwner) return;
+  event.preventDefault();
+  event.stopPropagation();
+  closeAllMenus();
+  const menu = document.getElementById('menu_' + msgId);
+  if (menu) { menu.classList.add('show'); activeMenu = menu; }
+}
+
+function deleteMessage(msgId) {
+  closeAllMenus();
+  socket.emit('delete_message', msgId);
+}
+
 // ДОБАВЛЕНИЕ СООБЩЕНИЙ
 function addMessage(msg) {
   const container = document.getElementById('messages');
   const isMe = msg.username === myName;
   const div = document.createElement('div');
   div.className = 'message ' + (isMe ? 'out' : 'in');
+  div.id = 'msg_' + msg.id;
 
   const senderHtml = !isMe ? '<div class="msg-sender">' + escapeHtml(msg.username) + '</div>' : '';
 
+  // Меню удаления (только для своих)
+  const menuHtml = isMe ? `
+    <div class="delete-menu" id="menu_${msg.id}">
+      <div class="delete-btn" onclick="deleteMessage(${msg.id})">🗑 Удалить сообщение</div>
+    </div>` : '';
+
   if (msg.type === 'image') {
-    div.innerHTML = senderHtml + `
-      <div class="bubble photo">
+    div.innerHTML = senderHtml + menuHtml + `
+      <div class="bubble photo"
+        oncontextmenu="showDeleteMenu(${msg.id}, ${isMe}, event)"
+        ontouchstart="startLongPress(${msg.id}, ${isMe}, event)"
+        ontouchend="cancelLongPress()">
         <img src="${msg.imageData}" alt="фото" onclick="openLightbox(this.src)" />
       </div>
       <div class="msg-time">${msg.time}</div>`;
 
   } else if (msg.type === 'voice') {
     const dur = msg.duration || 0;
-    const m = Math.floor(dur / 60);
-    const s = dur % 60;
-    const durStr = m + ':' + String(s).padStart(2, '0');
+    const durStr = Math.floor(dur/60) + ':' + String(dur%60).padStart(2,'0');
     const uid = 'v' + msg.id;
-    div.innerHTML = senderHtml + `
-      <div class="voice-bubble">
+    div.innerHTML = senderHtml + menuHtml + `
+      <div class="voice-bubble"
+        oncontextmenu="showDeleteMenu(${msg.id}, ${isMe}, event)"
+        ontouchstart="startLongPress(${msg.id}, ${isMe}, event)"
+        ontouchend="cancelLongPress()">
         <button class="play-btn" onclick="playVoice('${uid}', '${msg.audioData}', this)">▶</button>
         <div class="voice-info">
           <div class="voice-wave" id="wave_${uid}">
-            <span style="height:8px"></span>
-            <span style="height:14px"></span>
-            <span style="height:10px"></span>
-            <span style="height:16px"></span>
-            <span style="height:6px"></span>
-            <span style="height:12px"></span>
-            <span style="height:9px"></span>
-            <span style="height:15px"></span>
+            <span style="height:8px"></span><span style="height:14px"></span>
+            <span style="height:10px"></span><span style="height:16px"></span>
+            <span style="height:6px"></span><span style="height:12px"></span>
+            <span style="height:9px"></span><span style="height:15px"></span>
           </div>
           <div class="voice-dur" id="dur_${uid}">${durStr}</div>
         </div>
       </div>
       <div class="msg-time">${msg.time}</div>`;
-    // Сохраняем audioData
-    div.dataset.audio = msg.audioData;
 
   } else {
-    div.innerHTML = senderHtml + `
-      <div class="bubble">${escapeHtml(msg.text)}</div>
+    div.innerHTML = senderHtml + menuHtml + `
+      <div class="bubble"
+        oncontextmenu="showDeleteMenu(${msg.id}, ${isMe}, event)"
+        ontouchstart="startLongPress(${msg.id}, ${isMe}, event)"
+        ontouchend="cancelLongPress()">
+        ${escapeHtml(msg.text)}
+      </div>
       <div class="msg-time">${msg.time}</div>`;
   }
 
   container.appendChild(div);
 }
 
-// Воспроизведение голосового
-const audioPlayers = {};
+// Долгое нажатие для мобильных
+let longPressTimer = null;
+function startLongPress(msgId, isOwner, event) {
+  longPressTimer = setTimeout(() => { showDeleteMenu(msgId, isOwner, event); }, 600);
+}
+function cancelLongPress() { clearTimeout(longPressTimer); }
 
+// Воспроизведение голосовых
+const audioPlayers = {};
 function playVoice(uid, audioData, btn) {
-  // Если уже играет — пауза
   if (audioPlayers[uid]) {
     const audio = audioPlayers[uid];
-    if (!audio.paused) {
-      audio.pause();
-      btn.textContent = '▶';
-      stopWave(uid);
-      return;
-    } else {
-      audio.play();
-      btn.textContent = '⏸';
-      startWave(uid);
-      return;
-    }
+    if (!audio.paused) { audio.pause(); btn.textContent = '▶'; stopWave(uid); return; }
+    else { audio.play(); btn.textContent = '⏸'; startWave(uid); return; }
   }
-
   const audio = new Audio(audioData);
   audioPlayers[uid] = audio;
-
-  audio.play();
-  btn.textContent = '⏸';
-  startWave(uid);
-
-  // Обновляем таймер
+  audio.play(); btn.textContent = '⏸'; startWave(uid);
   audio.ontimeupdate = () => {
     const left = Math.max(0, Math.ceil(audio.duration - audio.currentTime));
-    const m = Math.floor(left / 60);
-    const s = left % 60;
     const el = document.getElementById('dur_' + uid);
-    if (el) el.textContent = m + ':' + String(s).padStart(2, '0');
+    if (el) el.textContent = Math.floor(left/60) + ':' + String(left%60).padStart(2,'0');
   };
-
-  audio.onended = () => {
-    btn.textContent = '▶';
-    stopWave(uid);
-  };
+  audio.onended = () => { btn.textContent = '▶'; stopWave(uid); };
 }
-
-function startWave(uid) {
-  const wave = document.getElementById('wave_' + uid);
-  if (wave) wave.querySelectorAll('span').forEach(s => s.classList.add('playing'));
-}
-
-function stopWave(uid) {
-  const wave = document.getElementById('wave_' + uid);
-  if (wave) wave.querySelectorAll('span').forEach(s => s.classList.remove('playing'));
-}
+function startWave(uid) { const w = document.getElementById('wave_'+uid); if(w) w.querySelectorAll('span').forEach(s=>s.classList.add('playing')); }
+function stopWave(uid) { const w = document.getElementById('wave_'+uid); if(w) w.querySelectorAll('span').forEach(s=>s.classList.remove('playing')); }
 
 function addSystem(text) {
   const div = document.createElement('div');
-  div.className = 'system-msg';
-  div.textContent = text;
-  document.getElementById('messages').appendChild(div);
-  scrollBottom();
+  div.className = 'system-msg'; div.textContent = text;
+  document.getElementById('messages').appendChild(div); scrollBottom();
 }
 
 function updateUsers(users, count) {
   document.getElementById('onlineCount').textContent = count + ' онлайн';
   document.getElementById('usersBar').innerHTML = users.map(u =>
-    '<div class="user-chip' + (u === myName ? ' me' : '') + '"><div class="dot"></div>' + escapeHtml(u) + (u === myName ? ' (ты)' : '') + '</div>'
+    '<div class="user-chip' + (u===myName?' me':'') + '"><div class="dot"></div>' + escapeHtml(u) + (u===myName?' (ты)':'') + '</div>'
   ).join('');
 }
 
