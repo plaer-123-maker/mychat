@@ -95,12 +95,14 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .stat{background:#0f3460;padding:16px;border-radius:10px;flex:1;min-width:100px;text-align:center;}
 .stat .num{font-size:28px;font-weight:bold;color:#e94560;}.stat .label{font-size:12px;color:#888;margin-top:4px;}
 .user-row{display:flex;align-items:center;justify-content:space-between;padding:10px;background:#0f3460;border-radius:8px;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
-.user-row .uinfo{font-size:14px;}.user-row .uinfo .role{font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;}
+.user-row .uinfo{font-size:14px;}
+.role{font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;}
 .role.admin{background:#e94560;}.role.moderator{background:#f5a623;color:#000;}.role.user{background:#333;}
 .user-row .uactions{display:flex;gap:4px;flex-wrap:wrap;}
-.user-row .uactions button{padding:4px 8px;border:none;border-radius:4px;cursor:pointer;font-size:11px;color:#fff;}
-.ubtn-ban{background:#e94560;}.ubtn-unban{background:#2ecc71;}.ubtn-mute{background:#f5a623;color:#000;}
-.ubtn-del{background:#c0392b;}.ubtn-nick{background:#3498db;}.ubtn-role{background:#9b59b6;}
+.admin-act-btn{padding:5px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;color:#fff;}
+.admin-act-btn:hover{opacity:0.8;}
+.abtn-ban{background:#e94560;}.abtn-unban{background:#2ecc71;}.abtn-mute{background:#f5a623;color:#000;}
+.abtn-del{background:#c0392b;}.abtn-nick{background:#3498db;}.abtn-role{background:#9b59b6;}
 .log-row{padding:8px;background:#0f3460;border-radius:6px;margin-bottom:4px;font-size:12px;}
 .log-row .time{color:#888;}.log-row .act{color:#e94560;font-weight:bold;}
 .admin-input{display:flex;gap:8px;margin-top:16px;}
@@ -289,11 +291,9 @@ socket.on('searchResults',function(users){
 });
 
 socket.on('myChats',function(chats){
-  var list=document.getElementById('sidebarList');
-  if(chats.length===0&&!document.getElementById('searchInput').value.trim()){
-    list.innerHTML='<div class="empty-list">Нет чатов. Найди кого-нибудь через поиск ☝️</div>';return;
-  }
   if(document.getElementById('searchInput').value.trim())return;
+  var list=document.getElementById('sidebarList');
+  if(chats.length===0){list.innerHTML='<div class="empty-list">Нет чатов. Найди кого-нибудь через поиск ☝️</div>';return;}
   var html='';
   chats.forEach(function(c){
     var lastText='';
@@ -311,7 +311,7 @@ socket.on('unreadNotification',function(d){
   if(currentView==='private')socket.emit('getMyChats');
 });
 
-// === OPEN PRIVATE CHAT ===
+// === PRIVATE CHAT ===
 function openPM(login,nickname){
   currentView='pm';currentPrivateLogin=login;currentPrivateNick=nickname;
   document.getElementById('mainChat').classList.add('show');
@@ -448,41 +448,88 @@ socket.on('passwordResult',function(m){if(m==='ok'){document.getElementById('pas
 
 document.getElementById('logoutBtn').addEventListener('click',function(){location.reload();});
 
-// === ADMIN ===
-document.getElementById('adminPanelBtn').addEventListener('click',function(){document.getElementById('adminOverlay').classList.add('show');loadTab('stats');});
-document.getElementById('adminClose').addEventListener('click',function(){document.getElementById('adminOverlay').classList.remove('show');});
-document.getElementById('adminTabs').addEventListener('click',function(e){if(e.target.dataset.tab){document.querySelectorAll('#adminTabs button').forEach(function(b){b.classList.remove('active');});e.target.classList.add('active');loadTab(e.target.dataset.tab);}});
+// === ADMIN PANEL ===
+document.getElementById('adminPanelBtn').addEventListener('click',function(){
+  document.getElementById('adminOverlay').classList.add('show');
+  loadTab('stats');
+});
+document.getElementById('adminClose').addEventListener('click',function(){
+  document.getElementById('adminOverlay').classList.remove('show');
+});
+document.getElementById('adminTabs').addEventListener('click',function(e){
+  if(e.target.dataset.tab){
+    document.querySelectorAll('#adminTabs button').forEach(function(b){b.classList.remove('active');});
+    e.target.classList.add('active');
+    loadTab(e.target.dataset.tab);
+  }
+});
 
-socket.on('adminStats',function(s){document.getElementById('adminContent').innerHTML='<div class="stat-box"><div class="stat"><div class="num">'+s.users+'</div><div class="label">Юзеров</div></div><div class="stat"><div class="num">'+s.messages+'</div><div class="label">Сообщений</div></div><div class="stat"><div class="num">'+s.pms+'</div><div class="label">Личных</div></div><div class="stat"><div class="num">'+s.online+'</div><div class="label">Онлайн</div></div></div>';});
+socket.on('adminStats',function(s){
+  document.getElementById('adminContent').innerHTML=
+    '<div class="stat-box">'+
+    '<div class="stat"><div class="num">'+s.users+'</div><div class="label">Юзеров</div></div>'+
+    '<div class="stat"><div class="num">'+s.messages+'</div><div class="label">Сообщений</div></div>'+
+    '<div class="stat"><div class="num">'+s.pms+'</div><div class="label">Личных</div></div>'+
+    '<div class="stat"><div class="num">'+s.online+'</div><div class="label">Онлайн</div></div></div>';
+});
 
 socket.on('adminUsers',function(users){
-  var html='';
+  var c=document.getElementById('adminContent');
+  c.innerHTML='';
   users.forEach(function(u){
-    var id='u_'+u.login.replace(/[^a-zA-Z0-9]/g,'_');
-    html+='<div class="user-row" id="'+id+'"><div class="uinfo"><b>'+u.nickname+'</b> ('+u.login+')<span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'')+'</div><div class="uactions">';
-    if(u.banned)html+='<button class="ubtn-unban" data-login="'+u.login+'" data-act="unban">Разбан</button>';
-    else html+='<button class="ubtn-ban" data-login="'+u.login+'" data-act="ban">Бан</button>';
-    html+='<button class="ubtn-mute" data-login="'+u.login+'" data-act="mute">Мут</button>';
-    html+='<button class="ubtn-nick" data-login="'+u.login+'" data-act="nick">Ник</button>';
-    html+='<button class="ubtn-role" data-login="'+u.login+'" data-act="role">Роль</button>';
-    html+='<button class="ubtn-del" data-login="'+u.login+'" data-act="del">Удалить</button>';
-    html+='</div></div>';
+    var row=document.createElement('div');
+    row.className='user-row';
+    var infoDiv=document.createElement('div');
+    infoDiv.className='uinfo';
+    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
+    row.appendChild(infoDiv);
+
+    var actDiv=document.createElement('div');
+    actDiv.className='uactions';
+
+    if(u.banned){
+      var btnUnban=document.createElement('button');
+      btnUnban.className='admin-act-btn abtn-unban';btnUnban.textContent='Разбан';
+      btnUnban.addEventListener('click',(function(login){return function(){socket.emit('adminUnbanUser',login);};})(u.login));
+      actDiv.appendChild(btnUnban);
+    }else{
+      var btnBan=document.createElement('button');
+      btnBan.className='admin-act-btn abtn-ban';btnBan.textContent='Бан';
+      btnBan.addEventListener('click',(function(login){return function(){if(confirm('Забанить '+login+'?'))socket.emit('adminBanUser',login);};})(u.login));
+      actDiv.appendChild(btnBan);
+    }
+
+    var btnMute=document.createElement('button');
+    btnMute.className='admin-act-btn abtn-mute';btnMute.textContent='Мут';
+    btnMute.addEventListener('click',(function(login){return function(){var m=prompt('Минут мута?','10');if(m)socket.emit('adminMuteUser',{login:login,minutes:parseInt(m)});};})(u.login));
+    actDiv.appendChild(btnMute);
+
+    var btnNick=document.createElement('button');
+    btnNick.className='admin-act-btn abtn-nick';btnNick.textContent='Ник';
+    btnNick.addEventListener('click',(function(login){return function(){var n=prompt('Новый ник:');if(n)socket.emit('adminChangeNickname',{login:login,newNickname:n});};})(u.login));
+    actDiv.appendChild(btnNick);
+
+    var btnRole=document.createElement('button');
+    btnRole.className='admin-act-btn abtn-role';btnRole.textContent='Роль';
+    btnRole.addEventListener('click',(function(login){return function(){var r=prompt('Роль (admin/moderator/user):','user');if(r)socket.emit('adminSetRole',{login:login,role:r});};})(u.login));
+    actDiv.appendChild(btnRole);
+
+    var btnDel=document.createElement('button');
+    btnDel.className='admin-act-btn abtn-del';btnDel.textContent='Удалить';
+    btnDel.addEventListener('click',(function(login){return function(){if(confirm('Удалить '+login+'? Необратимо!'))socket.emit('adminDeleteUser',login);};})(u.login));
+    actDiv.appendChild(btnDel);
+
+    row.appendChild(actDiv);
+    c.appendChild(row);
   });
-  var c=document.getElementById('adminContent');c.innerHTML=html;
-  c.onclick=function(e){
-    var btn=e.target;if(!btn.dataset||!btn.dataset.act)return;
-    var login=btn.dataset.login,act=btn.dataset.act;
-    if(act==='ban'){if(confirm('Забанить '+login+'?'))socket.emit('adminBanUser',login);}
-    else if(act==='unban')socket.emit('adminUnbanUser',login);
-    else if(act==='mute'){var m=prompt('Минут мута?','10');if(m)socket.emit('adminMuteUser',{login:login,minutes:parseInt(m)});}
-    else if(act==='nick'){var n=prompt('Новый ник:');if(n)socket.emit('adminChangeNickname',{login:login,newNickname:n});}
-    else if(act==='role'){var r=prompt('Роль (admin/moderator/user):','user');if(r)socket.emit('adminSetRole',{login:login,role:r});}
-    else if(act==='del'){if(confirm('Удалить '+login+'?'))socket.emit('adminDeleteUser',login);}
-  };
 });
 
 socket.on('adminLogs',function(logs){
-  var html='';logs.forEach(function(l){var d=new Date(Number(l.timestamp));html+='<div class="log-row"><span class="time">'+d.toLocaleString()+'</span> <span class="act">'+l.action+'</span> '+l.username+' — '+l.detail+(l.ip?' ('+l.ip+')':'')+'</div>';});
+  var html='';
+  logs.forEach(function(l){
+    var d=new Date(Number(l.timestamp));
+    html+='<div class="log-row"><span class="time">'+d.toLocaleString()+'</span> <span class="act">'+l.action+'</span> '+l.username+' — '+l.detail+(l.ip?' ('+l.ip+')':'')+'</div>';
+  });
   document.getElementById('adminContent').innerHTML=html||'<p>Логов нет</p>';
 });
 
@@ -492,12 +539,27 @@ socket.on('adminDone',function(msg){
 });
 
 function loadTab(tab){
-  currentAdminTab=tab;var c=document.getElementById('adminContent');
+  currentAdminTab=tab;
+  var c=document.getElementById('adminContent');
   if(tab==='stats'){socket.emit('adminGetStats');c.innerHTML='Загрузка...';}
   else if(tab==='users'){socket.emit('adminGetUsers');c.innerHTML='Загрузка...';}
   else if(tab==='logs'){socket.emit('adminGetLogs');c.innerHTML='Загрузка...';}
-  else if(tab==='announce'){c.innerHTML='<h3>📢 Объявление</h3><div class="admin-input"><input id="annInput" placeholder="Текст..."><button id="annBtn">Отправить</button></div>';document.getElementById('annBtn').onclick=function(){var t=document.getElementById('annInput').value.trim();if(t){socket.emit('adminAnnounce',t);document.getElementById('annInput').value='';}};}
-  else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').onclick=function(){if(confirm('Удалить ВСЕ сообщения?'))socket.emit('adminClearChat');};document.getElementById('delAllBtn').onclick=function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');};}
+  else if(tab==='announce'){
+    c.innerHTML='<h3>📢 Объявление</h3><div class="admin-input"><input id="annInput" placeholder="Текст..."><button id="annBtn">Отправить</button></div>';
+    document.getElementById('annBtn').addEventListener('click',function(){
+      var t=document.getElementById('annInput').value.trim();
+      if(t){socket.emit('adminAnnounce',t);document.getElementById('annInput').value='';}
+    });
+  }
+  else if(tab==='danger'){
+    c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';
+    document.getElementById('clearBtn').addEventListener('click',function(){
+      if(confirm('Удалить ВСЕ сообщения?'))socket.emit('adminClearChat');
+    });
+    document.getElementById('delAllBtn').addEventListener('click',function(){
+      if(confirm('Удалить ВСЕ аккаунты?')){if(confirm('Точно уверен?'))socket.emit('adminDeleteAllUsers');}
+    });
+  }
 }
 </script>
 </body>
