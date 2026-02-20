@@ -16,6 +16,7 @@ const pool = new Pool({
 });
 
 async function initDB() {
+  await pool.query('DROP TABLE IF EXISTS messages');
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id SERIAL PRIMARY KEY,
@@ -25,7 +26,7 @@ async function initDB() {
     )
   `);
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE messages (
       id SERIAL PRIMARY KEY,
       username VARCHAR(100) NOT NULL,
       text TEXT,
