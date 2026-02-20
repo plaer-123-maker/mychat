@@ -38,12 +38,7 @@ async function initDB() {
     type VARCHAR(20) DEFAULT 'text', timestamp BIGINT NOT NULL,
     read BOOLEAN DEFAULT false
   )`);
-
-  try { await pool.query('DROP TABLE IF EXISTS room_messages CASCADE'); } catch(e) { console.log('drop room_messages:', e.message); }
-  try { await pool.query('DROP TABLE IF EXISTS room_members CASCADE'); } catch(e) { console.log('drop room_members:', e.message); }
-  try { await pool.query('DROP TABLE IF EXISTS rooms CASCADE'); } catch(e) { console.log('drop rooms:', e.message); }
-
-  await pool.query(`CREATE TABLE rooms (
+  await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(20) NOT NULL,
@@ -51,14 +46,14 @@ async function initDB() {
     comments_enabled BOOLEAN DEFAULT true,
     timestamp BIGINT NOT NULL
   )`);
-  await pool.query(`CREATE TABLE room_members (
+  await pool.query(`CREATE TABLE IF NOT EXISTS room_members (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
     user_login VARCHAR(50) NOT NULL,
     role VARCHAR(20) DEFAULT 'member',
     UNIQUE(room_id, user_login)
   )`);
-  await pool.query(`CREATE TABLE room_messages (
+  await pool.query(`CREATE TABLE IF NOT EXISTS room_messages (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
     user_login VARCHAR(50) NOT NULL,
@@ -67,7 +62,6 @@ async function initDB() {
     type VARCHAR(20) DEFAULT 'text',
     timestamp BIGINT NOT NULL
   )`);
-
   await pool.query(`CREATE TABLE IF NOT EXISTS logs (
     id SERIAL PRIMARY KEY, action VARCHAR(50) NOT NULL,
     username VARCHAR(100), detail TEXT, ip VARCHAR(50),
@@ -326,7 +320,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // === ROOMS ===
   socket.on('createRoom', async ({ name, type }) => {
     if (!socket.userLogin || !name) return;
     if (type !== 'group' && type !== 'channel') type = 'group';
@@ -498,7 +491,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // === ADMIN ===
   socket.on('adminGetUsers', async () => {
     if (!isAdmin(socket)) return;
     try { const res = await pool.query('SELECT id,login,nickname,banned,muted_until,role FROM users ORDER BY id'); socket.emit('adminUsers', res.rows); } catch(e) {}

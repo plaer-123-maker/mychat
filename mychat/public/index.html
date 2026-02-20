@@ -237,7 +237,7 @@ function switchToGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabGeneral');
   document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="chat-item active"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
+  document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
@@ -317,6 +317,21 @@ socket.on('myRooms',function(rooms){
     html+='<div class="tag">'+r.type+'</div></div>';
   });list.innerHTML=html;
 });
+
+function openGeneral(){
+  currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  document.getElementById('mainChat').classList.add('show');
+  document.getElementById('noChat').style.display='none';
+  document.getElementById('chatTitle').textContent='Общий чат';
+  document.getElementById('typingIndicator').textContent='';
+  document.getElementById('onlineInfo').textContent='';
+  document.getElementById('chatHeaderBtns').innerHTML='';
+  document.getElementById('inputArea').style.display='flex';
+  document.getElementById('messages').innerHTML='';
+  if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
+  socket.emit('getGeneralHistory');
+}
+window.openGeneral=openGeneral;
 
 function openPM(login,nickname){
   currentView='pm';currentPrivateLogin=login;currentRoomId=null;currentRoomData=null;typingSet.clear();
@@ -591,6 +606,7 @@ document.getElementById('mobileBackBtn').addEventListener('click',function(){
   document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';
   if(currentView==='pm'){currentView='private';currentPrivateLogin=null;socket.emit('getMyChats');}
   else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;socket.emit('getMyRooms');}
+  else if(currentView==='general'){switchToGeneral();}
 });
 
 document.getElementById('adminPanelBtn').addEventListener('click',function(){document.getElementById('adminOverlay').classList.add('show');loadTab('stats');});
