@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -22,7 +23,8 @@ async function initDB() {
     id SERIAL PRIMARY KEY, login VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(200) NOT NULL, nickname VARCHAR(50) NOT NULL,
     banned BOOLEAN DEFAULT false, muted_until BIGINT DEFAULT 0,
-    role VARCHAR(20) DEFAULT 'user'
+    role VARCHAR(20) DEFAULT 'user',
+    token VARCHAR(200) DEFAULT NULL
   )`);
   await pool.query(`CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY, username VARCHAR(100) NOT NULL,
@@ -68,6 +70,7 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT false'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
   console.log('Database ready');
 }
@@ -117,8 +120,40 @@ function sendOnlineToAll() {
   }
 }
 
+// Генерация токена
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Авторизация по токену — вспомогательная
+async function authByToken(socket, token, ip) {
+  try {
+    const res = await pool.query('SELECT * FROM users WHERE token=$1', [token]);
+    if (res.rows.length === 0) return socket.emit('authError', 'Токен недействителен');
+    const user = res.rows[0];
+    if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
+    socket.username = user.nickname;
+    socket.userLogin = user.login;
+    socket.userRole = user.role || 'user';
+    if (user.login === ADMIN_LOGIN) socket.userRole = 'admin';
+    onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
+    socketUsers.set(socket.id, socket);
+    socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token });
+    const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
+    socket.emit('messageHistory', msgs.rows);
+    sendOnlineToAll();
+    await addLog('login_token', user.nickname, 'Auto-login', ip);
+  } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
+}
+
 io.on('connection', (socket) => {
   const ip = getIP(socket);
+
+  // === АВТО-ВХОД ПО ТОКЕНУ ===
+  socket.on('autoLogin', async (token) => {
+    if (!token) return socket.emit('authError', 'Нет токена');
+    await authByToken(socket, token, ip);
+  });
 
   socket.on('register', async ({ login, password, nickname }) => {
     try {
@@ -128,11 +163,12 @@ io.on('connection', (socket) => {
       if (nickExists.rows.length > 0) return socket.emit('authError', 'Этот ник уже занят');
       const hash = await bcrypt.hash(password, 10);
       const role = login === ADMIN_LOGIN ? 'admin' : 'user';
-      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role) VALUES ($1,$2,$3,false,0,$4)', [login, hash, nickname, role]);
+      const token = generateToken();
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token) VALUES ($1,$2,$3,false,0,$4,$5)', [login, hash, nickname, role, token]);
       socket.username = nickname; socket.userLogin = login; socket.userRole = role;
       onlineUsers.set(socket.id, { nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname, role, login });
+      socket.emit('authSuccess', { nickname, role, login, token });
       const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
       socket.emit('messageHistory', msgs.rows);
       sendOnlineToAll();
@@ -151,9 +187,12 @@ io.on('connection', (socket) => {
       socket.username = user.nickname; socket.userLogin = login;
       socket.userRole = user.role || 'user';
       if (login === ADMIN_LOGIN) socket.userRole = 'admin';
+      // Генерим новый токен при каждом логине
+      const token = generateToken();
+      await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
       onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token });
       const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
       socket.emit('messageHistory', msgs.rows);
       sendOnlineToAll();
@@ -175,6 +214,7 @@ io.on('connection', (socket) => {
       await pool.query('UPDATE users SET nickname=$1 WHERE login=$2', [newNick, socket.userLogin]);
       socket.username = newNick;
       onlineUsers.set(socket.id, { nickname: newNick, login: socket.userLogin, ip });
+      socket.emit('nicknameChanged', newNick);
       sendOnlineToAll();
     } catch (e) { console.error(e); }
   });
@@ -340,7 +380,7 @@ io.on('connection', (socket) => {
         ORDER BY r.timestamp DESC
       `, [socket.userLogin]);
       socket.emit('myRooms', res.rows);
-    } catch(e) { socket.emit('myRooms', []); }
+    } catch(e) { console.error(e); socket.emit('myRooms', []); }
   });
 
   // SEARCH ROOMS
@@ -381,7 +421,7 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // OPEN ROOM (load history + info)
+  // OPEN ROOM
   socket.on('openRoom', async (roomId) => {
     if (!socket.userLogin) return;
     try {
@@ -414,12 +454,9 @@ io.on('connection', (socket) => {
       var myRole = member.rows[0].role;
       var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [data.roomId]);
       if (room.rows.length === 0) return;
-
-      // Channel: only admin can post
       if (room.rows[0].type === 'channel' && myRole !== 'admin') {
         return socket.emit('chatError', 'В канале писать может только админ');
       }
-
       var msg = {
         room_id: data.roomId, user_login: socket.userLogin, username: socket.username,
         text: data.text||'', image: data.image||null, voice: data.voice||null,
@@ -460,7 +497,6 @@ io.on('connection', (socket) => {
       var already = await pool.query('SELECT * FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
       if (already.rows.length > 0) return socket.emit('chatError', 'Уже участник');
       await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, login, 'member']);
-      // Reload members
       var members = await pool.query(`
         SELECT rm.user_login, rm.role, u.nickname 
         FROM room_members rm JOIN users u ON rm.user_login = u.login 
@@ -510,7 +546,7 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // TOGGLE COMMENTS (channels only)
+  // TOGGLE COMMENTS
   socket.on('roomToggleComments', async (roomId) => {
     if (!socket.userLogin) return;
     try {
