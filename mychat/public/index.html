@@ -67,7 +67,20 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
 .private-msg.show { display:block; }
 .private-msg .close { cursor:pointer; float:right; color:#e94560; }
 
-/* ADMIN PANEL */
+/* PASSWORD MODAL */
+.modal-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1500; display:none; justify-content:center; align-items:center; }
+.modal-overlay.show { display:flex; }
+.modal-box { background:#16213e; padding:30px; border-radius:16px; width:340px; text-align:center; }
+.modal-box h3 { margin-bottom:16px; }
+.modal-box input { width:100%; padding:12px; margin-bottom:10px; border:1px solid #333; border-radius:8px; background:#0f3460; color:#fff; outline:none; }
+.modal-box .modal-btns { display:flex; gap:8px; margin-top:12px; }
+.modal-box .modal-btns button { flex:1; padding:10px; border:none; border-radius:8px; cursor:pointer; color:#fff; font-size:14px; }
+.modal-box .modal-btns .save { background:#e94560; }
+.modal-box .modal-btns .cancel { background:#333; }
+.modal-box .modal-error { color:#ff6b6b; font-size:13px; min-height:20px; margin-bottom:8px; }
+.modal-box .modal-success { color:#2ecc71; font-size:13px; min-height:20px; margin-bottom:8px; }
+
+/* ADMIN */
 .admin-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; display:none; justify-content:center; align-items:center; }
 .admin-overlay.show { display:flex; }
 .admin-panel { background:#16213e; width:90%; max-width:700px; max-height:85vh; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; }
@@ -106,7 +119,7 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
 .danger-zone h4 { color:#e94560; margin-bottom:10px; }
 .danger-zone button { padding:10px 20px; border:none; border-radius:8px; background:#c0392b; color:#fff; cursor:pointer; margin-right:8px; margin-bottom:8px; }
 
-@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
 .messages::-webkit-scrollbar { width:6px; }
 .messages::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
 </style>
@@ -129,11 +142,28 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
 <div class="chat-error" id="chatError"></div>
 <div class="private-msg" id="privateMsg"><span class="close" id="pmClose">✕</span><div id="pmContent"></div></div>
 
+<!-- PASSWORD MODAL -->
+<div class="modal-overlay" id="passModal">
+  <div class="modal-box">
+    <h3>🔒 Смена пароля</h3>
+    <div class="modal-error" id="passError"></div>
+    <div class="modal-success" id="passSuccess"></div>
+    <input type="password" id="oldPass" placeholder="Старый пароль">
+    <input type="password" id="newPass" placeholder="Новый пароль">
+    <input type="password" id="newPass2" placeholder="Повтори новый пароль">
+    <div class="modal-btns">
+      <button class="cancel" id="passCancel">Отмена</button>
+      <button class="save" id="passSave">Сохранить</button>
+    </div>
+  </div>
+</div>
+
 <div class="chat-container" id="chatContainer">
   <div class="chat-header">
     <div><h3>MyChat</h3><span class="online-count" id="onlineCount">0 онлайн</span></div>
     <div class="header-btns">
       <button id="nickBtn">✏️ Ник</button>
+      <button id="passBtn">🔒 Пароль</button>
       <button id="adminPanelBtn" class="admin-btn" style="display:none;">⚙️ Админ</button>
       <button id="logoutBtn">Выйти</button>
     </div>
@@ -154,7 +184,6 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
   </div>
 </div>
 
-<!-- ADMIN PANEL -->
 <div class="admin-overlay" id="adminOverlay">
   <div class="admin-panel" style="position:relative;">
     <span class="admin-close" id="adminClose">✕</span>
@@ -223,7 +252,6 @@ socket.on('authSuccess', function(data) {
 });
 
 socket.on('authError', function(msg) { authError.textContent = msg; });
-
 socket.on('kicked', function(msg) { alert(msg); location.reload(); });
 socket.on('nicknameChanged', function(n) { myNickname = n; });
 socket.on('chatCleared', function() { document.getElementById('messages').innerHTML = ''; });
@@ -242,6 +270,42 @@ socket.on('privateMessage', function(data) {
 });
 document.getElementById('pmClose').addEventListener('click', function() {
   document.getElementById('privateMsg').classList.remove('show');
+});
+
+// === PASSWORD ===
+document.getElementById('passBtn').addEventListener('click', function() {
+  document.getElementById('passModal').classList.add('show');
+  document.getElementById('oldPass').value = '';
+  document.getElementById('newPass').value = '';
+  document.getElementById('newPass2').value = '';
+  document.getElementById('passError').textContent = '';
+  document.getElementById('passSuccess').textContent = '';
+});
+
+document.getElementById('passCancel').addEventListener('click', function() {
+  document.getElementById('passModal').classList.remove('show');
+});
+
+document.getElementById('passSave').addEventListener('click', function() {
+  var oldP = document.getElementById('oldPass').value.trim();
+  var newP = document.getElementById('newPass').value.trim();
+  var newP2 = document.getElementById('newPass2').value.trim();
+  document.getElementById('passError').textContent = '';
+  document.getElementById('passSuccess').textContent = '';
+  if (!oldP || !newP || !newP2) { document.getElementById('passError').textContent = 'Заполни все поля'; return; }
+  if (newP !== newP2) { document.getElementById('passError').textContent = 'Пароли не совпадают'; return; }
+  if (newP.length < 4) { document.getElementById('passError').textContent = 'Минимум 4 символа'; return; }
+  socket.emit('changePassword', { oldPassword: oldP, newPassword: newP });
+});
+
+socket.on('passwordResult', function(msg) {
+  if (msg === 'ok') {
+    document.getElementById('passSuccess').textContent = 'Пароль изменён!';
+    document.getElementById('passError').textContent = '';
+    setTimeout(function() { document.getElementById('passModal').classList.remove('show'); }, 1500);
+  } else {
+    document.getElementById('passError').textContent = msg;
+  }
 });
 
 // === MESSAGES ===
@@ -374,7 +438,7 @@ document.getElementById('nickBtn').addEventListener('click', function() {
 
 document.getElementById('logoutBtn').addEventListener('click', function() { location.reload(); });
 
-// === ADMIN PANEL ===
+// === ADMIN ===
 document.getElementById('adminPanelBtn').addEventListener('click', function() {
   document.getElementById('adminOverlay').classList.add('show');
   loadAdminTab('stats');
@@ -397,8 +461,7 @@ socket.on('adminStats', function(s) {
     '<div class="stat-box">' +
     '<div class="stat"><div class="num">'+s.users+'</div><div class="label">Пользователей</div></div>' +
     '<div class="stat"><div class="num">'+s.messages+'</div><div class="label">Сообщений</div></div>' +
-    '<div class="stat"><div class="num">'+s.online+'</div><div class="label">Онлайн</div></div>' +
-    '</div>';
+    '<div class="stat"><div class="num">'+s.online+'</div><div class="label">Онлайн</div></div></div>';
 });
 
 socket.on('adminUsers', function(users) {

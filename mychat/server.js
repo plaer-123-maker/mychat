@@ -54,9 +54,6 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
-  // RESET PASSWORD - REMOVE AFTER FIRST LOGIN
-  const newHash = await bcrypt.hash('123456', 10);
-  await pool.query("UPDATE users SET password=$1 WHERE login='pekka'", [newHash]);
   console.log('Database ready');
 }
 
@@ -158,6 +155,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('changePassword', async ({ oldPassword, newPassword }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT password FROM users WHERE login=$1', [socket.userLogin]);
+      if (res.rows.length === 0) return socket.emit('passwordResult', 'Ошибка');
+      const valid = await bcrypt.compare(oldPassword, res.rows[0].password);
+      if (!valid) return socket.emit('passwordResult', 'Неверный старый пароль');
+      const hash = await bcrypt.hash(newPassword, 10);
+      await pool.query('UPDATE users SET password=$1 WHERE login=$2', [hash, socket.userLogin]);
+      await addLog('password', socket.username, 'Сменил пароль', ip);
+      socket.emit('passwordResult', 'ok');
+    } catch(e) {
+      console.error(e);
+      socket.emit('passwordResult', 'Ошибка смены пароля');
+    }
+  });
+
   socket.on('chatMessage', async (data) => {
     if (!socket.username) return;
     try {
@@ -202,7 +216,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // === ADMIN ===
   socket.on('adminGetUsers', async () => {
     if (!isAdmin(socket)) return;
     try {
