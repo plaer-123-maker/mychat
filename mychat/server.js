@@ -6,7 +6,7 @@ const path = require('path');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  maxHttpBufferSize: 10e6 // 10MB — максимальный размер фото
+  maxHttpBufferSize: 20e6 // 20MB — для фото и голосовых
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -15,8 +15,6 @@ const users = {};
 const messages = [];
 
 io.on('connection', (socket) => {
-  console.log('Новый пользователь подключился:', socket.id);
-
   socket.on('join', (username) => {
     users[socket.id] = username;
     socket.username = username;
@@ -28,7 +26,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Текстовое сообщение
+  // Текст
   socket.on('message', (text) => {
     const msg = {
       id: Date.now(),
@@ -56,13 +54,23 @@ io.on('connection', (socket) => {
     io.emit('message', msg);
   });
 
-  socket.on('typing', () => {
-    socket.broadcast.emit('typing', socket.username);
+  // Голосовое
+  socket.on('voice', (data) => {
+    const msg = {
+      id: Date.now(),
+      type: 'voice',
+      username: socket.username || 'Аноним',
+      audioData: data.audioData,
+      duration: data.duration,
+      time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+    };
+    messages.push(msg);
+    if (messages.length > 100) messages.shift();
+    io.emit('message', msg);
   });
 
-  socket.on('stop_typing', () => {
-    socket.broadcast.emit('stop_typing', socket.username);
-  });
+  socket.on('typing', () => { socket.broadcast.emit('typing', socket.username); });
+  socket.on('stop_typing', () => { socket.broadcast.emit('stop_typing', socket.username); });
 
   socket.on('disconnect', () => {
     if (socket.username) {
@@ -72,7 +80,6 @@ io.on('connection', (socket) => {
         users: Object.values(users),
         count: Object.keys(users).length
       });
-      console.log(socket.username + ' вышел из чата');
     }
   });
 });
@@ -80,5 +87,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log('\n✅ Чат запущен!');
-  console.log('🌐 Открой в браузере: http://localhost:' + PORT + '\n');
+  console.log('🌐 http://localhost:' + PORT + '\n');
 });
