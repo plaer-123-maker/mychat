@@ -125,7 +125,6 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .call-video-box{flex:1;position:relative;display:flex;justify-content:center;align-items:center;background:#1a1a2e;overflow:hidden;}
 .call-video-box video{max-width:100%;max-height:100%;object-fit:cover;}
 #remoteVideo{width:100%;height:100%;}
-/* Draggable local video for mobile */
 #localVideo{position:absolute;bottom:100px;right:20px;width:100px;height:140px;background:#000;border:2px solid #333;object-fit:cover;z-index:10;border-radius:10px;cursor:move;}
 .call-controls{height:100px;background:#16213e;display:flex;justify-content:space-evenly;align-items:center;padding:0 20px;}
 .call-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;display:flex;align-items:center;justify-content:center;}
@@ -155,7 +154,6 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 </div>
 <div class="chat-error" id="chatError"></div>
 
-<!-- CALL UI -->
 <div class="call-overlay" id="callOverlay">
   <div class="call-video-box">
     <video id="remoteVideo" autoplay playsinline></video>
@@ -226,10 +224,17 @@ currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=n
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
 
-// === WEBRTC VARIABLES ===
+// === IMPROVED WEBRTC CONFIG ===
 var localStream, remoteStream, peerConnection, incomingCallData=null;
-var currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+var currentFacingMode = 'user';
+const rtcConfig = { 
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' }
+  ] 
+};
 
 (function(){var token=localStorage.getItem('mychat_token');if(token)socket.emit('autoLogin',token);})();
 
@@ -388,7 +393,6 @@ function openPM(login,nickname){
   document.getElementById('chatTitle').textContent=nickname;
   document.getElementById('typingIndicator').textContent='';
   document.getElementById('onlineInfo').textContent='';
-  // ADD SEPARATE CALL BUTTONS
   document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
@@ -689,7 +693,7 @@ function loadTab(tab){
   else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');});}
 }
 
-// === CALL LOGIC UPDATED ===
+// === CALL LOGIC (FIXED) ===
 // Draggable local video
 const dragVideo = document.getElementById('localVideo');
 let isDragging = false;
@@ -706,19 +710,9 @@ function startDrag(e) {
   const rect = dragVideo.getBoundingClientRect();
   initialLeft = rect.left;
   initialTop = rect.top;
-  
-  // Disable default styling positioning to allow movement
-  dragVideo.style.right = 'auto';
-  dragVideo.style.bottom = 'auto';
-  dragVideo.style.left = initialLeft + 'px';
-  dragVideo.style.top = initialTop + 'px';
-
-  document.addEventListener('touchmove', moveDrag);
-  document.addEventListener('touchend', stopDrag);
-  document.addEventListener('mousemove', moveDrag);
-  document.addEventListener('mouseup', stopDrag);
+  dragVideo.style.right = 'auto';dragVideo.style.bottom = 'auto';dragVideo.style.left = initialLeft + 'px';dragVideo.style.top = initialTop + 'px';
+  document.addEventListener('touchmove', moveDrag);document.addEventListener('touchend', stopDrag);document.addEventListener('mousemove', moveDrag);document.addEventListener('mouseup', stopDrag);
 }
-
 function moveDrag(e) {
   if (!isDragging) return;
   const evt = e.type === 'touchmove' ? e.touches[0] : e;
@@ -726,22 +720,17 @@ function moveDrag(e) {
   const dy = evt.clientY - startY;
   dragVideo.style.left = (initialLeft + dx) + 'px';
   dragVideo.style.top = (initialTop + dy) + 'px';
-  e.preventDefault(); // prevent scrolling
+  e.preventDefault();
 }
-
 function stopDrag() {
   isDragging = false;
-  document.removeEventListener('touchmove', moveDrag);
-  document.removeEventListener('touchend', stopDrag);
-  document.removeEventListener('mousemove', moveDrag);
-  document.removeEventListener('mouseup', stopDrag);
+  document.removeEventListener('touchmove', moveDrag);document.removeEventListener('touchend', stopDrag);document.removeEventListener('mousemove', moveDrag);document.removeEventListener('mouseup', stopDrag);
 }
 
 function startCall(userToCall, type){
   currentPrivateLogin=userToCall;
   document.getElementById('callOverlay').classList.add('show');
   
-  // Constraints based on type
   const constraints = {
     audio: true,
     video: { facingMode: currentFacingMode }
@@ -751,15 +740,11 @@ function startCall(userToCall, type){
     localStream=stream;
     document.getElementById('localVideo').srcObject=stream;
     
-    // If audio call, disable video track immediately (acts like audio-only but ready for switch)
     if(type === 'audio') {
       const videoTrack = stream.getVideoTracks()[0];
-      if(videoTrack) {
-        videoTrack.enabled = false;
-        document.getElementById('toggleVideoBtn').classList.remove('active'); // Indicate off
-      }
+      if(videoTrack) { videoTrack.enabled = false; document.getElementById('toggleVideoBtn').classList.remove('active'); }
     } else {
-      document.getElementById('toggleVideoBtn').classList.add('active'); // Indicate on
+      document.getElementById('toggleVideoBtn').classList.add('active');
     }
 
     peerConnection=new RTCPeerConnection(rtcConfig);
@@ -794,13 +779,9 @@ function acceptCall(){
     localStream=stream;
     document.getElementById('localVideo').srcObject=stream;
     
-    // Mirror the call type of the caller (if they called audio, we start audio)
     if(incomingCallData.callType === 'audio') {
        const videoTrack = stream.getVideoTracks()[0];
-       if(videoTrack) {
-         videoTrack.enabled = false;
-         document.getElementById('toggleVideoBtn').classList.remove('active');
-       }
+       if(videoTrack) { videoTrack.enabled = false; document.getElementById('toggleVideoBtn').classList.remove('active'); }
     } else {
        document.getElementById('toggleVideoBtn').classList.add('active');
     }
@@ -833,9 +814,7 @@ socket.on('iceCandidate',function(candidate){
   if(peerConnection)peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
 });
 
-socket.on('callEnded',function(){
-  endCall();
-});
+socket.on('callEnded',function(){ endCall(); });
 
 function endCall(){
   if(peerConnection)peerConnection.close();
@@ -861,45 +840,26 @@ function toggleVideo(){
   if(localStream){
     var track=localStream.getVideoTracks()[0];
     track.enabled=!track.enabled;
-    // UI update
     const btn = document.getElementById('toggleVideoBtn');
-    if(track.enabled) btn.classList.add('active');
-    else btn.classList.remove('active');
+    if(track.enabled) btn.classList.add('active'); else btn.classList.remove('active');
   }
 }
 window.toggleVideo=toggleVideo;
 
 async function switchCamera(){
   if(!localStream) return;
-  // Stop current video track
   localStream.getVideoTracks()[0].stop();
-  
-  // Toggle facing mode
   currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-  
   try {
-    const newStream = await navigator.mediaDevices.getUserMedia({
-      audio: true, // Keep audio request to satisfy constraint, though we use existing track usually
-      video: { facingMode: currentFacingMode }
-    });
-    
+    const newStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: currentFacingMode } });
     const newVideoTrack = newStream.getVideoTracks()[0];
-    
-    // Replace track in peer connection (remote view)
     const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
     if(sender) sender.replaceTrack(newVideoTrack);
-    
-    // Replace track in local stream (local view)
-    // Remove old, add new
     const oldTrack = localStream.getVideoTracks()[0];
     localStream.removeTrack(oldTrack);
     localStream.addTrack(newVideoTrack);
     document.getElementById('localVideo').srcObject = localStream;
-    
-  } catch(e) {
-    alert('Не удалось переключить камеру');
-    console.error(e);
-  }
+  } catch(e) { alert('Не удалось переключить камеру'); console.error(e); }
 }
 window.switchCamera=switchCamera;
 </script>
