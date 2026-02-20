@@ -120,12 +120,10 @@ function sendOnlineToAll() {
   }
 }
 
-// Генерация токена
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-// Авторизация по токену — вспомогательная
 async function authByToken(socket, token, ip) {
   try {
     const res = await pool.query('SELECT * FROM users WHERE token=$1', [token]);
@@ -139,8 +137,6 @@ async function authByToken(socket, token, ip) {
     onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
     socketUsers.set(socket.id, socket);
     socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token });
-    const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
-    socket.emit('messageHistory', msgs.rows);
     sendOnlineToAll();
     await addLog('login_token', user.nickname, 'Auto-login', ip);
   } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
@@ -149,7 +145,6 @@ async function authByToken(socket, token, ip) {
 io.on('connection', (socket) => {
   const ip = getIP(socket);
 
-  // === АВТО-ВХОД ПО ТОКЕНУ ===
   socket.on('autoLogin', async (token) => {
     if (!token) return socket.emit('authError', 'Нет токена');
     await authByToken(socket, token, ip);
@@ -169,8 +164,6 @@ io.on('connection', (socket) => {
       onlineUsers.set(socket.id, { nickname, login, ip });
       socketUsers.set(socket.id, socket);
       socket.emit('authSuccess', { nickname, role, login, token });
-      const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
-      socket.emit('messageHistory', msgs.rows);
       sendOnlineToAll();
       await addLog('register', nickname, 'Registered', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
@@ -187,17 +180,23 @@ io.on('connection', (socket) => {
       socket.username = user.nickname; socket.userLogin = login;
       socket.userRole = user.role || 'user';
       if (login === ADMIN_LOGIN) socket.userRole = 'admin';
-      // Генерим новый токен при каждом логине
       const token = generateToken();
       await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
       onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
       socketUsers.set(socket.id, socket);
       socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token });
-      const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
-      socket.emit('messageHistory', msgs.rows);
       sendOnlineToAll();
       await addLog('login', user.nickname, 'Login', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
+  });
+
+  // === GET GENERAL HISTORY ===
+  socket.on('getGeneralHistory', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
+      socket.emit('messageHistory', msgs.rows);
+    } catch(e) { console.error(e); }
   });
 
   // TYPING
@@ -259,7 +258,6 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); }
   });
 
-  // SEARCH USER BY NICKNAME
   socket.on('searchUser', async (query) => {
     if (!socket.userLogin || !query) return;
     try {
@@ -352,7 +350,6 @@ io.on('connection', (socket) => {
   // === ROOMS (GROUPS & CHANNELS) ===
   // =============================================
 
-  // CREATE ROOM
   socket.on('createRoom', async ({ name, type }) => {
     if (!socket.userLogin || !name) return;
     if (type !== 'group' && type !== 'channel') return;
@@ -368,7 +365,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // GET MY ROOMS
   socket.on('getMyRooms', async () => {
     if (!socket.userLogin) return;
     try {
@@ -383,7 +379,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); socket.emit('myRooms', []); }
   });
 
-  // SEARCH ROOMS
   socket.on('searchRooms', async (query) => {
     if (!query) return;
     try {
@@ -394,7 +389,6 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('roomSearchResults', []); }
   });
 
-  // JOIN ROOM
   socket.on('joinRoom', async (roomId) => {
     if (!socket.userLogin) return;
     try {
@@ -407,7 +401,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // LEAVE ROOM
   socket.on('leaveRoom', async (roomId) => {
     if (!socket.userLogin) return;
     try {
@@ -421,7 +414,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // OPEN ROOM
   socket.on('openRoom', async (roomId) => {
     if (!socket.userLogin) return;
     try {
@@ -445,7 +437,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // SEND ROOM MESSAGE
   socket.on('roomMessage', async (data) => {
     if (!socket.userLogin || !data.roomId) return;
     try {
@@ -470,7 +461,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // DELETE ROOM MESSAGE
   socket.on('deleteRoomMessage', async ({ roomId, msgId }) => {
     if (!socket.userLogin) return;
     try {
@@ -486,7 +476,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // ADD MEMBER TO ROOM
   socket.on('roomAddMember', async ({ roomId, login }) => {
     if (!socket.userLogin) return;
     try {
@@ -507,7 +496,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // REMOVE MEMBER FROM ROOM
   socket.on('roomRemoveMember', async ({ roomId, login }) => {
     if (!socket.userLogin) return;
     try {
@@ -527,7 +515,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // SET MEMBER ROLE IN ROOM
   socket.on('roomSetRole', async ({ roomId, login, role }) => {
     if (!socket.userLogin) return;
     try {
@@ -546,7 +533,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // TOGGLE COMMENTS
   socket.on('roomToggleComments', async (roomId) => {
     if (!socket.userLogin) return;
     try {
@@ -560,7 +546,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // DELETE ROOM
   socket.on('deleteRoom', async (roomId) => {
     if (!socket.userLogin) return;
     try {
@@ -574,7 +559,6 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  // ROOM TYPING
   socket.on('roomTyping', (roomId) => {
     if (socket.username) socket.to('room_' + roomId).emit('roomUserTyping', { roomId, nickname: socket.username });
   });

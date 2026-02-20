@@ -180,16 +180,14 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 <div class="admin-overlay" id="adminOverlay"><div class="admin-panel"><span class="admin-close" id="adminClose">✕</span><div class="admin-tabs" id="adminTabs"><button class="active" data-tab="stats">📊 Стат</button><button data-tab="users">👥 Юзеры</button><button data-tab="logs">📋 Логи</button><button data-tab="announce">📢 Объявл</button><button data-tab="danger">⚠️ Опасно</button></div><div class="admin-content" id="adminContent"></div></div></div>
 <script>
 var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
-currentView='general',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
+currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
 
 // === AUTO LOGIN ===
 (function(){
   var token = localStorage.getItem('mychat_token');
-  if(token){
-    socket.emit('autoLogin', token);
-  }
+  if(token) socket.emit('autoLogin', token);
 })();
 
 // === AUTH ===
@@ -203,31 +201,35 @@ document.getElementById('switchLink').addEventListener('click',function(){
   var nf=document.getElementById('authNickname');if(isLoginMode)nf.classList.remove('show');else nf.classList.add('show');
   document.getElementById('authError').textContent='';
 });
+
 document.getElementById('authBtn').addEventListener('click',function(){
   var l=document.getElementById('authLogin').value.trim(),p=document.getElementById('authPassword').value.trim();
   document.getElementById('authError').textContent='';
   if(isLoginMode){if(!l||!p){document.getElementById('authError').textContent='Заполни все поля';return;}socket.emit('login',{login:l,password:p});}
   else{var n=document.getElementById('authNickname').value.trim();if(!l||!p||!n){document.getElementById('authError').textContent='Заполни все поля';return;}socket.emit('register',{login:l,password:p,nickname:n});}
 });
+
 socket.on('authSuccess',function(d){
   myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
-  // Сохраняем токен
   if(d.token) localStorage.setItem('mychat_token', d.token);
   document.getElementById('authOverlay').classList.add('hidden');
   document.getElementById('appContainer').classList.add('active');
   if(myRole==='admin'||myRole==='moderator')document.getElementById('adminPanelBtn').style.display='inline-block';
   switchToGeneral();
 });
+
 socket.on('authError',function(m){
   document.getElementById('authError').textContent=m;
-  // Если авто-логин не удался — убираем токен
   localStorage.removeItem('mychat_token');
 });
+
 socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
 socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
 socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
-socket.on('onlineUsers',function(d){if(d.isAdmin)document.getElementById('onlineInfo').textContent=d.count+' онлайн';else document.getElementById('onlineInfo').textContent='';});
+socket.on('onlineUsers',function(d){
+  if(currentView==='general'&&d.isAdmin)document.getElementById('onlineInfo').textContent=d.count+' онлайн';
+});
 
 // === TYPING ===
 var typingSet=new Set();
@@ -244,53 +246,67 @@ document.getElementById('tabGeneral').addEventListener('click',function(){switch
 document.getElementById('tabPrivate').addEventListener('click',function(){switchToPrivate();});
 document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
 
-function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
+function setActiveTab(id){
+  document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});
+  document.getElementById(id).classList.add('active');
+}
 
-// === ПОЛНЫЙ СБРОС СОСТОЯНИЯ ЧАТА ===
-function resetChatView(){
+function switchToGeneral(){
+  currentView='general';
   currentPrivateLogin=null;
   currentRoomId=null;
   currentRoomData=null;
   typingSet.clear();
+  setActiveTab('tabGeneral');
+  document.getElementById('searchInput').value='';
+  document.getElementById('sidebarList').innerHTML='<div class="chat-item active"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
+  document.getElementById('mainChat').classList.add('show');
+  document.getElementById('noChat').style.display='none';
+  document.getElementById('chatTitle').textContent='Общий чат';
+  document.getElementById('typingIndicator').textContent='';
+  document.getElementById('onlineInfo').textContent='';
+  document.getElementById('chatHeaderBtns').innerHTML='';
+  document.getElementById('inputArea').style.display='flex';
+  document.getElementById('messages').innerHTML='';
+  if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
+  socket.emit('getGeneralHistory');
+}
+
+function switchToPrivate(){
+  currentView='private';
+  currentPrivateLogin=null;
+  currentRoomId=null;
+  currentRoomData=null;
+  typingSet.clear();
+  setActiveTab('tabPrivate');
+  document.getElementById('searchInput').value='';
+  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  document.getElementById('chatTitle').textContent='';
   document.getElementById('typingIndicator').textContent='';
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='';
   document.getElementById('messages').innerHTML='';
-  document.getElementById('inputArea').style.display='flex';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='none';
-}
-
-function switchToGeneral(){
-  resetChatView();
-  currentView='general';
-  setActiveTab('tabGeneral');
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent='Общий чат';
-  document.getElementById('chatHeaderBtns').innerHTML='';
-  document.getElementById('inputArea').style.display='flex';
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="chat-item active"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
-  socket.emit('getHistory');
-  if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
-}
-
-function switchToPrivate(){
-  resetChatView();
-  currentView='private';
-  setActiveTab('tabPrivate');
-  document.getElementById('searchInput').value='';
   socket.emit('getMyChats');
 }
 
 function switchToRooms(){
-  resetChatView();
   currentView='rooms';
+  currentPrivateLogin=null;
+  currentRoomId=null;
+  currentRoomData=null;
+  typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
+  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
+  document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('noChat').style.display='flex';
+  document.getElementById('typingIndicator').textContent='';
+  document.getElementById('onlineInfo').textContent='';
+  document.getElementById('chatHeaderBtns').innerHTML='';
+  document.getElementById('messages').innerHTML='';
+  if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyRooms');
 }
 
@@ -308,14 +324,18 @@ document.getElementById('searchInput').addEventListener('input',function(){
     else if(currentView==='rooms')socket.emit('searchRooms',q);
   },300);
 });
+
 socket.on('searchResults',function(users){
+  if(currentView!=='private')return;
   var list=document.getElementById('sidebarList');
   if(users.length===0){list.innerHTML='<div class="empty-list">Никого не найдено</div>';return;}
   var html='';users.forEach(function(u){
     html+='<div class="chat-item" onclick="openPM(\''+u.login+'\',\''+u.nickname+'\')"><div class="avatar">👤</div><div class="info"><div class="name">'+u.nickname+'</div><div class="last">Нажми чтобы написать</div></div></div>';
   });list.innerHTML=html;
 });
+
 socket.on('roomSearchResults',function(rooms){
+  if(currentView!=='rooms')return;
   var list=document.getElementById('sidebarList');
   if(rooms.length===0){list.innerHTML='<div class="empty-list">Ничего не найдено</div>';return;}
   var html='';rooms.forEach(function(r){
@@ -326,7 +346,7 @@ socket.on('roomSearchResults',function(rooms){
 
 // === MY CHATS LIST ===
 socket.on('myChats',function(chats){
-  if(currentView!=='private')return;
+  if(currentView!=='private'&&currentView!=='pm')return;
   if(document.getElementById('searchInput').value.trim())return;
   var list=document.getElementById('sidebarList');
   if(chats.length===0){list.innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';return;}
@@ -338,7 +358,7 @@ socket.on('myChats',function(chats){
     html+='</div>';
   });list.innerHTML=html;
 });
-socket.on('unreadNotification',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)return;if(currentView==='private')socket.emit('getMyChats');});
+socket.on('unreadNotification',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)return;if(currentView==='private'||currentView==='pm')socket.emit('getMyChats');});
 
 // === MY ROOMS LIST ===
 socket.on('myRooms',function(rooms){
@@ -356,12 +376,18 @@ socket.on('myRooms',function(rooms){
 
 // === OPEN PM ===
 function openPM(login,nickname){
-  resetChatView();
-  currentView='pm';currentPrivateLogin=login;
+  currentView='pm';
+  currentPrivateLogin=login;
+  currentRoomId=null;
+  currentRoomData=null;
+  typingSet.clear();
   setActiveTab('tabPrivate');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent=nickname;
+  document.getElementById('typingIndicator').textContent='';
+  document.getElementById('onlineInfo').textContent='';
+  document.getElementById('chatHeaderBtns').innerHTML='';
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
@@ -372,36 +398,70 @@ window.openPM=openPM;
 
 // === OPEN ROOM ===
 function openRoom(roomId){
-  resetChatView();
-  currentView='room';currentRoomId=roomId;
+  currentView='room';
+  currentRoomId=roomId;
+  currentPrivateLogin=null;
+  currentRoomData=null;
+  typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
+  document.getElementById('chatTitle').textContent='Загрузка...';
+  document.getElementById('typingIndicator').textContent='';
+  document.getElementById('onlineInfo').textContent='';
+  document.getElementById('chatHeaderBtns').innerHTML='';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
   socket.emit('openRoom',roomId);
   socket.emit('getMyRooms');
 }
 window.openRoom=openRoom;
+
 function joinAndOpenRoom(roomId){
   socket.emit('joinRoom',roomId);
-  openRoom(roomId);
+  setTimeout(function(){ openRoom(roomId); }, 300);
 }
 window.joinAndOpenRoom=joinAndOpenRoom;
 
-socket.on('joinedRoom',function(roomId){socket.emit('getMyRooms');});
-socket.on('leftRoom',function(roomId){if(currentRoomId===roomId){resetChatView();currentView='rooms';}socket.emit('getMyRooms');});
-socket.on('kickedFromRoom',function(roomId){if(currentRoomId===roomId){alert('Вас удалили из комнаты');resetChatView();currentView='rooms';}socket.emit('getMyRooms');});
-socket.on('roomDeleted',function(roomId){if(currentRoomId===roomId){alert('Комната удалена');resetChatView();currentView='rooms';}socket.emit('getMyRooms');});
+socket.on('joinedRoom',function(roomId){
+  if(currentView==='rooms'||currentView==='room') socket.emit('getMyRooms');
+});
+socket.on('leftRoom',function(roomId){
+  if(currentRoomId===roomId){
+    currentRoomId=null;currentRoomData=null;currentView='rooms';
+    document.getElementById('mainChat').classList.remove('show');
+    document.getElementById('noChat').style.display='flex';
+    document.getElementById('messages').innerHTML='';
+  }
+  socket.emit('getMyRooms');
+});
+socket.on('kickedFromRoom',function(roomId){
+  if(currentRoomId===roomId){
+    alert('Вас удалили из комнаты');
+    currentRoomId=null;currentRoomData=null;currentView='rooms';
+    document.getElementById('mainChat').classList.remove('show');
+    document.getElementById('noChat').style.display='flex';
+    document.getElementById('messages').innerHTML='';
+  }
+  socket.emit('getMyRooms');
+});
+socket.on('roomDeleted',function(roomId){
+  if(currentRoomId===roomId){
+    alert('Комната удалена');
+    currentRoomId=null;currentRoomData=null;currentView='rooms';
+    document.getElementById('mainChat').classList.remove('show');
+    document.getElementById('noChat').style.display='flex';
+    document.getElementById('messages').innerHTML='';
+  }
+  socket.emit('getMyRooms');
+});
 
 socket.on('roomData',function(data){
   if(currentView!=='room'||currentRoomId!==data.room.id)return;
   currentRoomData=data;
   document.getElementById('chatTitle').textContent=data.room.name+(data.room.type==='channel'?' 📢':' 👥');
   var btns='';
-  if(data.myRole==='admin'){
-    btns+='<button onclick="openRoomSettings()">⚙️</button>';
-  }
+  if(data.myRole==='admin') btns+='<button onclick="openRoomSettings()">⚙️</button>';
   btns+='<button onclick="leaveCurrentRoom()">🚪</button>';
   document.getElementById('chatHeaderBtns').innerHTML=btns;
   if(data.room.type==='channel'&&data.myRole!=='admin'){
@@ -410,13 +470,21 @@ socket.on('roomData',function(data){
     document.getElementById('inputArea').style.display='flex';
   }
   var md=document.getElementById('messages');md.innerHTML='';
-  data.messages.forEach(function(m){addRoomMsg(m);});
+  if(data.messages.length===0){
+    md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
+  } else {
+    data.messages.forEach(function(m){addRoomMsg(m);});
+  }
   md.scrollTop=md.scrollHeight;
 });
 
 socket.on('roomNewMessage',function(msg){
   if(currentView==='room'&&currentRoomId===msg.room_id){
-    addRoomMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+    // Убираем "Пока нет сообщений"
+    var empty=document.querySelector('#messages .empty-list');
+    if(empty)empty.remove();
+    addRoomMsg(msg);
+    document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
   }
 });
 socket.on('roomMessageDeleted',function(d){if(currentRoomId===d.roomId){var el=document.getElementById('rmsg-'+d.msgId);if(el)el.remove();}});
@@ -485,13 +553,20 @@ window.closeAllModals=closeAllModals;
 socket.on('privateHistory',function(d){
   if(currentView!=='pm'||currentPrivateLogin!==d.otherLogin)return;
   var md=document.getElementById('messages');md.innerHTML='';
-  d.messages.forEach(function(m){addPM(m);});md.scrollTop=md.scrollHeight;
+  if(d.messages.length===0){
+    md.innerHTML='<div class="empty-list">Начните диалог</div>';
+  } else {
+    d.messages.forEach(function(m){addPM(m);});
+  }
+  md.scrollTop=md.scrollHeight;
 });
 socket.on('newPrivateMessage',function(msg){
   if(currentView==='pm'&&(currentPrivateLogin===msg.from_login||currentPrivateLogin===msg.to_login)){
+    var empty=document.querySelector('#messages .empty-list');
+    if(empty)empty.remove();
     addPM(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
   }
-  if(currentView==='private')socket.emit('getMyChats');
+  if(currentView==='private'||currentView==='pm')socket.emit('getMyChats');
 });
 socket.on('privateMessageDeleted',function(d){var el=document.getElementById('pm-'+d.id);if(el)el.remove();});
 function addPM(msg){
@@ -511,10 +586,17 @@ window.delPM=delPM;
 socket.on('messageHistory',function(msgs){
   if(currentView!=='general')return;
   var md=document.getElementById('messages');md.innerHTML='';
-  msgs.forEach(function(m){addMsg(m);});md.scrollTop=md.scrollHeight;
+  if(msgs.length===0){
+    md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
+  } else {
+    msgs.forEach(function(m){addMsg(m);});
+  }
+  md.scrollTop=md.scrollHeight;
 });
 socket.on('chatMessage',function(msg){
   if(currentView!=='general')return;
+  var empty=document.querySelector('#messages .empty-list');
+  if(empty)empty.remove();
   addMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
 });
 socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el)el.remove();});
@@ -602,7 +684,6 @@ document.getElementById('createRoomSave').addEventListener('click',function(){
   document.getElementById('createRoomModal').classList.remove('show');
 });
 socket.on('roomCreated',function(r){
-  // Автоматически переключаемся на вкладку группы и обновляем список
   switchToRooms();
 });
 
@@ -623,9 +704,9 @@ document.getElementById('logoutBtn').addEventListener('click',function(){localSt
 document.getElementById('mobileBackBtn').addEventListener('click',function(){
   document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  if(currentView==='pm'){currentView='private';socket.emit('getMyChats');}
-  else if(currentView==='room'){currentView='rooms';socket.emit('getMyRooms');}
-  else{currentView='general';}
+  document.getElementById('messages').innerHTML='';
+  if(currentView==='pm'){currentView='private';currentPrivateLogin=null;socket.emit('getMyChats');}
+  else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;socket.emit('getMyRooms');}
 });
 
 // === ADMIN ===
