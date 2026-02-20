@@ -190,7 +190,6 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
-  // === GET GENERAL HISTORY ===
   socket.on('getGeneralHistory', async () => {
     if (!socket.userLogin) return;
     try {
@@ -199,7 +198,6 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // TYPING
   socket.on('typing', () => { if (socket.username) socket.broadcast.emit('userTyping', { nickname: socket.username }); });
   socket.on('stopTyping', () => { if (socket.username) socket.broadcast.emit('userStopTyping', { nickname: socket.username }); });
   socket.on('privateTyping', (toLogin) => { if (!socket.username) return; var s = findSocketByLogin(toLogin); if (s) s.emit('privateUserTyping', { from: socket.userLogin, nickname: socket.username }); });
@@ -355,12 +353,38 @@ io.on('connection', (socket) => {
     if (type !== 'group' && type !== 'channel') return;
     try {
       const res = await pool.query(
-        'INSERT INTO rooms (name, type, owner_login, comments_enabled, timestamp) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+        'INSERT INTO rooms (name, type, owner_login, comments_enabled, timestamp) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [name, type, socket.userLogin, true, Date.now()]);
-      var roomId = res.rows[0].id;
+      var room = res.rows[0];
       await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)',
-        [roomId, socket.userLogin, 'admin']);
-      socket.emit('roomCreated', { id: roomId, name, type });
+        [room.id, socket.userLogin, 'admin']);
+      
+      // Сразу подключаем к комнате socket.io
+      socket.join('room_' + room.id);
+      
+      // Отправляем полные данные комнаты чтобы клиент сразу открыл её
+      var members = await pool.query(`
+        SELECT rm.user_login, rm.role, u.nickname 
+        FROM room_members rm JOIN users u ON rm.user_login = u.login 
+        WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname
+      `, [room.id]);
+      
+      socket.emit('roomCreated', { 
+        id: room.id, 
+        name: room.name, 
+        type: room.type,
+        owner_login: room.owner_login,
+        comments_enabled: room.comments_enabled
+      });
+      
+      // Сразу отправляем roomData чтобы комната открылась
+      socket.emit('roomData', {
+        room: room,
+        myRole: 'admin',
+        messages: [],
+        members: members.rows
+      });
+      
       await addLog('create_room', socket.username, type + ': ' + name, ip);
     } catch(e) { console.error(e); }
   });
@@ -392,6 +416,10 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', async (roomId) => {
     if (!socket.userLogin) return;
     try {
+      // Проверяем что комната существует
+      var roomCheck = await pool.query('SELECT id FROM rooms WHERE id=$1', [roomId]);
+      if (roomCheck.rows.length === 0) return socket.emit('chatError', 'Комната не найдена');
+      
       var check = await pool.query('SELECT * FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (check.rows.length === 0) {
         await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, socket.userLogin, 'member']);
@@ -420,7 +448,7 @@ io.on('connection', (socket) => {
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник');
       var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
-      if (room.rows.length === 0) return;
+      if (room.rows.length === 0) return socket.emit('chatError', 'Комната не найдена');
       var msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY timestamp ASC LIMIT 200', [roomId]);
       var members = await pool.query(`
         SELECT rm.user_login, rm.role, u.nickname 
