@@ -9,60 +9,49 @@
 * { margin:0; padding:0; box-sizing:border-box; }
 body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100vh; overflow:hidden; }
 
-/* AUTH */
 .auth-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:#1a1a2e; display:flex; justify-content:center; align-items:center; z-index:1000; }
 .auth-overlay.hidden { display:none; }
 .auth-box { background:#16213e; padding:40px; border-radius:16px; width:360px; text-align:center; }
-.auth-box h2 { margin-bottom:8px; font-size:24px; }
+.auth-box h2 { margin-bottom:8px; }
 .auth-box p { color:#888; margin-bottom:24px; font-size:14px; }
 .auth-box input { width:100%; padding:14px; margin-bottom:12px; border:1px solid #333; border-radius:10px; background:#0f3460; color:#fff; font-size:15px; outline:none; }
-.auth-box input:focus { border-color:#e94560; }
 .auth-box .btn { width:100%; padding:14px; border:none; border-radius:10px; background:#e94560; color:#fff; font-size:16px; cursor:pointer; margin-top:8px; }
 .auth-box .btn:hover { background:#c73652; }
-.auth-box .btn:active { transform:scale(0.98); }
 .auth-box .switch { margin-top:16px; color:#888; font-size:14px; }
-.auth-box .switch a { color:#e94560; cursor:pointer; text-decoration:none; }
+.auth-box .switch a { color:#e94560; cursor:pointer; }
 .auth-box .error { color:#ff6b6b; font-size:13px; margin-bottom:8px; min-height:20px; }
 .nick-field { display:none; }
 .nick-field.show { display:block; }
 
-/* CHAT */
 .chat-container { display:none; flex-direction:column; width:100%; height:100vh; }
 .chat-container.active { display:flex; }
 .chat-header { background:#16213e; padding:14px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; flex-shrink:0; }
-.chat-header h3 { font-size:18px; }
-.header-btns { display:flex; gap:8px; }
-.header-btns button { background:#0f3460; border:1px solid #333; color:#fff; padding:8px 12px; border-radius:8px; cursor:pointer; font-size:13px; }
+.header-btns { display:flex; gap:6px; flex-wrap:wrap; }
+.header-btns button { background:#0f3460; border:1px solid #333; color:#fff; padding:7px 10px; border-radius:8px; cursor:pointer; font-size:12px; }
 .header-btns button:hover { background:#e94560; }
+.header-btns .admin-btn { background:#e94560; }
 .online-count { font-size:12px; color:#888; }
 
-/* MESSAGES */
 .messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:8px; background:#1a1a2e; }
-.message { max-width:70%; padding:10px 14px; border-radius:12px; font-size:14px; word-wrap:break-word; position:relative; }
+.message { max-width:70%; padding:10px 14px; border-radius:12px; font-size:14px; word-wrap:break-word; }
 .message.mine { align-self:flex-end; background:#e94560; border-bottom-right-radius:4px; }
 .message.other { align-self:flex-start; background:#16213e; border-bottom-left-radius:4px; }
+.message.system { align-self:center; background:#2d1b69; text-align:center; font-style:italic; }
 .message .name { font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px; }
 .message .text { line-height:1.4; }
 .message img { max-width:250px; border-radius:8px; cursor:pointer; display:block; margin-top:4px; }
 .message audio { max-width:250px; margin-top:4px; }
 .message .del-btn { font-size:11px; color:#ff6b6b; cursor:pointer; margin-top:6px; display:block; text-align:right; opacity:0.7; }
-.message .del-btn:hover { opacity:1; }
 
-/* INPUT AREA */
 .input-area { background:#16213e; padding:12px 16px; display:flex; gap:8px; align-items:center; border-top:1px solid #333; flex-shrink:0; }
 .input-area input[type="text"] { flex:1; padding:12px; border:1px solid #333; border-radius:10px; background:#0f3460; color:#fff; font-size:14px; outline:none; }
-.input-area input[type="text"]:focus { border-color:#e94560; }
 .input-area button, .input-area label.icon-btn { width:42px; height:42px; border:none; border-radius:50%; color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .input-area .send-btn { background:#e94560; }
-.input-area .send-btn:hover { background:#c73652; }
 .input-area label.icon-btn { background:#0f3460; border:1px solid #333; }
-.input-area label.icon-btn:hover { background:#1a4a8a; }
 .input-area .mic-btn { background:#0f3460; border:1px solid #333; }
-.input-area .mic-btn:hover { background:#1a4a8a; }
 .input-area .mic-btn.recording { background:#e94560; animation:pulse 1s infinite; }
 .input-area input[type="file"] { display:none; }
 
-/* RECORDING BAR */
 .recording-bar { display:none; background:#16213e; padding:12px 16px; border-top:1px solid #333; align-items:center; gap:10px; flex-shrink:0; }
 .recording-bar.active { display:flex; }
 .recording-bar .rec-dot { width:12px; height:12px; background:#e94560; border-radius:50%; animation:pulse 1s infinite; }
@@ -71,17 +60,59 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
 .recording-bar .rec-cancel { background:#333; }
 .recording-bar .rec-send { background:#e94560; }
 
-@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+.chat-error { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#e94560; padding:12px 24px; border-radius:10px; z-index:999; display:none; }
+.chat-error.show { display:block; }
 
-/* SCROLLBAR */
+.private-msg { position:fixed; top:60px; right:20px; background:#2d1b69; padding:14px 20px; border-radius:10px; z-index:999; display:none; max-width:300px; }
+.private-msg.show { display:block; }
+.private-msg .close { cursor:pointer; float:right; color:#e94560; }
+
+/* ADMIN PANEL */
+.admin-overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:2000; display:none; justify-content:center; align-items:center; }
+.admin-overlay.show { display:flex; }
+.admin-panel { background:#16213e; width:90%; max-width:700px; max-height:85vh; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; }
+.admin-tabs { display:flex; background:#0f3460; overflow-x:auto; flex-shrink:0; }
+.admin-tabs button { padding:12px 16px; border:none; background:transparent; color:#888; cursor:pointer; font-size:13px; white-space:nowrap; }
+.admin-tabs button.active { color:#fff; border-bottom:2px solid #e94560; }
+.admin-content { flex:1; overflow-y:auto; padding:20px; }
+.admin-close { position:absolute; top:10px; right:16px; font-size:24px; cursor:pointer; color:#fff; }
+.admin-panel h3 { margin-bottom:16px; }
+.admin-panel .stat-box { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+.admin-panel .stat { background:#0f3460; padding:16px; border-radius:10px; flex:1; min-width:120px; text-align:center; }
+.admin-panel .stat .num { font-size:28px; font-weight:bold; color:#e94560; }
+.admin-panel .stat .label { font-size:12px; color:#888; margin-top:4px; }
+.user-row { display:flex; align-items:center; justify-content:space-between; padding:10px; background:#0f3460; border-radius:8px; margin-bottom:8px; flex-wrap:wrap; gap:6px; }
+.user-row .info { font-size:14px; }
+.user-row .info .role { font-size:11px; padding:2px 6px; border-radius:4px; margin-left:6px; }
+.user-row .info .role.admin { background:#e94560; }
+.user-row .info .role.moderator { background:#f5a623; color:#000; }
+.user-row .info .role.user { background:#333; }
+.user-row .actions { display:flex; gap:4px; flex-wrap:wrap; }
+.user-row .actions button { padding:4px 8px; border:none; border-radius:4px; cursor:pointer; font-size:11px; color:#fff; }
+.user-row .actions .ban { background:#e94560; }
+.user-row .actions .unban { background:#2ecc71; }
+.user-row .actions .mute { background:#f5a623; color:#000; }
+.user-row .actions .del { background:#c0392b; }
+.user-row .actions .nick { background:#3498db; }
+.user-row .actions .role-btn { background:#9b59b6; }
+.user-row .actions .pm { background:#1abc9c; }
+.log-row { padding:8px; background:#0f3460; border-radius:6px; margin-bottom:4px; font-size:12px; }
+.log-row .time { color:#888; }
+.log-row .action { color:#e94560; font-weight:bold; }
+.admin-input { display:flex; gap:8px; margin-bottom:16px; }
+.admin-input input { flex:1; padding:10px; border:1px solid #333; border-radius:8px; background:#0f3460; color:#fff; outline:none; }
+.admin-input button { padding:10px 16px; border:none; border-radius:8px; background:#e94560; color:#fff; cursor:pointer; }
+.danger-zone { margin-top:20px; padding:16px; border:1px solid #e94560; border-radius:10px; }
+.danger-zone h4 { color:#e94560; margin-bottom:10px; }
+.danger-zone button { padding:10px 20px; border:none; border-radius:8px; background:#c0392b; color:#fff; cursor:pointer; margin-right:8px; margin-bottom:8px; }
+
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
 .messages::-webkit-scrollbar { width:6px; }
-.messages::-webkit-scrollbar-track { background:transparent; }
 .messages::-webkit-scrollbar-thumb { background:#333; border-radius:3px; }
 </style>
 </head>
 <body>
 
-<!-- AUTH -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
     <h2 id="authTitle">Вход в MyChat</h2>
@@ -90,23 +121,20 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
     <input type="text" id="authLogin" placeholder="Логин">
     <input type="password" id="authPassword" placeholder="Пароль">
     <input type="text" id="authNickname" placeholder="Ник (будет виден в чате)" class="nick-field">
-    <button class="btn" id="authBtn" type="button">Войти →</button>
-    <div class="switch">
-      <span id="switchText">Нет аккаунта?</span>
-      <a id="switchLink">Зарегистрироваться</a>
-    </div>
+    <button class="btn" id="authBtn">Войти →</button>
+    <div class="switch"><span id="switchText">Нет аккаунта?</span> <a id="switchLink">Зарегистрироваться</a></div>
   </div>
 </div>
 
-<!-- CHAT -->
+<div class="chat-error" id="chatError"></div>
+<div class="private-msg" id="privateMsg"><span class="close" id="pmClose">✕</span><div id="pmContent"></div></div>
+
 <div class="chat-container" id="chatContainer">
   <div class="chat-header">
-    <div>
-      <h3>MyChat</h3>
-      <span class="online-count" id="onlineCount">0 онлайн</span>
-    </div>
+    <div><h3>MyChat</h3><span class="online-count" id="onlineCount">0 онлайн</span></div>
     <div class="header-btns">
       <button id="nickBtn">✏️ Ник</button>
+      <button id="adminPanelBtn" class="admin-btn" style="display:none;">⚙️ Админ</button>
       <button id="logoutBtn">Выйти</button>
     </div>
   </div>
@@ -121,8 +149,23 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
     <label class="icon-btn" for="photoInput">📷</label>
     <input type="file" id="photoInput" accept="image/*">
     <input type="text" id="msgInput" placeholder="Сообщение...">
-    <button class="mic-btn" id="micBtn" type="button">🎤</button>
-    <button class="send-btn" id="sendBtn" type="button">➤</button>
+    <button class="mic-btn" id="micBtn">🎤</button>
+    <button class="send-btn" id="sendBtn">➤</button>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div class="admin-overlay" id="adminOverlay">
+  <div class="admin-panel" style="position:relative;">
+    <span class="admin-close" id="adminClose">✕</span>
+    <div class="admin-tabs" id="adminTabs">
+      <button class="active" data-tab="stats">📊 Статистика</button>
+      <button data-tab="users">👥 Пользователи</button>
+      <button data-tab="logs">📋 Логи</button>
+      <button data-tab="announce">📢 Объявление</button>
+      <button data-tab="danger">⚠️ Опасная зона</button>
+    </div>
+    <div class="admin-content" id="adminContent"></div>
   </div>
 </div>
 
@@ -130,46 +173,34 @@ body { font-family:Arial,sans-serif; background:#1a1a2e; color:#fff; height:100v
 var socket = io();
 var isLoginMode = true;
 var myNickname = '';
+var myRole = 'user';
 var mediaRecorder = null;
 var audioChunks = [];
 var recInterval = null;
 var recSeconds = 0;
+var currentAdminTab = 'stats';
 
 // === AUTH ===
 var authOverlay = document.getElementById('authOverlay');
-var authTitle = document.getElementById('authTitle');
-var authSubtitle = document.getElementById('authSubtitle');
-var authError = document.getElementById('authError');
-var authLogin = document.getElementById('authLogin');
-var authPassword = document.getElementById('authPassword');
-var authNickname = document.getElementById('authNickname');
 var authBtn = document.getElementById('authBtn');
-var switchText = document.getElementById('switchText');
 var switchLink = document.getElementById('switchLink');
+var authNickname = document.getElementById('authNickname');
+var authError = document.getElementById('authError');
 
 switchLink.addEventListener('click', function() {
   isLoginMode = !isLoginMode;
-  if (isLoginMode) {
-    authTitle.textContent = 'Вход в MyChat';
-    authSubtitle.textContent = 'Введи логин и пароль';
-    authBtn.textContent = 'Войти →';
-    switchText.textContent = 'Нет аккаунта?';
-    switchLink.textContent = 'Зарегистрироваться';
-    authNickname.classList.remove('show');
-  } else {
-    authTitle.textContent = 'Регистрация';
-    authSubtitle.textContent = 'Создай свой аккаунт';
-    authBtn.textContent = 'Создать аккаунт →';
-    switchText.textContent = 'Уже есть аккаунт?';
-    switchLink.textContent = 'Войти';
-    authNickname.classList.add('show');
-  }
+  document.getElementById('authTitle').textContent = isLoginMode ? 'Вход в MyChat' : 'Регистрация';
+  document.getElementById('authSubtitle').textContent = isLoginMode ? 'Введи логин и пароль' : 'Создай свой аккаунт';
+  authBtn.textContent = isLoginMode ? 'Войти →' : 'Создать аккаунт →';
+  document.getElementById('switchText').textContent = isLoginMode ? 'Нет аккаунта?' : 'Уже есть аккаунт?';
+  switchLink.textContent = isLoginMode ? 'Зарегистрироваться' : 'Войти';
+  if (isLoginMode) authNickname.classList.remove('show'); else authNickname.classList.add('show');
   authError.textContent = '';
 });
 
 authBtn.addEventListener('click', function() {
-  var login = authLogin.value.trim();
-  var password = authPassword.value.trim();
+  var login = document.getElementById('authLogin').value.trim();
+  var password = document.getElementById('authPassword').value.trim();
   authError.textContent = '';
   if (isLoginMode) {
     if (!login || !password) { authError.textContent = 'Заполни все поля'; return; }
@@ -183,31 +214,39 @@ authBtn.addEventListener('click', function() {
 
 socket.on('authSuccess', function(data) {
   myNickname = data.nickname;
+  myRole = data.role || 'user';
   authOverlay.classList.add('hidden');
-  chatContainer.classList.add('active');
+  document.getElementById('chatContainer').classList.add('active');
+  if (myRole === 'admin' || myRole === 'moderator') {
+    document.getElementById('adminPanelBtn').style.display = 'inline-block';
+  }
 });
 
-socket.on('authError', function(msg) {
-  authError.textContent = msg;
+socket.on('authError', function(msg) { authError.textContent = msg; });
+
+socket.on('kicked', function(msg) { alert(msg); location.reload(); });
+socket.on('nicknameChanged', function(n) { myNickname = n; });
+socket.on('chatCleared', function() { document.getElementById('messages').innerHTML = ''; });
+
+socket.on('chatError', function(msg) {
+  var el = document.getElementById('chatError');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 3000);
 });
 
-// === CHAT ===
-var chatContainer = document.getElementById('chatContainer');
+socket.on('privateMessage', function(data) {
+  var el = document.getElementById('privateMsg');
+  document.getElementById('pmContent').innerHTML = '<b>Личное от ' + data.from + ':</b><br>' + data.text;
+  el.classList.add('show');
+});
+document.getElementById('pmClose').addEventListener('click', function() {
+  document.getElementById('privateMsg').classList.remove('show');
+});
+
+// === MESSAGES ===
 var messagesDiv = document.getElementById('messages');
-var msgInput = document.getElementById('msgInput');
-var sendBtn = document.getElementById('sendBtn');
-var photoInput = document.getElementById('photoInput');
-var onlineCount = document.getElementById('onlineCount');
-var nickBtn = document.getElementById('nickBtn');
-var logoutBtn = document.getElementById('logoutBtn');
-var micBtn = document.getElementById('micBtn');
-var recordingBar = document.getElementById('recordingBar');
-var recTime = document.getElementById('recTime');
-var recCancel = document.getElementById('recCancel');
-var recSend = document.getElementById('recSend');
-var inputArea = document.getElementById('inputArea');
 
-// MESSAGES
 socket.on('messageHistory', function(msgs) {
   messagesDiv.innerHTML = '';
   msgs.forEach(function(m) { addMessage(m); });
@@ -225,12 +264,14 @@ socket.on('messageDeleted', function(id) {
 });
 
 socket.on('onlineUsers', function(users) {
-  onlineCount.textContent = users.length + ' онлайн';
+  document.getElementById('onlineCount').textContent = users.length + ' онлайн';
 });
 
 function addMessage(msg) {
   var div = document.createElement('div');
-  div.className = 'message ' + (msg.username === myNickname ? 'mine' : 'other');
+  var isSystem = msg.username === '⚡ Система';
+  var isMine = msg.username === myNickname;
+  div.className = 'message ' + (isSystem ? 'system' : (isMine ? 'mine' : 'other'));
   div.id = 'msg-' + msg.id;
   var html = '<div class="name">' + msg.username + '</div>';
   if (msg.type === 'image' && msg.image) {
@@ -240,117 +281,216 @@ function addMessage(msg) {
   } else {
     html += '<div class="text">' + (msg.text || '') + '</div>';
   }
-  if (msg.username === myNickname) {
+  if (isMine || myRole === 'admin' || myRole === 'moderator') {
     html += '<span class="del-btn" onclick="deleteMsg(' + msg.id + ')">Удалить</span>';
   }
   div.innerHTML = html;
   messagesDiv.appendChild(div);
 }
 
-function deleteMsg(id) {
-  socket.emit('deleteMessage', id);
-}
+function deleteMsg(id) { socket.emit('deleteMessage', id); }
 
-// SEND TEXT
-sendBtn.addEventListener('click', function() {
-  var text = msgInput.value.trim();
+// === SEND ===
+document.getElementById('sendBtn').addEventListener('click', function() {
+  var text = document.getElementById('msgInput').value.trim();
   if (!text) return;
   socket.emit('chatMessage', { text: text, type: 'text' });
-  msgInput.value = '';
+  document.getElementById('msgInput').value = '';
+});
+document.getElementById('msgInput').addEventListener('keypress', function(e) {
+  if (e.key === 'Enter') document.getElementById('sendBtn').click();
 });
 
-msgInput.addEventListener('keypress', function(e) {
-  if (e.key === 'Enter') sendBtn.click();
-});
-
-// SEND PHOTO
-photoInput.addEventListener('change', function() {
+document.getElementById('photoInput').addEventListener('change', function() {
   var file = this.files[0];
   if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { alert('Макс 10MB'); return; }
+  if (file.size > 10*1024*1024) { alert('Макс 10MB'); return; }
   var reader = new FileReader();
-  reader.onload = function(e) {
-    socket.emit('chatMessage', { image: e.target.result, type: 'image' });
-  };
+  reader.onload = function(e) { socket.emit('chatMessage', { image: e.target.result, type: 'image' }); };
   reader.readAsDataURL(file);
   this.value = '';
 });
 
-// VOICE RECORDING
+// === VOICE ===
+var micBtn = document.getElementById('micBtn');
+var recordingBar = document.getElementById('recordingBar');
+var inputArea = document.getElementById('inputArea');
+
 micBtn.addEventListener('click', function() {
   if (mediaRecorder && mediaRecorder.state === 'recording') return;
   navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
-    mediaRecorder.ondataavailable = function(e) {
-      audioChunks.push(e.data);
-    };
-    mediaRecorder.onstop = function() {
-      stream.getTracks().forEach(function(t) { t.stop(); });
-    };
+    mediaRecorder.ondataavailable = function(e) { audioChunks.push(e.data); };
+    mediaRecorder.onstop = function() { stream.getTracks().forEach(function(t) { t.stop(); }); };
     mediaRecorder.start();
     micBtn.classList.add('recording');
     inputArea.style.display = 'none';
     recordingBar.classList.add('active');
     recSeconds = 0;
-    recTime.textContent = '0:00';
+    document.getElementById('recTime').textContent = '0:00';
     recInterval = setInterval(function() {
       recSeconds++;
-      var m = Math.floor(recSeconds / 60);
-      var s = recSeconds % 60;
-      recTime.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+      var m = Math.floor(recSeconds/60), s = recSeconds%60;
+      document.getElementById('recTime').textContent = m + ':' + (s<10?'0':'') + s;
     }, 1000);
-  }).catch(function(err) {
-    alert('Нет доступа к микрофону');
-  });
+  }).catch(function() { alert('Нет доступа к микрофону'); });
 });
 
-recCancel.addEventListener('click', function() {
+document.getElementById('recCancel').addEventListener('click', function() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
-    mediaRecorder.onstop = function() {
-      mediaRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
-    };
+    mediaRecorder.onstop = function() { mediaRecorder.stream.getTracks().forEach(function(t){t.stop();}); };
     mediaRecorder.stop();
   }
-  stopRecordingUI();
+  stopRec();
 });
 
-recSend.addEventListener('click', function() {
+document.getElementById('recSend').addEventListener('click', function() {
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.onstop = function() {
-      mediaRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
-      var blob = new Blob(audioChunks, { type: 'audio/webm' });
+      mediaRecorder.stream.getTracks().forEach(function(t){t.stop();});
+      var blob = new Blob(audioChunks, {type:'audio/webm'});
       var reader = new FileReader();
-      reader.onload = function(e) {
-        socket.emit('chatMessage', { voice: e.target.result, type: 'voice' });
-      };
+      reader.onload = function(e) { socket.emit('chatMessage', { voice: e.target.result, type: 'voice' }); };
       reader.readAsDataURL(blob);
     };
     mediaRecorder.stop();
   }
-  stopRecordingUI();
+  stopRec();
 });
 
-function stopRecordingUI() {
+function stopRec() {
   clearInterval(recInterval);
   micBtn.classList.remove('recording');
   recordingBar.classList.remove('active');
   inputArea.style.display = 'flex';
 }
 
-// CHANGE NICKNAME
-nickBtn.addEventListener('click', function() {
-  var newNick = prompt('Новый ник:', myNickname);
-  if (newNick && newNick.trim()) {
-    myNickname = newNick.trim();
-    socket.emit('changeNickname', myNickname);
+// === NICKNAME ===
+document.getElementById('nickBtn').addEventListener('click', function() {
+  var n = prompt('Новый ник:', myNickname);
+  if (n && n.trim()) { myNickname = n.trim(); socket.emit('changeNickname', myNickname); }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', function() { location.reload(); });
+
+// === ADMIN PANEL ===
+document.getElementById('adminPanelBtn').addEventListener('click', function() {
+  document.getElementById('adminOverlay').classList.add('show');
+  loadAdminTab('stats');
+});
+
+document.getElementById('adminClose').addEventListener('click', function() {
+  document.getElementById('adminOverlay').classList.remove('show');
+});
+
+document.getElementById('adminTabs').addEventListener('click', function(e) {
+  if (e.target.dataset.tab) {
+    document.querySelectorAll('#adminTabs button').forEach(function(b){b.classList.remove('active');});
+    e.target.classList.add('active');
+    loadAdminTab(e.target.dataset.tab);
   }
 });
 
-// LOGOUT
-logoutBtn.addEventListener('click', function() {
-  location.reload();
+socket.on('adminStats', function(s) {
+  document.getElementById('adminContent').innerHTML =
+    '<div class="stat-box">' +
+    '<div class="stat"><div class="num">'+s.users+'</div><div class="label">Пользователей</div></div>' +
+    '<div class="stat"><div class="num">'+s.messages+'</div><div class="label">Сообщений</div></div>' +
+    '<div class="stat"><div class="num">'+s.online+'</div><div class="label">Онлайн</div></div>' +
+    '</div>';
 });
+
+socket.on('adminUsers', function(users) {
+  var html = '';
+  users.forEach(function(u) {
+    html += '<div class="user-row"><div class="info">' +
+      '<b>' + u.nickname + '</b> (' + u.login + ')' +
+      '<span class="role '+u.role+'">' + u.role + '</span>' +
+      (u.banned ? ' 🚫' : '') +
+      (u.muted_until > Date.now() ? ' 🔇' : '') +
+      '</div><div class="actions">' +
+      (u.banned ? '<button class="unban" onclick="adminAction(\'unban\',\''+u.login+'\')">Разбан</button>' :
+        '<button class="ban" onclick="adminAction(\'ban\',\''+u.login+'\')">Бан</button>') +
+      '<button class="mute" onclick="adminAction(\'mute\',\''+u.login+'\')">Мут</button>' +
+      '<button class="nick" onclick="adminAction(\'nick\',\''+u.login+'\')">Ник</button>' +
+      '<button class="role-btn" onclick="adminAction(\'role\',\''+u.login+'\')">Роль</button>' +
+      '<button class="pm" onclick="adminAction(\'pm\',\''+u.login+'\')">ЛС</button>' +
+      '<button class="del" onclick="adminAction(\'del\',\''+u.login+'\')">Удалить</button>' +
+      '</div></div>';
+  });
+  document.getElementById('adminContent').innerHTML = html;
+});
+
+socket.on('adminLogs', function(logs) {
+  var html = '';
+  logs.forEach(function(l) {
+    var d = new Date(Number(l.timestamp));
+    html += '<div class="log-row"><span class="time">'+d.toLocaleString()+'</span> ' +
+      '<span class="action">'+l.action+'</span> ' + l.username + ' — ' + l.detail +
+      (l.ip ? ' ('+l.ip+')' : '') + '</div>';
+  });
+  document.getElementById('adminContent').innerHTML = html || '<p>Логов нет</p>';
+});
+
+socket.on('adminMsg', function(msg) { alert(msg); loadAdminTab(currentAdminTab); });
+
+function loadAdminTab(tab) {
+  currentAdminTab = tab;
+  var c = document.getElementById('adminContent');
+  if (tab === 'stats') { socket.emit('adminGetStats'); c.innerHTML = 'Загрузка...'; }
+  else if (tab === 'users') { socket.emit('adminGetUsers'); c.innerHTML = 'Загрузка...'; }
+  else if (tab === 'logs') { socket.emit('adminGetLogs'); c.innerHTML = 'Загрузка...'; }
+  else if (tab === 'announce') {
+    c.innerHTML = '<h3>📢 Объявление</h3><div class="admin-input">' +
+      '<input id="announceInput" placeholder="Текст объявления...">' +
+      '<button onclick="sendAnnounce()">Отправить</button></div>';
+  }
+  else if (tab === 'danger') {
+    c.innerHTML = '<div class="danger-zone"><h4>⚠️ Опасная зона</h4>' +
+      '<button onclick="adminClearChat()">🗑 Очистить чат</button>' +
+      '<button onclick="adminDeleteAll()">💀 Удалить все аккаунты</button></div>';
+  }
+}
+
+function adminAction(action, login) {
+  if (action === 'ban') { if(confirm('Забанить '+login+'?')) socket.emit('adminBanUser', login); }
+  else if (action === 'unban') { socket.emit('adminUnbanUser', login); }
+  else if (action === 'mute') {
+    var min = prompt('На сколько минут замутить?', '10');
+    if (min) socket.emit('adminMuteUser', { login: login, minutes: parseInt(min) });
+  }
+  else if (action === 'nick') {
+    var n = prompt('Новый ник для '+login+':');
+    if (n) socket.emit('adminChangeNickname', { login: login, newNickname: n });
+  }
+  else if (action === 'role') {
+    var r = prompt('Роль (admin/moderator/user):', 'user');
+    if (r) socket.emit('adminSetRole', { login: login, role: r });
+  }
+  else if (action === 'pm') {
+    var t = prompt('Личное сообщение для '+login+':');
+    if (t) socket.emit('adminSendPrivate', { login: login, text: t });
+  }
+  else if (action === 'del') {
+    if (confirm('Удалить аккаунт '+login+'? Это необратимо!')) socket.emit('adminDeleteUser', login);
+  }
+}
+
+function sendAnnounce() {
+  var t = document.getElementById('announceInput').value.trim();
+  if (t) { socket.emit('adminAnnounce', t); document.getElementById('announceInput').value = ''; }
+}
+
+function adminClearChat() {
+  if (confirm('Удалить ВСЕ сообщения?')) socket.emit('adminClearChat');
+}
+
+function adminDeleteAll() {
+  if (confirm('Удалить ВСЕ аккаунты кроме админа? Это необратимо!')) {
+    if (confirm('Ты точно уверен?')) socket.emit('adminDeleteAllUsers');
+  }
+}
 </script>
 </body>
 </html>
