@@ -71,6 +71,7 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
   console.log('Database ready');
 }
@@ -180,6 +181,40 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
+  // === WEBRTC CALLS ===
+  socket.on('callUser', ({ userToCall, signalData }) => {
+    if (!socket.userLogin) return;
+    const targetSocket = findSocketByLogin(userToCall);
+    if (targetSocket) {
+      targetSocket.emit('incomingCall', { signal: signalData, from: socket.userLogin, fromNickname: socket.username });
+    }
+  });
+
+  socket.on('answerCall', ({ signal, to }) => {
+    if (!socket.userLogin) return;
+    const targetSocket = findSocketByLogin(to);
+    if (targetSocket) {
+      targetSocket.emit('callAccepted', signal);
+    }
+  });
+
+  socket.on('hangUp', ({ to }) => {
+    if (!socket.userLogin) return;
+    const targetSocket = findSocketByLogin(to);
+    if (targetSocket) {
+      targetSocket.emit('callEnded');
+    }
+  });
+
+  socket.on('iceCandidate', ({ candidate, to }) => {
+    if (!socket.userLogin) return;
+    const targetSocket = findSocketByLogin(to);
+    if (targetSocket) {
+      targetSocket.emit('iceCandidate', candidate);
+    }
+  });
+
+  // === GENERAL CHAT ===
   socket.on('getGeneralHistory', async () => {
     if (!socket.userLogin) return;
     try {
