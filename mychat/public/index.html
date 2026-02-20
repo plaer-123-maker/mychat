@@ -119,18 +119,25 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .sidebar-list::-webkit-scrollbar{width:4px;}.sidebar-list::-webkit-scrollbar-thumb{background:#333;border-radius:2px;}
 @media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
 
-/* === CALL STYLES === */
+/* === CALL STYLES OPTIMIZED === */
 .call-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:3000;display:none;flex-direction:column;}
 .call-overlay.show{display:flex;}
-.call-video-box{flex:1;position:relative;display:flex;justify-content:center;align-items:center;background:#1a1a2e;}
-.call-video-box video{max-width:100%;max-height:100%;}
-#remoteVideo{width:100%;height:100%;object-fit:cover;}
-#localVideo{position:absolute;bottom:20px;right:20px;width:120px;height:160px;background:#000;border:2px solid #333;object-fit:cover;z-index:2;}
-.call-controls{height:80px;background:#16213e;display:flex;justify-content:center;align-items:center;gap:20px;}
-.call-btn{width:50px;height:50px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;}
-.btn-hangup{background:#ff4757;}.btn-mic{background:#333;}
-.incoming-call-modal{position:fixed;top:20px;right:20px;background:#16213e;padding:20px;border-radius:12px;z-index:3001;border:1px solid #e94560;display:none;text-align:center;box-shadow:0 5px 15px rgba(0,0,0,0.5);}
-.incoming-call-modal.show{display:block;animation:pulse 1s infinite;}
+.call-video-box{flex:1;position:relative;display:flex;justify-content:center;align-items:center;background:#1a1a2e;overflow:hidden;}
+.call-video-box video{max-width:100%;max-height:100%;object-fit:cover;}
+#remoteVideo{width:100%;height:100%;}
+/* Draggable local video for mobile */
+#localVideo{position:absolute;bottom:100px;right:20px;width:100px;height:140px;background:#000;border:2px solid #333;object-fit:cover;z-index:10;border-radius:10px;cursor:move;}
+.call-controls{height:100px;background:#16213e;display:flex;justify-content:space-evenly;align-items:center;padding:0 20px;}
+.call-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;display:flex;align-items:center;justify-content:center;}
+.btn-hangup{background:#ff4757;}
+.btn-util{background:#333;}
+.btn-util.active{background:#e94560;}
+.incoming-call-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;padding:30px;border-radius:16px;z-index:3001;border:1px solid #e94560;display:none;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.8);width:300px;}
+.incoming-call-modal.show{display:block;}
+.incoming-call-modal h3{margin-bottom:20px;}
+.incoming-call-btns{display:flex;gap:15px;justify-content:center;}
+.incoming-call-btns button{flex:1;padding:12px;border:none;border-radius:8px;font-size:16px;cursor:pointer;color:#fff;}
+.accept-btn{background:#2ecc71;}.reject-btn{background:#ff4757;}
 </style>
 </head>
 <body>
@@ -155,15 +162,17 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
     <video id="localVideo" autoplay playsinline muted></video>
   </div>
   <div class="call-controls">
-    <button class="call-btn btn-mic" id="toggleMicBtn" onclick="toggleMic()">🎤</button>
+    <button class="call-btn btn-util" id="flipCamBtn" onclick="switchCamera()">🔄</button>
+    <button class="call-btn btn-util" id="toggleVideoBtn" onclick="toggleVideo()">📷</button>
+    <button class="call-btn btn-util" id="toggleMicBtn" onclick="toggleMic()">🎤</button>
     <button class="call-btn btn-hangup" onclick="endCall()">📞</button>
   </div>
 </div>
 <div class="incoming-call-modal" id="incomingCallModal">
-  <h3 id="incomingCallerName">Входящий...</h3>
-  <div style="margin-top:10px;display:flex;gap:10px;justify-content:center;">
-    <button onclick="acceptCall()" style="background:#2ecc71;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Принять</button>
-    <button onclick="rejectCall()" style="background:#ff4757;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">Сброс</button>
+  <h3 id="incomingCallerName">Входящий звонок...</h3>
+  <div class="incoming-call-btns">
+    <button class="accept-btn" onclick="acceptCall()">Принять</button>
+    <button class="reject-btn" onclick="rejectCall()">Сброс</button>
   </div>
 </div>
 
@@ -219,6 +228,7 @@ currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
 
 // === WEBRTC VARIABLES ===
 var localStream, remoteStream, peerConnection, incomingCallData=null;
+var currentFacingMode = 'user'; // 'user' (front) or 'environment' (back)
 const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 (function(){var token=localStorage.getItem('mychat_token');if(token)socket.emit('autoLogin',token);})();
@@ -378,8 +388,8 @@ function openPM(login,nickname){
   document.getElementById('chatTitle').textContent=nickname;
   document.getElementById('typingIndicator').textContent='';
   document.getElementById('onlineInfo').textContent='';
-  // ADD CALL BUTTON
-  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\')">📞</button>';
+  // ADD SEPARATE CALL BUTTONS
+  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
@@ -679,35 +689,122 @@ function loadTab(tab){
   else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');});}
 }
 
-// === CALL LOGIC ===
-function startCall(userToCall){
+// === CALL LOGIC UPDATED ===
+// Draggable local video
+const dragVideo = document.getElementById('localVideo');
+let isDragging = false;
+let startX, startY, initialLeft, initialTop;
+
+dragVideo.addEventListener('touchstart', startDrag);
+dragVideo.addEventListener('mousedown', startDrag);
+
+function startDrag(e) {
+  isDragging = true;
+  const evt = e.type === 'touchstart' ? e.touches[0] : e;
+  startX = evt.clientX;
+  startY = evt.clientY;
+  const rect = dragVideo.getBoundingClientRect();
+  initialLeft = rect.left;
+  initialTop = rect.top;
+  
+  // Disable default styling positioning to allow movement
+  dragVideo.style.right = 'auto';
+  dragVideo.style.bottom = 'auto';
+  dragVideo.style.left = initialLeft + 'px';
+  dragVideo.style.top = initialTop + 'px';
+
+  document.addEventListener('touchmove', moveDrag);
+  document.addEventListener('touchend', stopDrag);
+  document.addEventListener('mousemove', moveDrag);
+  document.addEventListener('mouseup', stopDrag);
+}
+
+function moveDrag(e) {
+  if (!isDragging) return;
+  const evt = e.type === 'touchmove' ? e.touches[0] : e;
+  const dx = evt.clientX - startX;
+  const dy = evt.clientY - startY;
+  dragVideo.style.left = (initialLeft + dx) + 'px';
+  dragVideo.style.top = (initialTop + dy) + 'px';
+  e.preventDefault(); // prevent scrolling
+}
+
+function stopDrag() {
+  isDragging = false;
+  document.removeEventListener('touchmove', moveDrag);
+  document.removeEventListener('touchend', stopDrag);
+  document.removeEventListener('mousemove', moveDrag);
+  document.removeEventListener('mouseup', stopDrag);
+}
+
+function startCall(userToCall, type){
   currentPrivateLogin=userToCall;
   document.getElementById('callOverlay').classList.add('show');
-  navigator.mediaDevices.getUserMedia({video:true,audio:true}).then(function(stream){
-    localStream=stream;document.getElementById('localVideo').srcObject=stream;
+  
+  // Constraints based on type
+  const constraints = {
+    audio: true,
+    video: { facingMode: currentFacingMode }
+  };
+  
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
+    localStream=stream;
+    document.getElementById('localVideo').srcObject=stream;
+    
+    // If audio call, disable video track immediately (acts like audio-only but ready for switch)
+    if(type === 'audio') {
+      const videoTrack = stream.getVideoTracks()[0];
+      if(videoTrack) {
+        videoTrack.enabled = false;
+        document.getElementById('toggleVideoBtn').classList.remove('active'); // Indicate off
+      }
+    } else {
+      document.getElementById('toggleVideoBtn').classList.add('active'); // Indicate on
+    }
+
     peerConnection=new RTCPeerConnection(rtcConfig);
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
     peerConnection.ontrack=function(e){document.getElementById('remoteVideo').srcObject=e.streams[0];};
     localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
     peerConnection.createOffer().then(function(offer){
       peerConnection.setLocalDescription(offer);
-      socket.emit('callUser',{userToCall:userToCall,signalData:offer});
+      socket.emit('callUser',{userToCall:userToCall, signalData:offer, callType: type});
     });
-  }).catch(function(e){alert('Нет доступа к камере/микрофону');endCall();});
+  }).catch(function(e){alert('Нет доступа к камере/микрофону: ' + e);endCall();});
 }
 window.startCall=startCall;
 
 socket.on('incomingCall',function(d){
   incomingCallData=d;
-  document.getElementById('incomingCallerName').textContent='Входящий от: '+d.fromNickname;
+  let typeText = d.callType === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
+  document.getElementById('incomingCallerName').textContent = typeText + ' от: ' + d.fromNickname;
   document.getElementById('incomingCallModal').classList.add('show');
 });
 
 function acceptCall(){
   document.getElementById('incomingCallModal').classList.remove('show');
   document.getElementById('callOverlay').classList.add('show');
-  navigator.mediaDevices.getUserMedia({video:true,audio:true}).then(function(stream){
-    localStream=stream;document.getElementById('localVideo').srcObject=stream;
+  
+  const constraints = {
+    audio: true,
+    video: { facingMode: currentFacingMode }
+  };
+
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
+    localStream=stream;
+    document.getElementById('localVideo').srcObject=stream;
+    
+    // Mirror the call type of the caller (if they called audio, we start audio)
+    if(incomingCallData.callType === 'audio') {
+       const videoTrack = stream.getVideoTracks()[0];
+       if(videoTrack) {
+         videoTrack.enabled = false;
+         document.getElementById('toggleVideoBtn').classList.remove('active');
+       }
+    } else {
+       document.getElementById('toggleVideoBtn').classList.add('active');
+    }
+
     peerConnection=new RTCPeerConnection(rtcConfig);
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:incomingCallData.from});};
     peerConnection.ontrack=function(e){document.getElementById('remoteVideo').srcObject=e.streams[0];};
@@ -759,6 +856,52 @@ function toggleMic(){
   }
 }
 window.toggleMic=toggleMic;
+
+function toggleVideo(){
+  if(localStream){
+    var track=localStream.getVideoTracks()[0];
+    track.enabled=!track.enabled;
+    // UI update
+    const btn = document.getElementById('toggleVideoBtn');
+    if(track.enabled) btn.classList.add('active');
+    else btn.classList.remove('active');
+  }
+}
+window.toggleVideo=toggleVideo;
+
+async function switchCamera(){
+  if(!localStream) return;
+  // Stop current video track
+  localStream.getVideoTracks()[0].stop();
+  
+  // Toggle facing mode
+  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+  
+  try {
+    const newStream = await navigator.mediaDevices.getUserMedia({
+      audio: true, // Keep audio request to satisfy constraint, though we use existing track usually
+      video: { facingMode: currentFacingMode }
+    });
+    
+    const newVideoTrack = newStream.getVideoTracks()[0];
+    
+    // Replace track in peer connection (remote view)
+    const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+    if(sender) sender.replaceTrack(newVideoTrack);
+    
+    // Replace track in local stream (local view)
+    // Remove old, add new
+    const oldTrack = localStream.getVideoTracks()[0];
+    localStream.removeTrack(oldTrack);
+    localStream.addTrack(newVideoTrack);
+    document.getElementById('localVideo').srcObject = localStream;
+    
+  } catch(e) {
+    alert('Не удалось переключить камеру');
+    console.error(e);
+  }
+}
+window.switchCamera=switchCamera;
 </script>
 </body>
 </html>

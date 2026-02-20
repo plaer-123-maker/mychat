@@ -182,11 +182,17 @@ io.on('connection', (socket) => {
   });
 
   // === WEBRTC CALLS ===
-  socket.on('callUser', ({ userToCall, signalData }) => {
+  // Обновлен для передачи callType
+  socket.on('callUser', ({ userToCall, signalData, callType }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(userToCall);
     if (targetSocket) {
-      targetSocket.emit('incomingCall', { signal: signalData, from: socket.userLogin, fromNickname: socket.username });
+      targetSocket.emit('incomingCall', { 
+        signal: signalData, 
+        from: socket.userLogin, 
+        fromNickname: socket.username,
+        callType: callType || 'video' 
+      });
     }
   });
 
