@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MyChat</title>
 <script src="/socket.io/socket.io.js"></script>
 <style>
@@ -119,7 +119,7 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .sidebar-list::-webkit-scrollbar{width:4px;}.sidebar-list::-webkit-scrollbar-thumb{background:#333;border-radius:2px;}
 @media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
 
-/* === CALL STYLES OPTIMIZED === */
+/* === CALL STYLES === */
 .call-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:3000;display:none;flex-direction:column;}
 .call-overlay.show{display:flex;}
 .call-video-box{flex:1;position:relative;display:flex;justify-content:center;align-items:center;background:#1a1a2e;overflow:hidden;}
@@ -289,35 +289,42 @@ function switchToGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabGeneral');
   document.getElementById('searchInput').value='';
+  
+  // Добавляем обработчик onclick для открытия на мобильном
   document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent='Общий чат';
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='';
-  document.getElementById('inputArea').style.display='flex';
-  document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='block';
-  socket.emit('getGeneralHistory');
+  
+  // ЛОГИКА ДЛЯ МОБИЛЬНЫХ: НЕ ОТКРЫВАТЬ ЧАТ АВТОМАТИЧЕСКИ
+  if(window.innerWidth > 600) {
+    openGeneral(); // На ПК открываем сразу
+  } else {
+    // На мобильном — скрываем чат, показываем только список
+    document.getElementById('mainChat').classList.remove('show');
+    document.getElementById('noChat').style.display='none'; 
+  }
 }
+
 function switchToPrivate(){
   currentView='private';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabPrivate');
   document.getElementById('searchInput').value='';
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  document.getElementById('mainChat').classList.remove('show');
+  // На мобильном скрываем чат
+  if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
+  
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyChats');
 }
+
 function switchToRooms(){
   currentView='rooms';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  document.getElementById('mainChat').classList.remove('show');
+  // На мобильном скрываем чат
+  if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
+  
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=600)document.getElementById('mobileBackBtn').style.display='none';
