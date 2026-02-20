@@ -94,12 +94,6 @@ function isAdmin(socket) {
 
 function isSuperAdmin(socket) { return socket.userLogin === ADMIN_LOGIN; }
 
-function getOnlineList() {
-  var list = [];
-  for (let [sid, info] of onlineUsers) list.push({ nickname: info.nickname, login: info.login });
-  return list;
-}
-
 function findSocketByLogin(login) {
   for (let [sid, info] of onlineUsers) {
     if (info.login === login) return socketUsers.get(sid);
@@ -108,7 +102,8 @@ function findSocketByLogin(login) {
 }
 
 function sendOnlineToAll() {
-  var list = getOnlineList();
+  var list = [];
+  for (let [sid, info] of onlineUsers) list.push({ nickname: info.nickname, login: info.login });
   for (let [sid] of onlineUsers) {
     var s = socketUsers.get(sid);
     if (!s) continue;
@@ -124,34 +119,30 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-async function authByToken(socket, token, ip) {
-  try {
-    const res = await pool.query('SELECT * FROM users WHERE token=$1', [token]);
-    if (res.rows.length === 0) return socket.emit('authError', 'Токен недействителен');
-    const user = res.rows[0];
-    if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
-    socket.username = user.nickname;
-    socket.userLogin = user.login;
-    socket.userRole = user.role || 'user';
-    if (user.login === ADMIN_LOGIN) socket.userRole = 'admin';
-    onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
-    socketUsers.set(socket.id, socket);
-    socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token });
-    sendOnlineToAll();
-    await addLog('login_token', user.nickname, 'Auto-login', ip);
-  } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
-}
-
 io.on('connection', (socket) => {
   const ip = getIP(socket);
 
+  // === AUTH ===
   socket.on('autoLogin', async (token) => {
     if (!token) return socket.emit('authError', 'Нет токена');
-    await authByToken(socket, token, ip);
+    try {
+      const res = await pool.query('SELECT * FROM users WHERE token=$1', [token]);
+      if (res.rows.length === 0) return socket.emit('authError', 'Токен недействителен');
+      const user = res.rows[0];
+      if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
+      socket.username = user.nickname;
+      socket.userLogin = user.login;
+      socket.userRole = user.login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
+      onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
+      socketUsers.set(socket.id, socket);
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token });
+      sendOnlineToAll();
+    } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
 
   socket.on('register', async ({ login, password, nickname }) => {
     try {
+      if (!login || !password || !nickname) return socket.emit('authError', 'Заполни все поля');
       const exists = await pool.query('SELECT id FROM users WHERE login=$1', [login]);
       if (exists.rows.length > 0) return socket.emit('authError', 'Этот логин уже занят');
       const nickExists = await pool.query('SELECT id FROM users WHERE LOWER(nickname)=LOWER($1)', [nickname]);
@@ -171,6 +162,7 @@ io.on('connection', (socket) => {
 
   socket.on('login', async ({ login, password }) => {
     try {
+      if (!login || !password) return socket.emit('authError', 'Заполни все поля');
       const res = await pool.query('SELECT * FROM users WHERE login=$1', [login]);
       if (res.rows.length === 0) return socket.emit('authError', 'Неверный логин или пароль');
       const user = res.rows[0];
@@ -178,8 +170,7 @@ io.on('connection', (socket) => {
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) return socket.emit('authError', 'Неверный логин или пароль');
       socket.username = user.nickname; socket.userLogin = login;
-      socket.userRole = user.role || 'user';
-      if (login === ADMIN_LOGIN) socket.userRole = 'admin';
+      socket.userRole = login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
       const token = generateToken();
       await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
       onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
@@ -190,6 +181,7 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
+  // === GENERAL CHAT ===
   socket.on('getGeneralHistory', async () => {
     if (!socket.userLogin) return;
     try {
@@ -198,11 +190,39 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
+  socket.on('chatMessage', async (data) => {
+    if (!socket.username) return;
+    try {
+      const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
+      if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
+    } catch(e) {}
+    const msg = { username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
+    try {
+      const res = await pool.query('INSERT INTO messages (username,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+        [msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      msg.id = res.rows[0].id;
+      io.emit('chatMessage', msg);
+    } catch (e) { console.error(e); }
+  });
+
+  socket.on('deleteMessage', async (id) => {
+    if (!socket.username) return;
+    try {
+      if (isAdmin(socket)) await pool.query('DELETE FROM messages WHERE id=$1', [id]);
+      else await pool.query('DELETE FROM messages WHERE id=$1 AND username=$2', [id, socket.username]);
+      io.emit('messageDeleted', id);
+    } catch (e) { console.error(e); }
+  });
+
+  // === TYPING ===
   socket.on('typing', () => { if (socket.username) socket.broadcast.emit('userTyping', { nickname: socket.username }); });
   socket.on('stopTyping', () => { if (socket.username) socket.broadcast.emit('userStopTyping', { nickname: socket.username }); });
   socket.on('privateTyping', (toLogin) => { if (!socket.username) return; var s = findSocketByLogin(toLogin); if (s) s.emit('privateUserTyping', { from: socket.userLogin, nickname: socket.username }); });
   socket.on('privateStopTyping', (toLogin) => { if (!socket.username) return; var s = findSocketByLogin(toLogin); if (s) s.emit('privateUserStopTyping', { from: socket.userLogin }); });
+  socket.on('roomTyping', (roomId) => { if (socket.username) socket.to('room_' + roomId).emit('roomUserTyping', { roomId: Number(roomId), nickname: socket.username }); });
+  socket.on('roomStopTyping', (roomId) => { if (socket.username) socket.to('room_' + roomId).emit('roomUserStopTyping', { roomId: Number(roomId), nickname: socket.username }); });
 
+  // === PROFILE ===
   socket.on('changeNickname', async (newNick) => {
     if (!newNick || !socket.userLogin) return;
     try {
@@ -229,33 +249,7 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('passwordResult', 'Ошибка'); }
   });
 
-  socket.on('chatMessage', async (data) => {
-    if (!socket.username) return;
-    try {
-      const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
-      if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) {
-        return socket.emit('chatError', 'Вы замучены');
-      }
-    } catch(e) {}
-    const msg = { username: socket.username, text: data.text||'', image: data.image||null,
-      voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
-    try {
-      const res = await pool.query('INSERT INTO messages (username,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-        [msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
-      msg.id = res.rows[0].id;
-      io.emit('chatMessage', msg);
-    } catch (e) { console.error(e); }
-  });
-
-  socket.on('deleteMessage', async (id) => {
-    if (!socket.username) return;
-    try {
-      if (isAdmin(socket)) await pool.query('DELETE FROM messages WHERE id=$1', [id]);
-      else await pool.query('DELETE FROM messages WHERE id=$1 AND username=$2', [id, socket.username]);
-      io.emit('messageDeleted', id);
-    } catch (e) { console.error(e); }
-  });
-
+  // === SEARCH ===
   socket.on('searchUser', async (query) => {
     if (!socket.userLogin || !query) return;
     try {
@@ -265,6 +259,16 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('searchResults', []); }
   });
 
+  socket.on('searchRooms', async (query) => {
+    if (!query) return;
+    try {
+      const res = await pool.query('SELECT id, name, type FROM rooms WHERE LOWER(name) LIKE LOWER($1) LIMIT 10', ['%' + query + '%']);
+      console.log('searchRooms result:', res.rows);
+      socket.emit('roomSearchResults', res.rows);
+    } catch(e) { console.error('searchRooms error:', e); socket.emit('roomSearchResults', []); }
+  });
+
+  // === PRIVATE MESSAGES ===
   socket.on('getMyChats', async () => {
     if (!socket.userLogin) return;
     try {
@@ -277,17 +281,9 @@ io.on('connection', (socket) => {
       var users = await pool.query('SELECT login, nickname FROM users WHERE login = ANY($1)', [logins]);
       var chats = [];
       for (var u of users.rows) {
-        var last = await pool.query(
-          'SELECT text, type, timestamp FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp DESC LIMIT 1',
-          [socket.userLogin, u.login]);
-        var unread = await pool.query(
-          'SELECT COUNT(*) as c FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false',
-          [u.login, socket.userLogin]);
-        chats.push({
-          login: u.login, nickname: u.nickname,
-          lastMsg: last.rows[0] || null,
-          unread: parseInt(unread.rows[0].c)
-        });
+        var last = await pool.query('SELECT text, type, timestamp FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp DESC LIMIT 1', [socket.userLogin, u.login]);
+        var unread = await pool.query('SELECT COUNT(*) as c FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [u.login, socket.userLogin]);
+        chats.push({ login: u.login, nickname: u.nickname, lastMsg: last.rows[0] || null, unread: parseInt(unread.rows[0].c) });
       }
       chats.sort(function(a,b) { return (b.lastMsg?b.lastMsg.timestamp:0) - (a.lastMsg?a.lastMsg.timestamp:0); });
       socket.emit('myChats', chats);
@@ -297,11 +293,8 @@ io.on('connection', (socket) => {
   socket.on('getPrivateHistory', async (otherLogin) => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query(
-        'SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 200',
-        [socket.userLogin, otherLogin]);
-      await pool.query('UPDATE private_messages SET read=true WHERE from_login=$1 AND to_login=$2 AND read=false',
-        [otherLogin, socket.userLogin]);
+      const res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 200', [socket.userLogin, otherLogin]);
+      await pool.query('UPDATE private_messages SET read=true WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
       socket.emit('privateHistory', { otherLogin, messages: res.rows });
     } catch(e) { console.error(e); }
   });
@@ -312,20 +305,14 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username,
-      text: data.text||'', image: data.image||null, voice: data.voice||null,
-      type: data.type||'text', timestamp: Date.now() };
+    const msg = { from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
     try {
-      const res = await pool.query(
-        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
         [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
       msg.id = res.rows[0].id;
       socket.emit('newPrivateMessage', msg);
       var target = findSocketByLogin(data.toLogin);
-      if (target) {
-        target.emit('newPrivateMessage', msg);
-        target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username });
-      }
+      if (target) { target.emit('newPrivateMessage', msg); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
     } catch(e) { console.error(e); }
   });
 
@@ -344,83 +331,46 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  // =============================================
-  // === ROOMS (GROUPS & CHANNELS) ===
-  // =============================================
-
+  // === ROOMS ===
   socket.on('createRoom', async ({ name, type }) => {
     if (!socket.userLogin || !name) return;
-    if (type !== 'group' && type !== 'channel') return;
+    if (type !== 'group' && type !== 'channel') type = 'group';
     try {
-      const res = await pool.query(
-        'INSERT INTO rooms (name, type, owner_login, comments_enabled, timestamp) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-        [name, type, socket.userLogin, true, Date.now()]);
+      console.log('Creating room:', name, type, 'by', socket.userLogin);
+      const res = await pool.query('INSERT INTO rooms (name, type, owner_login, comments_enabled, timestamp) VALUES ($1,$2,$3,true,$4) RETURNING *', [name, type, socket.userLogin, Date.now()]);
       var room = res.rows[0];
-      await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)',
-        [room.id, socket.userLogin, 'admin']);
-      
-      // Сразу подключаем к комнате socket.io
+      console.log('Room created:', room);
+      await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [room.id, socket.userLogin, 'admin']);
+      console.log('Member added, room id:', room.id);
       socket.join('room_' + room.id);
-      
-      // Отправляем полные данные комнаты чтобы клиент сразу открыл её
-      var members = await pool.query(`
-        SELECT rm.user_login, rm.role, u.nickname 
-        FROM room_members rm JOIN users u ON rm.user_login = u.login 
-        WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname
-      `, [room.id]);
-      
-      socket.emit('roomCreated', { 
-        id: room.id, 
-        name: room.name, 
-        type: room.type,
-        owner_login: room.owner_login,
-        comments_enabled: room.comments_enabled
-      });
-      
-      // Сразу отправляем roomData чтобы комната открылась
-      socket.emit('roomData', {
-        room: room,
-        myRole: 'admin',
-        messages: [],
-        members: members.rows
-      });
-      
+      socket.emit('roomCreated', { id: room.id, name: room.name, type: room.type });
       await addLog('create_room', socket.username, type + ': ' + name, ip);
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error('createRoom error:', e); socket.emit('chatError', 'Ошибка создания комнаты'); }
   });
 
   socket.on('getMyRooms', async () => {
     if (!socket.userLogin) return;
     try {
       const res = await pool.query(`
-        SELECT r.*, rm.role as my_role,
-        (SELECT COUNT(*) FROM room_members WHERE room_id=r.id) as member_count
+        SELECT r.id, r.name, r.type, r.owner_login, r.comments_enabled, r.timestamp,
+        rm.role as my_role,
+        (SELECT COUNT(*)::int FROM room_members WHERE room_id=r.id) as member_count
         FROM rooms r
         JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
         ORDER BY r.timestamp DESC
       `, [socket.userLogin]);
+      console.log('getMyRooms for', socket.userLogin, ':', res.rows.length, 'rooms');
       socket.emit('myRooms', res.rows);
-    } catch(e) { console.error(e); socket.emit('myRooms', []); }
-  });
-
-  socket.on('searchRooms', async (query) => {
-    if (!query) return;
-    try {
-      const res = await pool.query(
-        'SELECT id, name, type FROM rooms WHERE LOWER(name) LIKE LOWER($1) LIMIT 10',
-        ['%' + query + '%']);
-      socket.emit('roomSearchResults', res.rows);
-    } catch(e) { socket.emit('roomSearchResults', []); }
+    } catch(e) { console.error('getMyRooms error:', e); socket.emit('myRooms', []); }
   });
 
   socket.on('joinRoom', async (roomId) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
-      // Проверяем что комната существует
       var roomCheck = await pool.query('SELECT id FROM rooms WHERE id=$1', [roomId]);
       if (roomCheck.rows.length === 0) return socket.emit('chatError', 'Комната не найдена');
-      
-      var check = await pool.query('SELECT * FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      var check = await pool.query('SELECT id FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (check.rows.length === 0) {
         await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, socket.userLogin, 'member']);
       }
@@ -431,11 +381,10 @@ io.on('connection', (socket) => {
 
   socket.on('leaveRoom', async (roomId) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
-      if (room.rows.length > 0 && room.rows[0].owner_login === socket.userLogin) {
-        return socket.emit('chatError', 'Владелец не может покинуть комнату. Удалите её.');
-      }
+      if (room.rows.length > 0 && room.rows[0].owner_login === socket.userLogin) return socket.emit('chatError', 'Владелец не может покинуть комнату. Удалите её.');
       await pool.query('DELETE FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       socket.leave('room_' + roomId);
       socket.emit('leftRoom', roomId);
@@ -444,81 +393,63 @@ io.on('connection', (socket) => {
 
   socket.on('openRoom', async (roomId) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
+      console.log('openRoom:', roomId, 'by', socket.userLogin);
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
-      if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник');
+      if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник этой комнаты');
       var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return socket.emit('chatError', 'Комната не найдена');
       var msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY timestamp ASC LIMIT 200', [roomId]);
-      var members = await pool.query(`
-        SELECT rm.user_login, rm.role, u.nickname 
-        FROM room_members rm JOIN users u ON rm.user_login = u.login 
-        WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname
-      `, [roomId]);
+      var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
       socket.join('room_' + roomId);
-      socket.emit('roomData', {
-        room: room.rows[0],
-        myRole: member.rows[0].role,
-        messages: msgs.rows,
-        members: members.rows
-      });
-    } catch(e) { console.error(e); }
+      var data = { room: room.rows[0], myRole: member.rows[0].role, messages: msgs.rows, members: members.rows };
+      console.log('Sending roomData:', data.room.name, 'msgs:', data.messages.length, 'members:', data.members.length);
+      socket.emit('roomData', data);
+    } catch(e) { console.error('openRoom error:', e); }
   });
 
   socket.on('roomMessage', async (data) => {
     if (!socket.userLogin || !data.roomId) return;
+    var roomId = Number(data.roomId);
     try {
-      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [data.roomId, socket.userLogin]);
+      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0) return;
-      var myRole = member.rows[0].role;
-      var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [data.roomId]);
+      var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return;
-      if (room.rows[0].type === 'channel' && myRole !== 'admin') {
-        return socket.emit('chatError', 'В канале писать может только админ');
-      }
-      var msg = {
-        room_id: data.roomId, user_login: socket.userLogin, username: socket.username,
-        text: data.text||'', image: data.image||null, voice: data.voice||null,
-        type: data.type||'text', timestamp: Date.now()
-      };
-      var res = await pool.query(
-        'INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
+      var msg = { room_id: roomId, user_login: socket.userLogin, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
+      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
         [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
       msg.id = res.rows[0].id;
-      io.to('room_' + data.roomId).emit('roomNewMessage', msg);
+      io.to('room_' + roomId).emit('roomNewMessage', msg);
     } catch(e) { console.error(e); }
   });
 
   socket.on('deleteRoomMessage', async ({ roomId, msgId }) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0) return;
-      var myRole = member.rows[0].role;
-      if (myRole === 'admin') {
-        await pool.query('DELETE FROM room_messages WHERE id=$1 AND room_id=$2', [msgId, roomId]);
-      } else {
-        await pool.query('DELETE FROM room_messages WHERE id=$1 AND room_id=$2 AND user_login=$3', [msgId, roomId, socket.userLogin]);
-      }
+      if (member.rows[0].role === 'admin') await pool.query('DELETE FROM room_messages WHERE id=$1 AND room_id=$2', [msgId, roomId]);
+      else await pool.query('DELETE FROM room_messages WHERE id=$1 AND room_id=$2 AND user_login=$3', [msgId, roomId, socket.userLogin]);
       io.to('room_' + roomId).emit('roomMessageDeleted', { roomId, msgId });
     } catch(e) {}
   });
 
   socket.on('roomAddMember', async ({ roomId, login }) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0 || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может добавлять');
       var userExists = await pool.query('SELECT login FROM users WHERE login=$1', [login]);
       if (userExists.rows.length === 0) return socket.emit('chatError', 'Пользователь не найден');
-      var already = await pool.query('SELECT * FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
+      var already = await pool.query('SELECT id FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
       if (already.rows.length > 0) return socket.emit('chatError', 'Уже участник');
       await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, login, 'member']);
-      var members = await pool.query(`
-        SELECT rm.user_login, rm.role, u.nickname 
-        FROM room_members rm JOIN users u ON rm.user_login = u.login 
-        WHERE rm.room_id=$1
-      `, [roomId]);
+      var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1', [roomId]);
       io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
       socket.emit('chatError', login + ' добавлен');
     } catch(e) { console.error(e); }
@@ -526,6 +457,7 @@ io.on('connection', (socket) => {
 
   socket.on('roomRemoveMember', async ({ roomId, login }) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0 || member.rows[0].role !== 'admin') return;
@@ -534,48 +466,39 @@ io.on('connection', (socket) => {
       await pool.query('DELETE FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
       var targetSocket = findSocketByLogin(login);
       if (targetSocket) { targetSocket.leave('room_' + roomId); targetSocket.emit('kickedFromRoom', roomId); }
-      var members = await pool.query(`
-        SELECT rm.user_login, rm.role, u.nickname 
-        FROM room_members rm JOIN users u ON rm.user_login = u.login 
-        WHERE rm.room_id=$1
-      `, [roomId]);
+      var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1', [roomId]);
       io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
     } catch(e) {}
   });
 
   socket.on('roomSetRole', async ({ roomId, login, role }) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
-      if (room.rows.length === 0) return;
-      if (room.rows[0].owner_login !== socket.userLogin) return socket.emit('chatError', 'Только владелец может менять роли');
+      if (room.rows.length === 0 || room.rows[0].owner_login !== socket.userLogin) return socket.emit('chatError', 'Только владелец может менять роли');
       if (role !== 'admin' && role !== 'member') return;
       await pool.query('UPDATE room_members SET role=$1 WHERE room_id=$2 AND user_login=$3', [role, roomId, login]);
-      var members = await pool.query(`
-        SELECT rm.user_login, rm.role, u.nickname 
-        FROM room_members rm JOIN users u ON rm.user_login = u.login 
-        WHERE rm.room_id=$1
-      `, [roomId]);
+      var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1', [roomId]);
       io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
-      socket.emit('chatError', login + ' теперь ' + role);
     } catch(e) {}
   });
 
   socket.on('roomToggleComments', async (roomId) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
-      if (room.rows.length === 0) return;
-      if (room.rows[0].owner_login !== socket.userLogin) return;
+      if (room.rows.length === 0 || room.rows[0].owner_login !== socket.userLogin) return;
       var newVal = !room.rows[0].comments_enabled;
       await pool.query('UPDATE rooms SET comments_enabled=$1 WHERE id=$2', [newVal, roomId]);
       io.to('room_' + roomId).emit('roomSettingsUpdated', { roomId, comments_enabled: newVal });
-      socket.emit('chatError', 'Комментарии ' + (newVal ? 'включены' : 'выключены'));
     } catch(e) {}
   });
 
   socket.on('deleteRoom', async (roomId) => {
     if (!socket.userLogin) return;
+    roomId = Number(roomId);
     try {
       var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return;
@@ -587,126 +510,62 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  socket.on('roomTyping', (roomId) => {
-    if (socket.username) socket.to('room_' + roomId).emit('roomUserTyping', { roomId, nickname: socket.username });
-  });
-  socket.on('roomStopTyping', (roomId) => {
-    if (socket.username) socket.to('room_' + roomId).emit('roomUserStopTyping', { roomId, nickname: socket.username });
-  });
-
   // === ADMIN ===
   socket.on('adminGetUsers', async () => {
     if (!isAdmin(socket)) return;
-    try {
-      const res = await pool.query('SELECT id,login,nickname,banned,muted_until,role FROM users ORDER BY id');
-      socket.emit('adminUsers', res.rows);
-    } catch(e) {}
+    try { const res = await pool.query('SELECT id,login,nickname,banned,muted_until,role FROM users ORDER BY id'); socket.emit('adminUsers', res.rows); } catch(e) {}
   });
-
   socket.on('adminGetStats', async () => {
     if (!isAdmin(socket)) return;
     try {
-      const users = await pool.query('SELECT COUNT(*) as c FROM users');
-      const msgs = await pool.query('SELECT COUNT(*) as c FROM messages');
-      const pms = await pool.query('SELECT COUNT(*) as c FROM private_messages');
-      const rooms = await pool.query('SELECT COUNT(*) as c FROM rooms');
+      const users = await pool.query('SELECT COUNT(*)::int as c FROM users');
+      const msgs = await pool.query('SELECT COUNT(*)::int as c FROM messages');
+      const pms = await pool.query('SELECT COUNT(*)::int as c FROM private_messages');
+      const rooms = await pool.query('SELECT COUNT(*)::int as c FROM rooms');
       socket.emit('adminStats', { users: users.rows[0].c, messages: msgs.rows[0].c, pms: pms.rows[0].c, rooms: rooms.rows[0].c, online: onlineUsers.size });
     } catch(e) {}
   });
-
   socket.on('adminGetLogs', async () => {
     if (!isAdmin(socket)) return;
-    try {
-      const res = await pool.query('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100');
-      socket.emit('adminLogs', res.rows);
-    } catch(e) {}
+    try { const res = await pool.query('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 100'); socket.emit('adminLogs', res.rows); } catch(e) {}
   });
-
   socket.on('adminBanUser', async (login) => {
     if (!isAdmin(socket)) return;
-    try {
-      await pool.query('UPDATE users SET banned=true WHERE login=$1', [login]);
-      var s = findSocketByLogin(login); if (s) s.emit('kicked', 'Вы заблокированы');
-      await addLog('ban', socket.username, 'Banned ' + login, ip);
-      socket.emit('adminDone', 'Забанен: ' + login);
-    } catch(e) {}
+    try { await pool.query('UPDATE users SET banned=true WHERE login=$1', [login]); var s = findSocketByLogin(login); if (s) s.emit('kicked', 'Вы заблокированы'); await addLog('ban', socket.username, 'Banned ' + login, ip); socket.emit('adminDone', 'Забанен: ' + login); } catch(e) {}
   });
-
   socket.on('adminUnbanUser', async (login) => {
     if (!isAdmin(socket)) return;
-    try {
-      await pool.query('UPDATE users SET banned=false WHERE login=$1', [login]);
-      socket.emit('adminDone', 'Разбанен: ' + login);
-    } catch(e) {}
+    try { await pool.query('UPDATE users SET banned=false WHERE login=$1', [login]); socket.emit('adminDone', 'Разбанен: ' + login); } catch(e) {}
   });
-
   socket.on('adminMuteUser', async ({ login, minutes }) => {
     if (!isAdmin(socket)) return;
-    try {
-      await pool.query('UPDATE users SET muted_until=$1 WHERE login=$2', [Date.now() + minutes * 60000, login]);
-      socket.emit('adminDone', 'Замучен: ' + login);
-    } catch(e) {}
+    try { await pool.query('UPDATE users SET muted_until=$1 WHERE login=$2', [Date.now() + minutes * 60000, login]); socket.emit('adminDone', 'Замучен: ' + login); } catch(e) {}
   });
-
   socket.on('adminDeleteUser', async (login) => {
     if (!isSuperAdmin(socket)) return;
     if (login === ADMIN_LOGIN) return;
-    try {
-      await pool.query('DELETE FROM private_messages WHERE from_login=$1 OR to_login=$1', [login]);
-      await pool.query('DELETE FROM room_members WHERE user_login=$1', [login]);
-      await pool.query('DELETE FROM users WHERE login=$1', [login]);
-      var s = findSocketByLogin(login); if (s) s.emit('kicked', 'Аккаунт удалён');
-      socket.emit('adminDone', 'Удалён: ' + login);
-    } catch(e) {}
+    try { await pool.query('DELETE FROM private_messages WHERE from_login=$1 OR to_login=$1', [login]); await pool.query('DELETE FROM room_members WHERE user_login=$1', [login]); await pool.query('DELETE FROM users WHERE login=$1', [login]); var s = findSocketByLogin(login); if (s) s.emit('kicked', 'Аккаунт удалён'); socket.emit('adminDone', 'Удалён: ' + login); } catch(e) {}
   });
-
   socket.on('adminDeleteAllUsers', async () => {
     if (!isSuperAdmin(socket)) return;
-    try {
-      await pool.query('DELETE FROM users WHERE login != $1', [ADMIN_LOGIN]);
-      await pool.query('DELETE FROM messages');
-      await pool.query('DELETE FROM private_messages');
-      await pool.query('DELETE FROM room_members WHERE user_login != $1', [ADMIN_LOGIN]);
-      for (let [sid, info] of onlineUsers) {
-        if (info.login !== ADMIN_LOGIN) { var s = socketUsers.get(sid); if (s) s.emit('kicked', 'Все аккаунты удалены'); }
-      }
-      socket.emit('adminDone', 'Все удалены');
-    } catch(e) {}
+    try { await pool.query('DELETE FROM users WHERE login != $1', [ADMIN_LOGIN]); await pool.query('DELETE FROM messages'); await pool.query('DELETE FROM private_messages'); await pool.query('DELETE FROM room_members WHERE user_login != $1', [ADMIN_LOGIN]); for (let [sid, info] of onlineUsers) { if (info.login !== ADMIN_LOGIN) { var s = socketUsers.get(sid); if (s) s.emit('kicked', 'Все аккаунты удалены'); } } socket.emit('adminDone', 'Все удалены'); } catch(e) {}
   });
-
   socket.on('adminClearChat', async () => {
     if (!isAdmin(socket)) return;
     try { await pool.query('DELETE FROM messages'); io.emit('chatCleared'); socket.emit('adminDone', 'Чат очищен'); } catch(e) {}
   });
-
   socket.on('adminAnnounce', async (text) => {
     if (!isAdmin(socket)) return;
     const msg = { username: '⚡ Система', text, type: 'text', timestamp: Date.now() };
-    try {
-      const res = await pool.query('INSERT INTO messages (username,text,type,timestamp) VALUES ($1,$2,$3,$4) RETURNING id',
-        [msg.username, msg.text, msg.type, msg.timestamp]);
-      msg.id = res.rows[0].id; io.emit('chatMessage', msg);
-      socket.emit('adminDone', 'Отправлено');
-    } catch(e) {}
+    try { const res = await pool.query('INSERT INTO messages (username,text,type,timestamp) VALUES ($1,$2,$3,$4) RETURNING id', [msg.username, msg.text, msg.type, msg.timestamp]); msg.id = res.rows[0].id; io.emit('chatMessage', msg); socket.emit('adminDone', 'Отправлено'); } catch(e) {}
   });
-
   socket.on('adminSetRole', async ({ login, role }) => {
     if (!isSuperAdmin(socket)) return;
-    try {
-      await pool.query('UPDATE users SET role=$1 WHERE login=$2', [role, login]);
-      socket.emit('adminDone', login + ' теперь ' + role);
-    } catch(e) {}
+    try { await pool.query('UPDATE users SET role=$1 WHERE login=$2', [role, login]); socket.emit('adminDone', login + ' теперь ' + role); } catch(e) {}
   });
-
   socket.on('adminChangeNickname', async ({ login, newNickname }) => {
     if (!isAdmin(socket)) return;
-    try {
-      await pool.query('UPDATE users SET nickname=$1 WHERE login=$2', [newNickname, login]);
-      var s = findSocketByLogin(login);
-      if (s) { s.username = newNickname; s.emit('nicknameChanged', newNickname); }
-      for (let [sid, info] of onlineUsers) { if (info.login === login) info.nickname = newNickname; }
-      socket.emit('adminDone', 'Ник изменён');
-    } catch(e) {}
+    try { await pool.query('UPDATE users SET nickname=$1 WHERE login=$2', [newNickname, login]); var s = findSocketByLogin(login); if (s) { s.username = newNickname; s.emit('nicknameChanged', newNickname); } for (let [sid, info] of onlineUsers) { if (info.login === login) info.nickname = newNickname; } socket.emit('adminDone', 'Ник изменён'); } catch(e) {}
   });
 
   socket.on('disconnect', () => {
