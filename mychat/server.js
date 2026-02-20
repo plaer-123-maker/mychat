@@ -38,21 +38,27 @@ async function initDB() {
     type VARCHAR(20) DEFAULT 'text', timestamp BIGINT NOT NULL,
     read BOOLEAN DEFAULT false
   )`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
+
+  try { await pool.query('DROP TABLE IF EXISTS room_messages CASCADE'); } catch(e) { console.log('drop room_messages:', e.message); }
+  try { await pool.query('DROP TABLE IF EXISTS room_members CASCADE'); } catch(e) { console.log('drop room_members:', e.message); }
+  try { await pool.query('DROP TABLE IF EXISTS rooms CASCADE'); } catch(e) { console.log('drop rooms:', e.message); }
+
+  await pool.query(`CREATE TABLE rooms (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(20) NOT NULL,
     owner_login VARCHAR(50) NOT NULL,
+    comments_enabled BOOLEAN DEFAULT true,
     timestamp BIGINT NOT NULL
   )`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS room_members (
+  await pool.query(`CREATE TABLE room_members (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
     user_login VARCHAR(50) NOT NULL,
     role VARCHAR(20) DEFAULT 'member',
     UNIQUE(room_id, user_login)
   )`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS room_messages (
+  await pool.query(`CREATE TABLE room_messages (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
     user_login VARCHAR(50) NOT NULL,
@@ -61,6 +67,7 @@ async function initDB() {
     type VARCHAR(20) DEFAULT 'text',
     timestamp BIGINT NOT NULL
   )`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS logs (
     id SERIAL PRIMARY KEY, action VARCHAR(50) NOT NULL,
     username VARCHAR(100), detail TEXT, ip VARCHAR(50),
@@ -70,7 +77,6 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
-  try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
   console.log('Database ready');
 }
