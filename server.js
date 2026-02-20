@@ -50,12 +50,13 @@ async function initDB() {
       timestamp BIGINT NOT NULL
     )
   `);
-  // Add columns if they don't exist
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT false'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
-  // Set admin role
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
+  // RESET PASSWORD - REMOVE AFTER FIRST LOGIN
+  const newHash = await bcrypt.hash('123456', 10);
+  await pool.query("UPDATE users SET password=$1 WHERE login='pekka'", [newHash]);
   console.log('Database ready');
 }
 
@@ -159,7 +160,6 @@ io.on('connection', (socket) => {
 
   socket.on('chatMessage', async (data) => {
     if (!socket.username) return;
-    // Check mute
     try {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) {
@@ -217,11 +217,7 @@ io.on('connection', (socket) => {
       const users = await pool.query('SELECT COUNT(*) as c FROM users');
       const msgs = await pool.query('SELECT COUNT(*) as c FROM messages');
       const online = onlineUsers.size;
-      socket.emit('adminStats', {
-        users: users.rows[0].c,
-        messages: msgs.rows[0].c,
-        online: online
-      });
+      socket.emit('adminStats', { users: users.rows[0].c, messages: msgs.rows[0].c, online: online });
     } catch(e) { console.error(e); }
   });
 
@@ -237,7 +233,6 @@ io.on('connection', (socket) => {
     if (!isAdmin(socket)) return;
     try {
       await pool.query('UPDATE users SET banned=true WHERE login=$1', [login]);
-      // Kick user
       for (let [sid, info] of onlineUsers) {
         if (info.login === login) {
           var s = socketUsers.get(sid);
@@ -282,7 +277,6 @@ io.on('connection', (socket) => {
     if (login === ADMIN_LOGIN) return;
     try {
       await pool.query('DELETE FROM users WHERE login=$1', [login]);
-      await pool.query('DELETE FROM messages WHERE username=(SELECT nickname FROM users WHERE login=$1)', [login]);
       for (let [sid, info] of onlineUsers) {
         if (info.login === login) {
           var s = socketUsers.get(sid);
@@ -299,7 +293,6 @@ io.on('connection', (socket) => {
     try {
       await pool.query('DELETE FROM users WHERE login != $1', [ADMIN_LOGIN]);
       await pool.query('DELETE FROM messages');
-      // Kick everyone except admin
       for (let [sid, info] of onlineUsers) {
         if (info.login !== ADMIN_LOGIN) {
           var s = socketUsers.get(sid);
@@ -356,10 +349,7 @@ io.on('connection', (socket) => {
         if (info.login === login) {
           info.nickname = newNickname;
           var s = socketUsers.get(sid);
-          if (s) {
-            s.username = newNickname;
-            s.emit('nicknameChanged', newNickname);
-          }
+          if (s) { s.username = newNickname; s.emit('nicknameChanged', newNickname); }
         }
       }
       await addLog('change_nick', socket.username, 'Сменил ник ' + login + ' на ' + newNickname, ip);
