@@ -135,11 +135,23 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .reaction-btn:hover{background:rgba(233,69,96,0.3);}
 .reaction-btn.mine{background:rgba(233,69,96,0.25);border-color:#e94560;}
 .reaction-btn .rc{font-size:12px;color:#aaa;}
-.emoji-picker{position:absolute;background:#16213e;border:1px solid #333;border-radius:12px;padding:8px 10px;display:flex;gap:6px;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,0.5);animation:fadeIn 0.15s ease;}
-.emoji-picker button{background:none;border:none;font-size:20px;cursor:pointer;padding:3px;border-radius:6px;transition:background 0.1s;}
-.emoji-picker button:hover{background:rgba(255,255,255,0.1);}
-.emoji-picker .ep-reply{font-size:13px;background:#0f3460;border:1px solid #333;color:#fff;padding:4px 8px;border-radius:6px;}
-.message{position:relative;}
+.message{position:relative;transition:transform 0.15s ease;}
+
+/* === SWIPE TO REPLY === */
+.msg-wrapper{position:relative;display:flex;align-items:center;max-width:100%;}
+.msg-wrapper.mine{justify-content:flex-end;}
+.msg-wrapper.other{justify-content:flex-start;}
+.swipe-reply-icon{position:absolute;opacity:0;transition:opacity 0.15s;pointer-events:none;font-size:20px;color:#e94560;width:32px;height:32px;display:flex;align-items:center;justify-content:center;}
+.msg-wrapper.mine .swipe-reply-icon{left:0;}
+.msg-wrapper.other .swipe-reply-icon{right:0;}
+.swipe-reply-icon.visible{opacity:1;}
+
+/* === FLOATING REACTION PANEL === */
+.reaction-panel{position:fixed;background:#16213e;border:1px solid #444;border-radius:24px;padding:6px 10px;display:flex;gap:4px;z-index:600;box-shadow:0 8px 32px rgba(0,0,0,0.7);animation:popIn 0.18s cubic-bezier(0.34,1.56,0.64,1);}
+.reaction-panel button{background:none;border:none;font-size:24px;cursor:pointer;padding:4px 3px;border-radius:8px;transition:transform 0.1s,background 0.1s;line-height:1;}
+.reaction-panel button:hover,.reaction-panel button:active{transform:scale(1.3);background:rgba(255,255,255,0.1);}
+.reaction-panel .rp-reply{font-size:13px;background:#0f3460;border:1px solid #555 !important;color:#fff;padding:6px 10px;border-radius:16px;white-space:nowrap;}
+@keyframes popIn{from{opacity:0;transform:scale(0.7) translateY(6px);}to{opacity:1;transform:scale(1) translateY(0);}}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
 
 /* === VIDEO NOTE STYLES === */
@@ -534,7 +546,7 @@ socket.on('roomNewMessage',function(msg){
     addRoomMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
   }
 });
-socket.on('roomMessageDeleted',function(d){if(currentRoomId==d.roomId){var el=document.getElementById('rmsg-'+d.msgId);if(el)el.remove();}});
+socket.on('roomMessageDeleted',function(d){if(currentRoomId==d.roomId){var el=document.getElementById('rmsg-'+d.msgId);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}}});
 socket.on('roomMembersUpdated',function(d){if(currentRoomId==d.roomId&&currentRoomData)currentRoomData.members=d.members;});
 socket.on('roomSettingsUpdated',function(d){if(currentRoomId==d.roomId&&currentRoomData)currentRoomData.room.comments_enabled=d.comments_enabled;});
 
@@ -551,7 +563,7 @@ function addRoomMsg(msg){
   div.innerHTML=html;
   if(msg.type==='video_note'&&msg.voice)div.appendChild(renderVideoNote(msg.voice,isMine));
   attachMsgEvents(div,msg.id,'room',msg.username,msg.text||'');
-  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').appendChild(div._wrapper||div);
 }
 function delRoomMsg(id){socket.emit('deleteRoomMessage',{roomId:currentRoomId,msgId:id});}
 window.delRoomMsg=delRoomMsg;
@@ -608,7 +620,7 @@ socket.on('newPrivateMessage',function(msg){
   }
   if(currentView==='private'||currentView==='pm')socket.emit('getMyChats');
 });
-socket.on('privateMessageDeleted',function(d){var el=document.getElementById('pm-'+d.id);if(el)el.remove();});
+socket.on('privateMessageDeleted',function(d){var el=document.getElementById('pm-'+d.id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 function addPM(msg){
   var div=document.createElement('div');var isMine=msg.from_login===myLogin;
   div.className='message '+(isMine?'mine':'other');div.id='pm-'+msg.id;
@@ -622,7 +634,7 @@ function addPM(msg){
   div.innerHTML=html;
   if(msg.type==='video_note'&&msg.voice)div.appendChild(renderVideoNote(msg.voice,isMine));
   attachMsgEvents(div,msg.id,'pm',msg.from_nickname,msg.text||'');
-  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').appendChild(div._wrapper||div);
 }
 function delPM(id){socket.emit('deletePrivateMessage',id);}
 window.delPM=delPM;
@@ -639,7 +651,7 @@ socket.on('chatMessage',function(msg){
   var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
   addMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
 });
-socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el)el.remove();});
+socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 // === REPLY FUNCTIONS ===
 document.getElementById('replyCancel').addEventListener('click', clearReply);
 function clearReply(){
@@ -657,37 +669,54 @@ function setReply(id, user, text){
 }
 window.setReply=setReply;
 
-// === EMOJI PICKER ===
+// === REACTION PANEL (tap/click) ===
 var EMOJIS=['👍','❤️','😂','😮','😢','🔥','👏','🎉'];
-var activePickerId=null;
-function closePicker(){
-  document.querySelectorAll('.emoji-picker').forEach(function(e){e.remove();});
-  activePickerId=null;
+var activePanel=null;
+function closeReactionPanel(){
+  if(activePanel){activePanel.remove();activePanel=null;}
 }
-function showEmojiPicker(msgId, msgType, anchorEl, replyUser, replyText){
-  closePicker();
-  activePickerId=msgId;
-  var picker=document.createElement('div');
-  picker.className='emoji-picker';
+function showReactionPanel(msgId, msgType, anchorEl, replyUser, replyText){
+  closeReactionPanel();
+  var panel=document.createElement('div');
+  panel.className='reaction-panel';
+
   // Reply button
-  var rb=document.createElement('button');rb.className='ep-reply';rb.textContent='↩ Ответить';
-  rb.onclick=function(){setReply(msgId,replyUser,replyText);closePicker();};
-  picker.appendChild(rb);
+  var rb=document.createElement('button');
+  rb.className='rp-reply';rb.textContent='↩ Ответить';
+  rb.addEventListener('click',function(e){e.stopPropagation();setReply(msgId,replyUser,replyText);closeReactionPanel();});
+  panel.appendChild(rb);
+
+  // Emoji buttons
   EMOJIS.forEach(function(em){
     var b=document.createElement('button');b.textContent=em;
-    b.onclick=function(){socket.emit('addReaction',{msgType:msgType,msgId:msgId,emoji:em});closePicker();};
-    picker.appendChild(b);
+    b.addEventListener('click',function(e){
+      e.stopPropagation();
+      socket.emit('addReaction',{msgType:msgType,msgId:msgId,emoji:em});
+      closeReactionPanel();
+    });
+    panel.appendChild(b);
   });
-  document.body.appendChild(picker);
+
+  document.body.appendChild(panel);
+  activePanel=panel;
+
+  // Position: above the message, centered horizontally
   var rect=anchorEl.getBoundingClientRect();
-  var top=rect.top-60;
-  var left=rect.left;
-  if(left+260>window.innerWidth)left=window.innerWidth-270;
-  if(top<10)top=rect.bottom+6;
-  picker.style.position='fixed';picker.style.top=top+'px';picker.style.left=left+'px';
-  setTimeout(function(){document.addEventListener('click',closePicker,{once:true});},50);
+  var pw=panel.offsetWidth||320;
+  var left=rect.left+(rect.width/2)-(pw/2);
+  if(left<8)left=8;
+  if(left+pw>window.innerWidth-8)left=window.innerWidth-pw-8;
+  var top=rect.top-56;
+  if(top<8)top=rect.bottom+8;
+  panel.style.left=left+'px';
+  panel.style.top=top+'px';
+
+  setTimeout(function(){
+    document.addEventListener('click',closeReactionPanel,{once:true});
+    document.addEventListener('touchstart',closeReactionPanel,{once:true,passive:true});
+  },50);
 }
-window.showEmojiPicker=showEmojiPicker;
+window.showReactionPanel=showReactionPanel;
 
 // === REACTIONS UPDATE ===
 socket.on('reactionUpdated',function(d){
@@ -711,25 +740,84 @@ function buildReplyQuote(msg){
 }
 
 function attachMsgEvents(div, msgId, msgType, authorName, textContent){
-  var pressTimer;
-  div.addEventListener('mouseenter',function(e){
-    // show small reaction trigger on hover for desktop
-    if(!div.querySelector('.msg-hover-btn')){
-      var hb=document.createElement('button');
-      hb.className='msg-hover-btn';
-      hb.textContent='😊';
-      hb.style.cssText='position:absolute;'+(div.classList.contains('mine')?'left:-36px':'right:-36px')+';top:4px;background:#16213e;border:1px solid #333;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:14px;color:#fff;display:flex;align-items:center;justify-content:center;';
-      hb.onclick=function(e){e.stopPropagation();showEmojiPicker(msgId,msgType,hb,authorName,textContent);};
-      div.appendChild(hb);
+  // Wrap message in a .msg-wrapper for swipe
+  var isMine=div.classList.contains('mine');
+  var wrapper=document.createElement('div');
+  wrapper.className='msg-wrapper '+(isMine?'mine':'other');
+
+  // Swipe reply icon
+  var icon=document.createElement('div');
+  icon.className='swipe-reply-icon';
+  icon.textContent='↩';
+
+  if(isMine){
+    wrapper.appendChild(icon);
+    wrapper.appendChild(div);
+  } else {
+    wrapper.appendChild(div);
+    wrapper.appendChild(icon);
+  }
+
+  // === SWIPE TO REPLY (touch) ===
+  var touchStartX=0, touchStartY=0, swiping=false, swipeDone=false;
+  var SWIPE_THRESHOLD=60;
+
+  div.addEventListener('touchstart',function(e){
+    touchStartX=e.touches[0].clientX;
+    touchStartY=e.touches[0].clientY;
+    swiping=false;swipeDone=false;
+  },{passive:true});
+
+  div.addEventListener('touchmove',function(e){
+    var dx=e.touches[0].clientX-touchStartX;
+    var dy=e.touches[0].clientY-touchStartY;
+    if(Math.abs(dy)>Math.abs(dx)+10){return;} // vertical scroll - ignore
+    var dir=isMine?-1:1; // mine swipes left, other swipes right
+    var move=dx*dir;
+    if(move<0)return;
+    swiping=true;
+    var clamped=Math.min(move,SWIPE_THRESHOLD*1.2);
+    div.style.transform='translateX('+(dx*dir>0?move*dir*-1:move*dir)+'px)';
+    // Simpler: just translate in swipe direction
+    div.style.transform='translateX('+Math.min(move,80)*(isMine?-1:1)+'px)';
+    icon.classList.toggle('visible', move>=SWIPE_THRESHOLD*0.5);
+    if(move>=SWIPE_THRESHOLD && !swipeDone){
+      swipeDone=true;
+      // haptic
+      if(navigator.vibrate)navigator.vibrate(30);
     }
+    e.preventDefault();
+  },{passive:false});
+
+  div.addEventListener('touchend',function(e){
+    div.style.transition='transform 0.2s ease';
+    div.style.transform='translateX(0)';
+    icon.classList.remove('visible');
+    setTimeout(function(){div.style.transition='';},200);
+    if(swipeDone){setReply(msgId,authorName,textContent);}
+    swiping=false;
+  },{passive:true});
+
+  // === CLICK/TAP to show reaction panel ===
+  var clickTimer=null;
+  div.addEventListener('click',function(e){
+    if(swiping||swipeDone)return;
+    if(e.target.closest('.del-btn,.reply-quote,.reaction-btn,.reactions-row'))return;
+    // small delay to distinguish from double-click
+    clearTimeout(clickTimer);
+    clickTimer=setTimeout(function(){
+      showReactionPanel(msgId,msgType,div,authorName,textContent);
+    },180);
   });
-  div.addEventListener('mouseleave',function(){
-    var hb=div.querySelector('.msg-hover-btn');if(hb)hb.remove();
+
+  // Desktop: right-click context = reaction panel
+  div.addEventListener('contextmenu',function(e){
+    e.preventDefault();
+    showReactionPanel(msgId,msgType,div,authorName,textContent);
   });
-  // Long press for mobile
-  div.addEventListener('touchstart',function(e){pressTimer=setTimeout(function(){showEmojiPicker(msgId,msgType,div,authorName,textContent);},500);},{passive:true});
-  div.addEventListener('touchend',function(){clearTimeout(pressTimer);});
-  div.addEventListener('touchmove',function(){clearTimeout(pressTimer);});
+
+  // Replace div in parent with wrapper when appended
+  div._wrapper=wrapper;
 }
 
 function addMsg(msg){
@@ -745,7 +833,7 @@ function addMsg(msg){
   div.innerHTML=html;
   if(msg.type==='video_note'&&msg.voice)div.appendChild(renderVideoNote(msg.voice,isM));
   attachMsgEvents(div,msg.id,'general',msg.username,msg.text||'');
-  document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').appendChild(div._wrapper||div);
 }
 function delMsg(id){socket.emit('deleteMessage',id);}
 window.delMsg=delMsg;
