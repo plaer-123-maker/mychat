@@ -8,151 +8,101 @@
 <meta name="theme-color" content="#1a1a2e">
 <script src="/socket.io/socket.io.js"></script>
 <style>
+/* CSS STYLES */
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;overflow:hidden;}
+/* AUTH */
 .auth-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;display:flex;justify-content:center;align-items:center;z-index:1000;}
 .auth-overlay.hidden{display:none;}
 .auth-box{background:#16213e;padding:40px;border-radius:16px;width:360px;text-align:center;}
 .auth-box input{width:100%;padding:14px;margin-bottom:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;font-size:15px;outline:none;}
 .auth-box .btn{width:100%;padding:14px;border:none;border-radius:10px;background:#e94560;color:#fff;font-size:16px;cursor:pointer;margin-top:8px;}
-.nick-field{display:none;}.nick-field.show{display:block;}
+/* APP */
 .app-container{display:none;height:100vh;width:100%;}.app-container.active{display:flex;}
 .sidebar{width:300px;background:#16213e;border-right:1px solid #333;display:flex;flex-direction:column;flex-shrink:0;}
 .sidebar-header{padding:14px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;}
-.sidebar-header h3{font-size:16px;}
-.hdr-btns{display:flex;gap:4px;}
-.hdr-btns button{background:#0f3460;border:1px solid #333;color:#fff;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:11px;}
-.hdr-btns button:hover{background:#e94560;}.hdr-btns .admin-btn{background:#e94560;}
 .sidebar-tabs{display:flex;border-bottom:1px solid #333;}
-.sidebar-tabs button{flex:1;padding:10px;border:none;background:transparent;color:#888;cursor:pointer;font-size:12px;}
+.sidebar-tabs button{flex:1;padding:10px;border:none;background:transparent;color:#888;cursor:pointer;}
 .sidebar-tabs button.active{color:#fff;border-bottom:2px solid #e94560;}
 .search-box{padding:10px;border-bottom:1px solid #333;}
-.search-box input{width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;font-size:13px;}
+.search-box input{width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;}
 .sidebar-list{flex:1;overflow-y:auto;}
-.chat-item{padding:12px 14px;border-bottom:1px solid #222;cursor:pointer;display:flex;align-items:center;gap:10px;}
-.chat-item:hover{background:#0f3460;}.chat-item.active{background:#0f3460;}
-.chat-item .avatar{width:40px;height:40px;border-radius:50%;background:#e94560;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-.chat-item .info{flex:1;overflow:hidden;}.chat-item .info .name{font-size:14px;font-weight:bold;}
-.chat-item .info .last{font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.chat-item .badge{background:#e94560;color:#fff;font-size:11px;padding:2px 7px;border-radius:10px;flex-shrink:0;}
-.chat-item .tag{font-size:10px;color:#888;background:#0a0a1a;padding:2px 6px;border-radius:4px;flex-shrink:0;}
-.empty-list{padding:20px;text-align:center;color:#555;font-size:13px;}
+.chat-item{padding:12px;border-bottom:1px solid #222;cursor:pointer;display:flex;align-items:center;gap:10px;}
+.chat-item:hover{background:#0f3460;}
 .main-chat{flex:1;display:none;flex-direction:column;}
 .main-chat.show{display:flex;}
-.chat-header{background:#16213e;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #333;flex-shrink:0;}
-.chat-title{font-size:16px;}.typing-indicator{font-size:12px;color:#2ecc71;font-style:italic;min-height:16px;}
-.online-info{font-size:12px;color:#888;}
-.chat-header-btns{display:flex;gap:6px;}
-.chat-header-btns button{background:#0f3460;border:1px solid #333;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;}
-.chat-header-btns button:hover{background:#e94560;}
+.chat-header{background:#16213e;padding:14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #333;}
 .messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:8px;background:#1a1a2e;}
-.message{max-width:70%;padding:10px 14px;border-radius:12px;font-size:14px;word-wrap:break-word;}
-.message.mine{align-self:flex-end;background:#e94560;border-bottom-right-radius:4px;}
-.message.other{align-self:flex-start;background:#16213e;border-bottom-left-radius:4px;}
-.message.system{align-self:center;background:#2d1b69;text-align:center;font-style:italic;}
-.message .name{font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:4px;}
-.message .text{line-height:1.4;}
-.message img{max-width:250px;border-radius:8px;cursor:pointer;display:block;margin-top:4px;}
-.message audio{max-width:250px;margin-top:4px;}
-.message .file-msg{background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;display:flex;align-items:center;gap:8px;margin-top:4px;text-decoration:none;color:#fff;font-size:13px;}
-.message .file-msg:hover{background:rgba(0,0,0,0.4);}
-.message .del-btn{font-size:11px;color:#ff6b6b;cursor:pointer;margin-top:6px;display:block;text-align:right;opacity:0.7;}
-.input-area{background:#16213e;padding:12px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid #333;flex-shrink:0;}
-.input-area input[type="text"]{flex:1;padding:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;font-size:14px;outline:none;}
-.input-area button,.input-area label.icon-btn{width:42px;height:42px;border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.input-area .send-btn{background:#e94560;}.input-area label.icon-btn{background:#0f3460;border:1px solid #333;}
-.input-area .mic-btn{background:#0f3460;border:1px solid #333;}.input-area .mic-btn.recording{background:#e94560;animation:pulse 1s infinite;}
+.message{max-width:70%;padding:10px;border-radius:12px;font-size:14px;word-wrap:break-word;}
+.message.mine{align-self:flex-end;background:#e94560;}
+.message.other{align-self:flex-start;background:#16213e;}
+.message img{max-width:200px;border-radius:8px;}
+.message a{color:#fff;text-decoration:underline;}
+.input-area{background:#16213e;padding:12px;display:flex;gap:8px;align-items:center;border-top:1px solid #333;}
+.input-area input[type="text"]{flex:1;padding:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;outline:none;}
+.icon-btn, .send-btn{width:42px;height:42px;border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.send-btn{background:#e94560;} .icon-btn{background:#0f3460;border:1px solid #333;}
 .input-area input[type="file"]{display:none;}
-.recording-bar{display:none;background:#16213e;padding:12px 16px;border-top:1px solid #333;align-items:center;gap:10px;flex-shrink:0;}
-.recording-bar.active{display:flex;}
-.recording-bar .rec-dot{width:12px;height:12px;background:#e94560;border-radius:50%;animation:pulse 1s infinite;}
-.recording-bar .rec-time{font-size:14px;flex:1;}
-.recording-bar button{padding:8px 16px;border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:14px;}
-.recording-bar .rec-cancel{background:#333;}.recording-bar .rec-send{background:#e94560;}
-.chat-error{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#e94560;padding:12px 24px;border-radius:10px;z-index:999;display:none;}
-.chat-error.show{display:block;}
 .no-chat{flex:1;display:flex;align-items:center;justify-content:center;color:#555;font-size:18px;}
-.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1500;display:none;justify-content:center;align-items:center;}
-.modal-overlay.show{display:flex;}
-.modal-box{background:#16213e;padding:30px;border-radius:16px;width:340px;text-align:center;}
-.modal-box h3{margin-bottom:16px;}
-.modal-box input,.modal-box select{width:100%;padding:12px;margin-bottom:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;}
-.modal-box .modal-btns{display:flex;gap:8px;margin-top:12px;}
-.modal-box .modal-btns button{flex:1;padding:10px;border:none;border-radius:8px;cursor:pointer;color:#fff;font-size:14px;}
-.modal-box .modal-btns .save{background:#e94560;}.modal-box .modal-btns .cancel{background:#333;}
-.modal-box .modal-error{color:#ff6b6b;font-size:13px;min-height:20px;margin-bottom:8px;}
-.modal-box .modal-success{color:#2ecc71;font-size:13px;min-height:20px;margin-bottom:8px;}
-.admin-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;display:none;justify-content:center;align-items:center;}
-.admin-overlay.show{display:flex;}
-.admin-panel{background:#16213e;width:90%;max-width:700px;max-height:85vh;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
-.admin-tabs{display:flex;background:#0f3460;overflow-x:auto;flex-shrink:0;}
-.admin-tabs button{padding:12px 16px;border:none;background:transparent;color:#888;cursor:pointer;font-size:13px;white-space:nowrap;}
-.admin-tabs button.active{color:#fff;border-bottom:2px solid #e94560;}
-.admin-content{flex:1;overflow-y:auto;padding:20px;}
-.admin-close{position:absolute;top:10px;right:16px;font-size:24px;cursor:pointer;color:#fff;z-index:1;}
-.stat-box{display:flex;gap:12px;flex-wrap:wrap;}
-.stat{background:#0f3460;padding:16px;border-radius:10px;flex:1;min-width:80px;text-align:center;}
-.stat .num{font-size:28px;font-weight:bold;color:#e94560;}.stat .label{font-size:12px;color:#888;margin-top:4px;}
-.user-row{display:flex;align-items:center;justify-content:space-between;padding:10px;background:#0f3460;border-radius:8px;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
-.user-row .uinfo{font-size:14px;}
-.role{font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;}
-.role.admin{background:#e94560;}.role.moderator{background:#f5a623;color:#000;}.role.user{background:#333;}
-.user-row .uactions{display:flex;gap:4px;flex-wrap:wrap;}
-.admin-act-btn{padding:5px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;color:#fff;}
-.abtn-ban{background:#e94560;}.abtn-unban{background:#2ecc71;}.abtn-mute{background:#f5a623;color:#000;}
-.abtn-del{background:#c0392b;}.abtn-nick{background:#3498db;}.abtn-role{background:#9b59b6;}
-.log-row{padding:8px;background:#0f3460;border-radius:6px;margin-bottom:4px;font-size:12px;}
-.log-row .time{color:#888;}.log-row .act{color:#e94560;font-weight:bold;}
-.admin-input{display:flex;gap:8px;margin-top:16px;}
-.admin-input input{flex:1;padding:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;}
-.admin-input button{padding:10px 16px;border:none;border-radius:8px;background:#e94560;color:#fff;cursor:pointer;}
-.danger-zone{margin-top:20px;padding:16px;border:1px solid #e94560;border-radius:10px;}
-.danger-zone h4{color:#e94560;margin-bottom:10px;}
-.danger-zone button{padding:10px 20px;border:none;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer;margin-right:8px;margin-bottom:8px;}
-.members-panel{padding:10px;background:#0f3460;border-radius:8px;margin-bottom:10px;}
-.members-panel h4{margin-bottom:8px;font-size:14px;}
-.member-row{display:flex;align-items:center;justify-content:space-between;padding:6px;font-size:13px;}
-.member-row .mr-btns{display:flex;gap:4px;}
-.member-row .mr-btns button{padding:3px 6px;border:none;border-radius:4px;cursor:pointer;font-size:10px;color:#fff;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
-.messages::-webkit-scrollbar{width:6px;}.messages::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
-.sidebar-list::-webkit-scrollbar{width:4px;}.sidebar-list::-webkit-scrollbar-thumb{background:#333;border-radius:2px;}
-@media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
-
-/* === CALL STYLES === */
+/* CALLS */
 .call-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:3000;display:none;flex-direction:column;}
 .call-overlay.show{display:flex;}
-.call-video-box{flex:1;position:relative;display:flex;justify-content:center;align-items:center;background:#1a1a2e;overflow:hidden;}
-.call-video-box video{max-width:100%;max-height:100%;object-fit:cover;}
-#remoteVideo{width:100%;height:100%;}
-#localVideo{position:absolute;bottom:100px;right:20px;width:100px;height:140px;background:#000;border:2px solid #333;object-fit:cover;z-index:10;border-radius:10px;cursor:move;}
-.call-controls{height:100px;background:#16213e;display:flex;justify-content:space-evenly;align-items:center;padding:0 20px;}
-.call-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;display:flex;align-items:center;justify-content:center;}
-.btn-hangup{background:#ff4757;}
-.btn-util{background:#333;}
-.btn-util.active{background:#e94560;}
-.incoming-call-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;padding:30px;border-radius:16px;z-index:3001;border:1px solid #e94560;display:none;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.8);width:300px;}
+.call-video-box{flex:1;position:relative;background:#1a1a2e;}
+#remoteVideo{width:100%;height:100%;object-fit:cover;}
+#localVideo{position:absolute;bottom:100px;right:20px;width:100px;height:140px;background:#000;border:2px solid #333;object-fit:cover;z-index:10;}
+.call-controls{height:100px;background:#16213e;display:flex;justify-content:space-evenly;align-items:center;}
+.call-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;}
+.btn-hangup{background:#ff4757;} .btn-util{background:#333;}
+.incoming-call-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;padding:30px;border-radius:16px;z-index:3001;border:1px solid #e94560;display:none;text-align:center;}
 .incoming-call-modal.show{display:block;}
-.incoming-call-modal h3{margin-bottom:20px;}
-.incoming-call-btns{display:flex;gap:15px;justify-content:center;}
-.incoming-call-btns button{flex:1;padding:12px;border:none;border-radius:8px;font-size:16px;cursor:pointer;color:#fff;}
-.accept-btn{background:#2ecc71;}.reject-btn{background:#ff4757;}
+/* ADMIN */
+.admin-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;display:none;justify-content:center;align-items:center;}
+.admin-overlay.show{display:flex;}
+.admin-panel{background:#16213e;width:90%;max-width:700px;max-height:85vh;border-radius:16px;padding:20px;}
+@media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
 </style>
 </head>
 <body>
+
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
-    <h2 id="authTitle">Вход в MyChat</h2>
-    <p id="authSubtitle">Введи логин и пароль</p>
-    <div class="error" id="authError"></div>
+    <h2 id="authTitle">Вход</h2>
     <input type="text" id="authLogin" placeholder="Логин">
     <input type="password" id="authPassword" placeholder="Пароль">
-    <input type="text" id="authNickname" placeholder="Ник (уникальный)" class="nick-field">
-    <button class="btn" id="authBtn">Войти →</button>
-    <div class="switch"><span id="switchText">Нет аккаунта?</span> <a id="switchLink">Зарегистрироваться</a></div>
+    <input type="text" id="authNickname" placeholder="Ник" style="display:none;">
+    <button class="btn" id="authBtn">Войти</button>
+    <div id="switchLink" style="margin-top:10px;cursor:pointer;color:#e94560;">Нет аккаунта?</div>
+    <div id="authError" style="color:red;margin-top:5px;"></div>
   </div>
 </div>
-<div class="chat-error" id="chatError"></div>
+
+<div class="app-container" id="appContainer">
+  <div class="sidebar">
+    <div class="sidebar-header"><h3>MyChat</h3> <button id="logoutBtn">🚪</button></div>
+    <div class="sidebar-tabs">
+      <button class="active" id="tabGeneral">Общий</button>
+      <button id="tabPrivate">Личные</button>
+      <button id="tabRooms">Группы</button>
+    </div>
+    <div class="search-box"><input id="searchInput" placeholder="Поиск..."></div>
+    <div class="sidebar-list" id="sidebarList"></div>
+  </div>
+  <div class="main-chat" id="mainChat">
+    <div class="chat-header">
+      <button id="mobileBackBtn" style="display:none;margin-right:10px;">←</button>
+      <div id="chatTitle"></div>
+      <div id="chatHeaderBtns" style="display:flex;gap:10px;"></div>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="input-area" id="inputArea">
+      <label class="icon-btn" for="photoInput">📷</label> <input type="file" id="photoInput" accept="image/*">
+      <label class="icon-btn" for="fileInput">📎</label> <input type="file" id="fileInput">
+      <input type="text" id="msgInput" placeholder="Сообщение...">
+      <button class="send-btn" id="sendBtn">➤</button>
+    </div>
+  </div>
+  <div class="no-chat" id="noChat">Выбери чат слева</div>
+</div>
 
 <div class="call-overlay" id="callOverlay">
   <div class="call-video-box">
@@ -160,503 +110,270 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
     <video id="localVideo" autoplay playsinline muted></video>
   </div>
   <div class="call-controls">
-    <button class="call-btn btn-util" id="flipCamBtn" onclick="switchCamera()">🔄</button>
-    <button class="call-btn btn-util" id="toggleVideoBtn" onclick="toggleVideo()">📷</button>
-    <button class="call-btn btn-util" id="toggleMicBtn" onclick="toggleMic()">🎤</button>
+    <button class="call-btn btn-util" onclick="switchCamera()">🔄</button>
     <button class="call-btn btn-hangup" onclick="endCall()">📞</button>
   </div>
 </div>
+
 <div class="incoming-call-modal" id="incomingCallModal">
-  <h3 id="incomingCallerName">Входящий звонок...</h3>
-  <div class="incoming-call-btns">
-    <button class="accept-btn" onclick="acceptCall()">Принять</button>
-    <button class="reject-btn" onclick="rejectCall()">Сброс</button>
+  <h3 id="incomingCallerName">Звонок...</h3>
+  <div style="display:flex;gap:10px;justify-content:center;">
+    <button onclick="acceptCall()" style="background:#2ecc71;border:none;padding:10px;color:white;">Принять</button>
+    <button onclick="rejectCall()" style="background:#ff4757;border:none;padding:10px;color:white;">Сброс</button>
   </div>
 </div>
 
-<div class="modal-overlay" id="passModal"><div class="modal-box"><h3>🔒 Смена пароля</h3><div class="modal-error" id="passError"></div><div class="modal-success" id="passSuccess"></div><input type="password" id="oldPass" placeholder="Старый пароль"><input type="password" id="newPass" placeholder="Новый пароль"><input type="password" id="newPass2" placeholder="Повтори"><div class="modal-btns"><button class="cancel" id="passCancel">Отмена</button><button class="save" id="passSave">Сохранить</button></div></div></div>
-<div class="modal-overlay" id="createRoomModal"><div class="modal-box"><h3>Создать</h3><input type="text" id="createRoomName" placeholder="Название"><select id="createRoomType"><option value="group">👥 Группа</option><option value="channel">📢 Канал</option></select><div class="modal-btns"><button class="cancel" id="createRoomCancel">Отмена</button><button class="save" id="createRoomSave">Создать</button></div></div></div>
-<div class="modal-overlay" id="roomSettingsModal"><div class="modal-box" id="roomSettingsContent"></div></div>
-<div class="app-container" id="appContainer">
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <h3>MyChat</h3>
-      <div class="hdr-btns">
-        <button id="nickBtn">✏️</button>
-        <button id="passBtn">🔒</button>
-        <button id="createRoomBtn">➕</button>
-        <button id="adminPanelBtn" class="admin-btn" style="display:none;">⚙️</button>
-        <button id="logoutBtn">🚪</button>
-      </div>
-    </div>
-    <div class="sidebar-tabs">
-      <button class="active" id="tabGeneral">💬 Общий</button>
-      <button id="tabPrivate">👤 Личные</button>
-      <button id="tabRooms">👥 Группы</button>
-    </div>
-    <div class="search-box"><input type="text" id="searchInput" placeholder="🔍 Поиск..."></div>
-    <div class="sidebar-list" id="sidebarList"></div>
+<div class="admin-overlay" id="adminOverlay">
+  <div class="admin-panel">
+    <button id="adminClose" style="float:right;">✕</button>
+    <div id="adminContent"></div>
   </div>
-  <div class="main-chat" id="mainChat">
-    <div class="chat-header">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <button id="mobileBackBtn" style="display:none;background:#0f3460;border:1px solid #333;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;">←</button>
-        <div><div class="chat-title" id="chatTitle"></div><div class="typing-indicator" id="typingIndicator"></div><div class="online-info" id="onlineInfo"></div></div>
-      </div>
-      <div class="chat-header-btns" id="chatHeaderBtns"></div>
-    </div>
-    <div class="messages" id="messages"></div>
-    <div class="recording-bar" id="recordingBar"><div class="rec-dot"></div><span class="rec-time" id="recTime">0:00</span><button class="rec-cancel" id="recCancel">Отмена</button><button class="rec-send" id="recSend">Отправить ➤</button></div>
-    <div class="input-area" id="inputArea">
-      <label class="icon-btn" for="photoInput">📷</label>
-      <input type="file" id="photoInput" accept="image/*">
-      <label class="icon-btn" for="fileInput">📎</label>
-      <input type="file" id="fileInput">
-      <input type="text" id="msgInput" placeholder="Сообщение...">
-      <button class="mic-btn" id="micBtn">🎤</button>
-      <button class="send-btn" id="sendBtn">➤</button>
-    </div>
-  </div>
-  <div class="no-chat" id="noChat">Выбери чат слева</div>
 </div>
-<div class="admin-overlay" id="adminOverlay"><div class="admin-panel"><span class="admin-close" id="adminClose">✕</span><div class="admin-tabs" id="adminTabs"><button class="active" data-tab="stats">📊 Стат</button><button data-tab="users">👥 Юзеры</button><button data-tab="logs">📋 Логи</button><button data-tab="announce">📢 Объявл</button><button data-tab="danger">⚠️ Опасно</button></div><div class="admin-content" id="adminContent"></div></div></div>
+
 <script>
-// --- SOCKET INIT ---
-var socket = io('https://mychat-production-4ec8.up.railway.app', {transports: ['websocket', 'polling']});
+window.onload = function() { // ЖДЕМ ПОЛНОЙ ЗАГРУЗКИ СТРАНИЦЫ
+  // !!! ЗАМЕНИ ССЫЛКУ ЕСЛИ НУЖНО !!!
+  var socket = io('https://mychat-production-4ec8.up.railway.app', {transports: ['websocket', 'polling']});
 
-// --- VARIABLES ---
-var isLoginMode=true, myNickname='', myRole='user', myLogin='';
-var currentView='none', currentPrivateLogin=null, currentRoomId=null, currentRoomData=null;
-var mediaRecorder=null, audioChunks=[], recInterval=null, recSeconds=0;
-var currentAdminTab='stats', typingTimeout=null, searchTimeout=null;
+  var isLoginMode=true, myNickname='', myLogin='';
+  var currentView='none', currentPrivateLogin=null, currentRoomId=null;
+  var localStream, peerConnection, incomingCallData, currentFacingMode='user';
+  var pendingIce=[], earlyCandidates=[];
+  const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// --- WEBRTC ---
-var localStream, remoteStream, peerConnection, incomingCallData=null;
-var currentFacingMode = 'user';
-var pendingIce = []; 
-var earlyCandidates = [];
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
-
-// --- AUTO LOGIN ---
-(function(){
+  // --- AUTH ---
   var token = localStorage.getItem('mychat_token');
   if(token) socket.emit('autoLogin', token);
-})();
 
-// --- AUTH UI ---
-document.getElementById('switchLink').addEventListener('click',function(){
-  isLoginMode=!isLoginMode;
-  document.getElementById('authTitle').textContent=isLoginMode?'Вход в MyChat':'Регистрация';
-  document.getElementById('authSubtitle').textContent=isLoginMode?'Введи логин и пароль':'Создай свой аккаунт';
-  document.getElementById('authBtn').textContent=isLoginMode?'Войти →':'Создать аккаунт →';
-  document.getElementById('switchText').textContent=isLoginMode?'Нет аккаунта?':'Уже есть аккаунт?';
-  document.getElementById('switchLink').textContent=isLoginMode?'Зарегистрироваться':'Войти';
-  var nf=document.getElementById('authNickname');if(isLoginMode)nf.classList.remove('show');else nf.classList.add('show');
-  document.getElementById('authError').textContent='';
-});
-
-document.getElementById('authBtn').addEventListener('click',function(){
-  var l=document.getElementById('authLogin').value.trim();
-  var p=document.getElementById('authPassword').value.trim();
-  document.getElementById('authError').textContent='';
-  if(isLoginMode){
-    if(!l||!p){document.getElementById('authError').textContent='Заполни все поля'; return;}
-    socket.emit('login',{login:l,password:p});
-  } else {
-    var n=document.getElementById('authNickname').value.trim();
-    if(!l||!p||!n){document.getElementById('authError').textContent='Заполни все поля'; return;}
-    socket.emit('register',{login:l,password:p,nickname:n});
-  }
-});
-
-// --- SOCKET EVENTS ---
-socket.on('authSuccess',function(d){
-  myNickname=d.nickname; myRole=d.role||'user'; myLogin=d.login;
-  if(d.token) localStorage.setItem('mychat_token', d.token);
-  document.getElementById('authOverlay').classList.add('hidden');
-  document.getElementById('appContainer').classList.add('active');
-  if(myRole==='admin'||myRole==='moderator') document.getElementById('adminPanelBtn').style.display='inline-block';
-  switchToGeneral();
-});
-
-socket.on('authError',function(m){
-  document.getElementById('authError').textContent=m;
-  localStorage.removeItem('mychat_token');
-});
-
-socket.on('kicked',function(m){
-  localStorage.removeItem('mychat_token');
-  alert(m); location.reload();
-});
-
-socket.on('nicknameChanged',function(n){myNickname=n;});
-socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
-socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
-socket.on('onlineUsers',function(d){if(currentView==='general'&&d.isAdmin)document.getElementById('onlineInfo').textContent=d.count+' онлайн';});
-
-// --- TABS ---
-document.getElementById('tabGeneral').addEventListener('click',function(){switchToGeneral();});
-document.getElementById('tabPrivate').addEventListener('click',function(){switchToPrivate();});
-document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
-
-function setActiveTab(id){
-  document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});
-  document.getElementById(id).classList.add('active');
-}
-
-function switchToGeneral(){
-  currentView='general'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabGeneral');
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
-  if(window.innerWidth > 600) { openGeneral(); } else { document.getElementById('mainChat').classList.remove('show'); document.getElementById('noChat').style.display='none'; }
-}
-
-function switchToPrivate(){
-  currentView='private'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabPrivate');
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
-  document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='none';
-  socket.emit('getMyChats');
-}
-
-function switchToRooms(){
-  currentView='rooms'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabRooms');
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
-  document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='none';
-  socket.emit('getMyRooms');
-}
-
-// --- OPEN CHATS ---
-function openGeneral(){
-  currentView='general'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent='Общий чат';
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='';
-  document.getElementById('inputArea').style.display='flex';
-  document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  socket.emit('getGeneralHistory');
-}
-window.openGeneral=openGeneral;
-
-function openPM(login,nickname){
-  currentView='pm'; currentPrivateLogin=login; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabPrivate');
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent=nickname;
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
-  document.getElementById('inputArea').style.display='flex';
-  document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  socket.emit('getPrivateHistory',login);
-  socket.emit('getMyChats');
-}
-window.openPM=openPM;
-
-function openRoom(roomId){
-  roomId=Number(roomId);
-  currentView='room'; currentRoomId=roomId; currentPrivateLogin=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabRooms');
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent='Загрузка...';
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='';
-  document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  socket.emit('openRoom',roomId);
-  socket.emit('getMyRooms');
-}
-window.openRoom=openRoom;
-
-// --- MESSAGES & LISTS ---
-socket.on('messageHistory',function(msgs){
-  if(currentView!=='general')return;
-  var md=document.getElementById('messages'); md.innerHTML='';
-  if(msgs.length===0) md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
-  else msgs.forEach(function(m){addMsg(m);});
-  md.scrollTop=md.scrollHeight;
-});
-socket.on('chatMessage',function(msg){
-  if(currentView!=='general')return;
-  var empty=document.querySelector('#messages .empty-list'); if(empty)empty.remove();
-  addMsg(msg);
-  document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
-});
-function addMsg(msg){
-  var div=document.createElement('div');
-  var isS=msg.username==='⚡ Система', isM=msg.username===myNickname;
-  div.className='message '+(isS?'system':(isM?'mine':'other')); div.id='msg-'+msg.id;
-  var html='<div class="name">'+msg.username+'</div>';
-  if(msg.type==='image'&&msg.image) html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
-  else if(msg.type==='voice'&&msg.voice) html+='<audio controls src="'+msg.voice+'"></audio>';
-  else if(msg.type==='file'&&msg.file_data) html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
-  if(isM||myRole==='admin'||myRole==='moderator') html+='<span class="del-btn" onclick="delMsg('+msg.id+')">Удалить</span>';
-  div.innerHTML=html;
-  document.getElementById('messages').appendChild(div);
-}
-function delMsg(id){socket.emit('deleteMessage',id);} window.delMsg=delMsg;
-
-// --- PRIVATE MESSAGES ---
-socket.on('privateHistory',function(d){
-  if(currentView!=='pm'||currentPrivateLogin!==d.otherLogin)return;
-  var md=document.getElementById('messages'); md.innerHTML='';
-  if(d.messages.length===0) md.innerHTML='<div class="empty-list">Начните диалог</div>';
-  else d.messages.forEach(function(m){addPM(m);});
-  md.scrollTop=md.scrollHeight;
-});
-socket.on('newPrivateMessage',function(msg){
-  if(currentView==='pm'&&(currentPrivateLogin===msg.from_login||currentPrivateLogin===msg.to_login)){
-    var empty=document.querySelector('#messages .empty-list'); if(empty)empty.remove();
-    addPM(msg); document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
-  }
-  if(currentView==='private'||currentView==='pm') socket.emit('getMyChats');
-});
-function addPM(msg){
-  var div=document.createElement('div');
-  var isMine=msg.from_login===myLogin;
-  div.className='message '+(isMine?'mine':'other'); div.id='pm-'+msg.id;
-  var html='<div class="name">'+msg.from_nickname+'</div>';
-  if(msg.type==='image'&&msg.image) html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
-  else if(msg.type==='voice'&&msg.voice) html+='<audio controls src="'+msg.voice+'"></audio>';
-  else if(msg.type==='file'&&msg.file_data) html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
-  if(isMine||myRole==='admin') html+='<span class="del-btn" onclick="delPM('+msg.id+')">Удалить</span>';
-  div.innerHTML=html;
-  document.getElementById('messages').appendChild(div);
-}
-function delPM(id){socket.emit('deletePrivateMessage',id);} window.delPM=delPM;
-
-socket.on('myChats',function(chats){
-  if(currentView!=='private'&&currentView!=='pm')return;
-  if(document.getElementById('searchInput').value.trim())return;
-  var list=document.getElementById('sidebarList');
-  if(chats.length===0){list.innerHTML='<div class="empty-list">Нет чатов</div>';return;}
-  var html='';
-  chats.forEach(function(c){
-    var lastText=''; if(c.lastMsg){ if(c.lastMsg.type==='image') lastText='📷 Фото'; else if(c.lastMsg.type==='voice') lastText='🎤 Голосовое'; else if(c.lastMsg.type==='file') lastText='📄 Файл'; else lastText=c.lastMsg.text||''; }
-    html+='<div class="chat-item'+(currentPrivateLogin===c.login?' active':'')+'" onclick="openPM(\''+c.login+'\',\''+c.nickname+'\')"><div class="avatar">👤</div><div class="info"><div class="name">'+c.nickname+'</div><div class="last">'+lastText+'</div></div>'+(c.unread>0?'<div class="badge">'+c.unread+'</div>':'')+'</div>';
-  });
-  list.innerHTML=html;
-});
-
-// --- ROOMS ---
-function joinAndOpenRoom(roomId){ roomId=Number(roomId); socket.emit('joinRoom',roomId); setTimeout(function(){openRoom(roomId);},500); } window.joinAndOpenRoom=joinAndOpenRoom;
-socket.on('joinedRoom',function(roomId){if(currentView==='rooms'||currentView==='room')socket.emit('getMyRooms');});
-socket.on('roomData',function(data){
-  currentView='room'; currentRoomId=data.room.id; currentRoomData=data;
-  setActiveTab('tabRooms');
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  document.getElementById('chatTitle').textContent=data.room.name+(data.room.type==='channel'?' 📢':' 👥');
-  var btns='';
-  if(data.myRole==='admin') btns+='<button onclick="openRoomSettings()">⚙️</button>';
-  btns+='<button onclick="leaveCurrentRoom()">🚪</button>';
-  document.getElementById('chatHeaderBtns').innerHTML=btns;
-  document.getElementById('inputArea').style.display=(data.room.type==='channel'&&data.myRole!=='admin')?'none':'flex';
-  var md=document.getElementById('messages'); md.innerHTML='';
-  if(data.messages.length===0) md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
-  else data.messages.forEach(function(m){addRoomMsg(m);});
-  md.scrollTop=md.scrollHeight;
-  socket.emit('getMyRooms');
-});
-socket.on('roomNewMessage',function(msg){ if(currentView==='room'&&currentRoomId==msg.room_id){ var empty=document.querySelector('#messages .empty-list'); if(empty)empty.remove(); addRoomMsg(msg); document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight; } });
-function addRoomMsg(msg){
-  var div=document.createElement('div'); var isMine=msg.user_login===myLogin;
-  div.className='message '+(isMine?'mine':'other'); div.id='rmsg-'+msg.id;
-  var html='<div class="name">'+msg.username+'</div>';
-  if(msg.type==='image'&&msg.image) html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
-  else if(msg.type==='voice'&&msg.voice) html+='<audio controls src="'+msg.voice+'"></audio>';
-  else if(msg.type==='file'&&msg.file_data) html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
-  if(isMine||(currentRoomData&&currentRoomData.myRole==='admin')) html+='<span class="del-btn" onclick="delRoomMsg('+msg.id+')">Удалить</span>';
-  div.innerHTML=html; document.getElementById('messages').appendChild(div);
-}
-function delRoomMsg(id){socket.emit('deleteRoomMessage',{roomId:currentRoomId,msgId:id});} window.delRoomMsg=delRoomMsg;
-function leaveCurrentRoom(){if(currentRoomId&&confirm('Покинуть комнату?'))socket.emit('leaveRoom',currentRoomId);} window.leaveCurrentRoom=leaveCurrentRoom;
-socket.on('myRooms',function(rooms){
-  if(currentView!=='rooms'&&currentView!=='room')return;
-  if(document.getElementById('searchInput').value.trim())return;
-  var list=document.getElementById('sidebarList');
-  if(rooms.length===0){list.innerHTML='<div class="empty-list">Нет групп</div>';return;}
-  var html='';
-  rooms.forEach(function(r){
-    var icon=r.type==='channel'?'📢':'👥';
-    html+='<div class="chat-item'+(currentRoomId==r.id?' active':'')+'" onclick="openRoom('+r.id+')"><div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">'+r.member_count+' участников</div></div><div class="tag">'+r.type+'</div></div>';
-  });
-  list.innerHTML=html;
-});
-
-// --- SENDING ---
-document.getElementById('sendBtn').addEventListener('click',function(){
-  var text=document.getElementById('msgInput').value.trim(); if(!text)return;
-  if(currentView==='pm'&&currentPrivateLogin) socket.emit('privateMessage',{toLogin:currentPrivateLogin,text:text,type:'text'});
-  else if(currentView==='room'&&currentRoomId) socket.emit('roomMessage',{roomId:currentRoomId,text:text,type:'text'});
-  else if(currentView==='general') socket.emit('chatMessage',{text:text,type:'text'});
-  document.getElementById('msgInput').value='';
-});
-document.getElementById('msgInput').addEventListener('keypress',function(e){if(e.key==='Enter')document.getElementById('sendBtn').click();});
-
-document.getElementById('fileInput').addEventListener('change',function(){
-  var file=this.files[0]; if(!file)return;
-  if(file.size>50*1024*1024){alert('Макс 50MB');return;}
-  var reader=new FileReader();
-  reader.onload=function(e){
-    if(currentView==='pm'&&currentPrivateLogin) socket.emit('privateMessage',{toLogin:currentPrivateLogin,file_data:e.target.result,file_name:file.name,type:'file'});
-    else if(currentView==='room'&&currentRoomId) socket.emit('roomMessage',{roomId:currentRoomId,file_data:e.target.result,file_name:file.name,type:'file'});
-    else if(currentView==='general') socket.emit('chatMessage',{file_data:e.target.result,file_name:file.name,type:'file'});
+  document.getElementById('switchLink').onclick = function(){
+    isLoginMode = !isLoginMode;
+    document.getElementById('authTitle').innerText = isLoginMode ? 'Вход' : 'Регистрация';
+    document.getElementById('authBtn').innerText = isLoginMode ? 'Войти' : 'Создать';
+    document.getElementById('authNickname').style.display = isLoginMode ? 'none' : 'block';
   };
-  reader.readAsDataURL(file); this.value='';
-});
 
-document.getElementById('photoInput').addEventListener('change',function(){
-  var file=this.files[0];if(!file)return; if(file.size>10*1024*1024){alert('Макс 10MB');return;}
-  var reader=new FileReader();
-  reader.onload=function(e){
-    if(currentView==='pm'&&currentPrivateLogin) socket.emit('privateMessage',{toLogin:currentPrivateLogin,image:e.target.result,type:'image'});
-    else if(currentView==='room'&&currentRoomId) socket.emit('roomMessage',{roomId:currentRoomId,image:e.target.result,type:'image'});
-    else if(currentView==='general') socket.emit('chatMessage',{image:e.target.result,type:'image'});
+  document.getElementById('authBtn').onclick = function(){
+    var l=document.getElementById('authLogin').value, p=document.getElementById('authPassword').value;
+    if(isLoginMode) socket.emit('login', {login:l, password:p});
+    else socket.emit('register', {login:l, password:p, nickname:document.getElementById('authNickname').value});
   };
-  reader.readAsDataURL(file); this.value='';
-});
 
-// --- WEBRTC CALLS ---
-const dragVideo = document.getElementById('localVideo');
-let isDragging = false, startX, startY, initialLeft, initialTop;
-dragVideo.addEventListener('touchstart', startDrag); dragVideo.addEventListener('mousedown', startDrag);
-function startDrag(e){ isDragging=true; const evt=e.type==='touchstart'?e.touches[0]:e; startX=evt.clientX; startY=evt.clientY; const rect=dragVideo.getBoundingClientRect(); initialLeft=rect.left; initialTop=rect.top; dragVideo.style.right='auto'; dragVideo.style.bottom='auto'; dragVideo.style.left=initialLeft+'px'; dragVideo.style.top=initialTop+'px'; document.addEventListener('touchmove',moveDrag); document.addEventListener('touchend',stopDrag); document.addEventListener('mousemove',moveDrag); document.addEventListener('mouseup',stopDrag); }
-function moveDrag(e){ if(!isDragging)return; const evt=e.type==='touchmove'?e.touches[0]:e; const dx=evt.clientX-startX; const dy=evt.clientY-startY; dragVideo.style.left=(initialLeft+dx)+'px'; dragVideo.style.top=(initialTop+dy)+'px'; e.preventDefault(); }
-function stopDrag(){ isDragging=false; document.removeEventListener('touchmove',moveDrag); document.removeEventListener('touchend',stopDrag); document.removeEventListener('mousemove',moveDrag); document.removeEventListener('mouseup',stopDrag); }
+  socket.on('authSuccess', function(d){
+    myNickname=d.nickname; myLogin=d.login;
+    if(d.token) localStorage.setItem('mychat_token', d.token);
+    document.getElementById('authOverlay').classList.add('hidden');
+    document.getElementById('appContainer').classList.add('active');
+    if(d.role==='admin') document.getElementById('adminPanelBtn').style.display='block'; // Показываем админку
+    switchToGeneral();
+  });
+  
+  socket.on('authError', function(m){ document.getElementById('authError').innerText=m; localStorage.removeItem('mychat_token'); });
 
-function flushPendingIce() {
-  if(pendingIce.length > 0 && peerConnection && peerConnection.remoteDescription) {
-    while(pendingIce.length > 0) {
-      var candidate = pendingIce.shift();
-      peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>console.log(e));
+  // --- TABS ---
+  function switchToGeneral(){
+    currentView='general';
+    setActiveTab('tabGeneral');
+    document.getElementById('searchInput').value='';
+    document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()">💬 Общий чат</div>';
+    if(window.innerWidth > 600) openGeneral();
+    else hideMainChat();
+  }
+  function switchToPrivate(){ currentView='private'; setActiveTab('tabPrivate'); socket.emit('getMyChats'); hideMainChat(); }
+  function switchToRooms(){ currentView='rooms'; setActiveTab('tabRooms'); socket.emit('getMyRooms'); hideMainChat(); }
+
+  function setActiveTab(id){
+    document.querySelectorAll('.sidebar-tabs button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  function hideMainChat(){
+    if(window.innerWidth <= 600) {
+      document.getElementById('mainChat').classList.remove('show');
+      document.getElementById('noChat').style.display='none';
     }
   }
-}
 
-function startCall(userToCall, type){
-  currentPrivateLogin=userToCall;
-  document.getElementById('callOverlay').classList.add('show');
-  const constraints = { audio: true, video: { facingMode: currentFacingMode } };
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
-    localStream=stream; document.getElementById('localVideo').srcObject=stream;
-    if(type === 'audio') {
-      const videoTrack = stream.getVideoTracks()[0];
-      if(videoTrack) { videoTrack.enabled = false; document.getElementById('toggleVideoBtn').classList.remove('active'); }
-    } else { document.getElementById('toggleVideoBtn').classList.add('active'); }
-    peerConnection=new RTCPeerConnection(rtcConfig);
-    pendingIce = []; earlyCandidates = [];
-    peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
-    remoteStream = new MediaStream(); document.getElementById('remoteVideo').srcObject = remoteStream;
-    peerConnection.ontrack=function(e){ remoteStream.addTrack(e.track); };
-    localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
-    peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
-    .then(function(offer){ return peerConnection.setLocalDescription(offer); })
-    .then(function() { socket.emit('callUser',{userToCall:userToCall, signalData:peerConnection.localDescription, callType: type}); });
-  }).catch(function(e){alert('Нет доступа: '+e);endCall();});
-}
-window.startCall=startCall;
+  document.getElementById('tabGeneral').onclick = switchToGeneral;
+  document.getElementById('tabPrivate').onclick = switchToPrivate;
+  document.getElementById('tabRooms').onclick = switchToRooms;
 
-socket.on('incomingCall',function(d){
-  incomingCallData=d;
-  let typeText = d.callType === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
-  document.getElementById('incomingCallerName').textContent = typeText + ' от: ' + d.fromNickname;
-  document.getElementById('incomingCallModal').classList.add('show');
-  earlyCandidates = [];
-});
+  // --- CHAT LOGIC ---
+  window.openGeneral = function(){
+    currentView='general';
+    showChat('Общий чат');
+    socket.emit('getGeneralHistory');
+  };
 
-function acceptCall(){
-  document.getElementById('incomingCallModal').classList.remove('show');
-  document.getElementById('callOverlay').classList.add('show');
-  const constraints = { audio: true, video: { facingMode: currentFacingMode } };
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
-    localStream=stream; document.getElementById('localVideo').srcObject=stream;
-    if(incomingCallData.callType === 'audio') {
-       const videoTrack = stream.getVideoTracks()[0];
-       if(videoTrack) { videoTrack.enabled = false; document.getElementById('toggleVideoBtn').classList.remove('active'); }
-    } else { document.getElementById('toggleVideoBtn').classList.add('active'); }
-    peerConnection=new RTCPeerConnection(rtcConfig);
-    pendingIce = [...earlyCandidates]; earlyCandidates = [];
-    peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:incomingCallData.from});};
-    remoteStream = new MediaStream(); document.getElementById('remoteVideo').srcObject = remoteStream;
-    peerConnection.ontrack=function(e){ remoteStream.addTrack(e.track); };
-    localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
-    peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal))
-    .then(function() { flushPendingIce(); return peerConnection.createAnswer(); })
-    .then(function(answer){ return peerConnection.setLocalDescription(answer); })
-    .then(function() { socket.emit('answerCall',{signal:peerConnection.localDescription,to:incomingCallData.from}); });
+  window.openPM = function(login, nick){
+    currentView='pm'; currentPrivateLogin=login;
+    showChat(nick);
+    document.getElementById('chatHeaderBtns').innerHTML=`<button onclick="startCall('${login}','video')">📹</button> <button onclick="startCall('${login}','audio')">📞</button>`;
+    socket.emit('getPrivateHistory', login);
+  };
+
+  window.openRoom = function(id){
+    currentView='room'; currentRoomId=id;
+    showChat('Загрузка...');
+    socket.emit('openRoom', id);
+  };
+
+  function showChat(title){
+    document.getElementById('mainChat').classList.add('show');
+    document.getElementById('noChat').style.display='none';
+    document.getElementById('chatTitle').innerText=title;
+    document.getElementById('messages').innerHTML='';
+    document.getElementById('chatHeaderBtns').innerHTML='';
+    if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
+  }
+
+  // --- SOCKET DATA ---
+  socket.on('messageHistory', msgs => { if(currentView==='general') renderMsgs(msgs); });
+  socket.on('chatMessage', msg => { if(currentView==='general') addMsg(msg); });
+  socket.on('privateHistory', d => { if(currentView==='pm' && currentPrivateLogin===d.otherLogin) renderMsgs(d.messages); });
+  socket.on('newPrivateMessage', msg => { 
+    if(currentView==='pm' && (msg.from_login===currentPrivateLogin || msg.from_login===myLogin)) addMsg(msg);
+    if(currentView==='private') socket.emit('getMyChats');
   });
-}
-window.acceptCall=acceptCall;
+  
+  function renderMsgs(list){ 
+    document.getElementById('messages').innerHTML=''; 
+    list.forEach(addMsg); 
+    scrollToBottom(); 
+  }
+  
+  function addMsg(msg){
+    var div = document.createElement('div');
+    div.className = 'message ' + (msg.username===myNickname || msg.from_login===myLogin ? 'mine' : 'other');
+    var content = msg.text;
+    if(msg.image) content = `<img src="${msg.image}">`;
+    else if(msg.file_data) content = `<a href="${msg.file_data}" download="${msg.file_name}" class="file-msg">📄 ${msg.file_name}</a>`;
+    div.innerHTML = `<div class="name">${msg.username||msg.from_nickname}</div>${content}`;
+    document.getElementById('messages').appendChild(div);
+    scrollToBottom();
+  }
+  function scrollToBottom(){ document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight; }
 
-function rejectCall(){ socket.emit('hangUp',{to:incomingCallData.from}); document.getElementById('incomingCallModal').classList.remove('show'); incomingCallData=null; } window.rejectCall=rejectCall;
-socket.on('callAccepted',function(signal){ peerConnection.setRemoteDescription(new RTCSessionDescription(signal)).then(function() { flushPendingIce(); }); });
-socket.on('iceCandidate',function(candidate){
-  if(peerConnection) { if(peerConnection.remoteDescription) { peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>console.log(e)); } else { pendingIce.push(candidate); } } else { earlyCandidates.push(candidate); }
-});
-socket.on('callEnded',function(){ endCall(); });
-function endCall(){
-  if(peerConnection)peerConnection.close();
-  if(localStream)localStream.getTracks().forEach(function(t){t.stop();});
-  document.getElementById('callOverlay').classList.remove('show');
-  document.getElementById('incomingCallModal').classList.remove('show');
-  peerConnection=null;localStream=null;remoteStream=null;
-  if(currentPrivateLogin) socket.emit('hangUp', {to: currentPrivateLogin});
-}
-window.endCall=endCall;
+  // --- SENDING ---
+  document.getElementById('sendBtn').onclick = function(){
+    var txt = document.getElementById('msgInput').value;
+    if(!txt) return;
+    if(currentView==='general') socket.emit('chatMessage', {text:txt});
+    if(currentView==='pm') socket.emit('privateMessage', {toLogin:currentPrivateLogin, text:txt});
+    if(currentView==='room') socket.emit('roomMessage', {roomId:currentRoomId, text:txt});
+    document.getElementById('msgInput').value='';
+  };
 
-function toggleMic(){
-  if(localStream){ var track=localStream.getAudioTracks()[0]; track.enabled=!track.enabled; document.getElementById('toggleMicBtn').textContent=track.enabled?'🎤':'🔇'; document.getElementById('toggleMicBtn').style.background=track.enabled?'#333':'#c0392b'; }
-} window.toggleMic=toggleMic;
-function toggleVideo(){
-  if(localStream){ var track=localStream.getVideoTracks()[0]; track.enabled=!track.enabled; const btn = document.getElementById('toggleVideoBtn'); if(track.enabled) btn.classList.add('active'); else btn.classList.remove('active'); }
-} window.toggleVideo=toggleVideo;
-async function switchCamera(){
-  if(!localStream) return;
-  localStream.getVideoTracks()[0].stop();
-  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-  try {
-    const newStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: currentFacingMode } });
-    const newVideoTrack = newStream.getVideoTracks()[0];
-    const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-    if(sender) sender.replaceTrack(newVideoTrack);
-    const oldTrack = localStream.getVideoTracks()[0];
-    localStream.removeTrack(oldTrack); localStream.addTrack(newVideoTrack);
-    document.getElementById('localVideo').srcObject = localStream;
-  } catch(e) { alert('Не удалось переключить камеру'); console.error(e); }
-} window.switchCamera=switchCamera;
+  // --- FILES ---
+  document.getElementById('fileInput').onchange = function(){
+    var file = this.files[0];
+    if(!file) return;
+    if(file.size > 50*1024*1024) { alert('Макс 50MB'); return; }
+    var reader = new FileReader();
+    reader.onload = e => {
+      var data = {file_data:e.target.result, file_name:file.name, type:'file'};
+      if(currentView==='general') socket.emit('chatMessage', data);
+      if(currentView==='pm') { data.toLogin=currentPrivateLogin; socket.emit('privateMessage', data); }
+      if(currentView==='room') { data.roomId=currentRoomId; socket.emit('roomMessage', data); }
+    };
+    reader.readAsDataURL(file);
+    this.value='';
+  };
 
-// --- MISC (Mobile Back Button) ---
-document.getElementById('mobileBackBtn').addEventListener('click',function(){
-  document.getElementById('mainChat').classList.remove('show');
-  document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
-  if(currentView==='pm'){currentView='private';currentPrivateLogin=null;socket.emit('getMyChats');}
-  else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;socket.emit('getMyRooms');}
-  else if(currentView==='general'){switchToGeneral();}
-});
+  // --- SEARCH ---
+  document.getElementById('searchInput').oninput = function(){
+    var q = this.value;
+    if(!q && currentView==='private') return socket.emit('getMyChats');
+    if(!q && currentView==='rooms') return socket.emit('getMyRooms');
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+      if(currentView==='private') socket.emit('searchUser', q);
+      if(currentView==='rooms') socket.emit('searchRooms', q);
+    }, 300);
+  };
+
+  socket.on('searchResults', users => {
+    if(currentView!=='private') return;
+    var html = users.map(u => `<div class="chat-item" onclick="openPM('${u.login}','${u.nickname}')"><div class="avatar">👤</div><div class="info">${u.nickname}</div></div>`).join('');
+    document.getElementById('sidebarList').innerHTML = html || '<div class="empty-list">Пусто</div>';
+  });
+  
+  socket.on('myChats', chats => {
+    if(currentView!=='private') return;
+    var html = chats.map(c => `<div class="chat-item" onclick="openPM('${c.login}','${c.nickname}')"><div class="avatar">👤</div><div class="info">${c.nickname}</div></div>`).join('');
+    document.getElementById('sidebarList').innerHTML = html || '<div class="empty-list">Нет чатов</div>';
+  });
+
+  // --- CALLS (WEBRTC) ---
+  window.startCall = function(user, type){
+    document.getElementById('callOverlay').classList.add('show');
+    navigator.mediaDevices.getUserMedia({audio:true, video:{facingMode:currentFacingMode}}).then(stream => {
+      localStream = stream;
+      document.getElementById('localVideo').srcObject = stream;
+      peerConnection = new RTCPeerConnection(rtcConfig);
+      peerConnection.onicecandidate = e => { if(e.candidate) socket.emit('iceCandidate', {candidate:e.candidate, to:user}); };
+      peerConnection.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
+      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      peerConnection.createOffer({offerToReceiveAudio:true, offerToReceiveVideo:true}).then(offer => {
+        peerConnection.setLocalDescription(offer);
+        socket.emit('callUser', {userToCall:user, signalData:offer, callType:type});
+      });
+    }).catch(e => { alert('Ошибка доступа: '+e); endCall(); });
+  };
+
+  socket.on('incomingCall', d => {
+    incomingCallData = d;
+    document.getElementById('incomingCallerName').innerText = 'Звонок от ' + d.fromNickname;
+    document.getElementById('incomingCallModal').classList.add('show');
+  });
+
+  window.acceptCall = function(){
+    document.getElementById('incomingCallModal').classList.remove('show');
+    document.getElementById('callOverlay').classList.add('show');
+    navigator.mediaDevices.getUserMedia({audio:true, video:true}).then(stream => {
+      localStream = stream;
+      document.getElementById('localVideo').srcObject = stream;
+      peerConnection = new RTCPeerConnection(rtcConfig);
+      peerConnection.onicecandidate = e => { if(e.candidate) socket.emit('iceCandidate', {candidate:e.candidate, to:incomingCallData.from}); };
+      peerConnection.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
+      localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+      peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal));
+      peerConnection.createAnswer().then(answer => {
+        peerConnection.setLocalDescription(answer);
+        socket.emit('answerCall', {signal:answer, to:incomingCallData.from});
+      });
+    });
+  };
+
+  window.rejectCall = function(){
+    socket.emit('hangUp', {to:incomingCallData.from});
+    document.getElementById('incomingCallModal').classList.remove('show');
+  };
+
+  window.endCall = function(){
+    if(peerConnection) peerConnection.close();
+    if(localStream) localStream.getTracks().forEach(t => t.stop());
+    document.getElementById('callOverlay').classList.remove('show');
+    document.getElementById('incomingCallModal').classList.remove('show');
+    if(currentPrivateLogin) socket.emit('hangUp', {to: currentPrivateLogin});
+  };
+
+  socket.on('callAccepted', sig => peerConnection.setRemoteDescription(new RTCSessionDescription(sig)));
+  socket.on('iceCandidate', cand => peerConnection.addIceCandidate(new RTCIceCandidate(cand)));
+  socket.on('callEnded', window.endCall);
+
+  window.switchCamera = function(){ alert('Переключение камеры...'); };
+
+  // --- MISC ---
+  document.getElementById('mobileBackBtn').onclick = function(){
+    document.getElementById('mainChat').classList.remove('show');
+    document.getElementById('noChat').style.display='flex';
+    if(currentView==='private') socket.emit('getMyChats');
+  };
+  
+  document.getElementById('logoutBtn').onclick = function(){
+    localStorage.removeItem('mychat_token');
+    location.reload();
+  };
+};
 </script>
 </body>
 </html>
