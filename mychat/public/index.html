@@ -530,6 +530,41 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .admin-vip-code .code-used{color:#ff4757;font-size:11px;}
 .admin-vip-code .code-ok{color:#2ecc71;font-size:11px;}
 
+
+/* ── ONLINE STATUS ── */
+.online-dot{width:10px;height:10px;border-radius:50%;background:var(--online);border:2px solid var(--bg-sidebar);flex-shrink:0;}
+.online-dot.offline{background:var(--text-muted);}
+.chat-subtitle .status-text{font-size:12px;color:var(--online);}
+.chat-subtitle .status-text.offline{color:var(--text-muted);}
+
+/* ── READ RECEIPTS ── */
+.msg-checks{display:inline-flex;gap:-2px;margin-left:3px;font-size:12px;line-height:1;}
+.check-single{color:rgba(255,255,255,0.5);}
+.check-double{color:#4fc3f7;}
+
+/* ── VIP EMOJI in nick ── */
+.vip-nick-emoji{font-size:14px;margin-left:3px;display:inline-block;vertical-align:middle;}
+.chat-item .name .vip-nick-emoji{font-size:13px;}
+.msg-nick .vip-nick-emoji{font-size:12px;}
+
+/* ── PINNED CHATS ── */
+.chat-item.pinned{border-left:3px solid var(--accent);}
+.pin-icon{font-size:11px;color:var(--text-muted);margin-left:4px;}
+.chat-item-ctx-menu{position:fixed;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:6px 0;z-index:5000;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+.chat-item-ctx-menu div{padding:11px 18px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text-primary);}
+.chat-item-ctx-menu div:hover{background:var(--bg-hover);}
+.chat-item-ctx-menu .ctx-danger{color:#ff4757;}
+.pinned-section-title{font-size:11px;font-weight:700;color:var(--text-muted);padding:8px 16px 4px;text-transform:uppercase;letter-spacing:0.5px;}
+
+/* ── UNIFIED CHAT LIST ── */
+#tabAll{display:inline-flex;}
+.chat-item .chat-type-badge{font-size:10px;background:var(--bg-input);color:var(--text-muted);padding:1px 6px;border-radius:6px;margin-left:4px;}
+
+/* ── NOTIFICATIONS ── */
+#notifPermBar{background:var(--accent);color:#fff;padding:10px 16px;font-size:13px;display:none;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;}
+#notifPermBar.show{display:flex;}
+#notifPermBar button{background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;}
+
 /* ── PHOTO VIEWER ── */
 #photoViewer{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.97);display:none;flex-direction:column;align-items:center;justify-content:center;}
 #photoViewer.active{display:flex;}
@@ -600,6 +635,9 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
   <button class="call-mini-end" onclick="event.stopPropagation();endCall()">📞</button>
 </div>
 
+
+<!-- VIP Photo Emoji Input -->
+<input type="file" id="vipPhotoInput" accept="image/*" style="display:none">
 
 <!-- Photo Viewer -->
 <div id="photoViewer">
@@ -727,7 +765,15 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
         <button class="hdr-btn" id="settingsBtn" title="Настройки">☰</button>
       </div>
     </div>
+    <div id="notifPermBar">
+      <span>🔔 Разреши уведомления чтобы не пропускать сообщения</span>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="requestNotifPermission()">Разрешить</button>
+        <button onclick="dismissNotifBar()">✕</button>
+      </div>
+    </div>
     <div class="sidebar-tabs">
+      <button id="tabAll">🗂 Все</button>
       <button class="active" id="tabGeneral">💬 Общий</button>
       <button id="tabPrivate">✉️ Личные</button>
       <button id="tabRooms">👥 Группы</button>
@@ -747,7 +793,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
         <div class="chat-header-avatar" id="chatHeaderAvatar" style="cursor:pointer;" onclick="onHeaderAvatarClick()">💬</div>
         <div style="cursor:pointer;" onclick="onHeaderAvatarClick()">
           <div class="chat-title" id="chatTitle"></div>
-          <div class="chat-subtitle">
+          <div class="chat-subtitle" id="chatSubtitle">
             <span class="typing-indicator" id="typingIndicator"></span>
             <span id="onlineInfo"></span>
           </div>
@@ -998,7 +1044,13 @@ function openVipSettings() {
     bodyContent = '<div class="vip-status-card"><div class="vip-status-icon">👑</div><div class="vip-status-info"><div class="vip-status-title">VIP активен!</div><div class="vip-status-sub">Действует до '+new Date(myVipUntil).toLocaleDateString('ru')+'</div></div></div>'
       + '<div style="padding:0 20px 20px"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;font-weight:600;">Смайлик в никнейм</div>'
       + '<div class="emoji-grid" id="vipEmojiGrid">'+emojiGrid+'</div>'
-      + '<button onclick="clearVipEmoji()" style="margin-top:8px;width:100%;padding:11px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">Убрать смайлик</button></div>';
+      + '<button onclick="clearVipEmoji()" style="margin-top:8px;width:100%;padding:11px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">Убрать смайлик</button>'
+      + '<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">'
+      + '<div style="font-size:13px;font-weight:600;margin-bottom:10px;">Статус онлайн</div>'
+      + '<label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;color:var(--text-secondary)">'
+      + '<input type="checkbox" id="hideOnlineChk" '+(hideOnlineSelf?'checked':'')+' onchange="toggleHideOnline(this.checked)" style="width:16px;height:16px;">'
+      + 'Скрыть точное время — показывать «был(а) недавно»</label>'
+      + '</div></div>';
   } else {
     bodyContent = '<div style="padding:20px">'
       + '<div style="text-align:center;padding:20px 0"><div style="font-size:48px;margin-bottom:12px">👑</div>'
@@ -1026,6 +1078,12 @@ function clearVipEmoji() {
   document.querySelectorAll('.emoji-opt').forEach(function(el){ el.classList.remove('selected'); });
   if(window.socket)window.socket.emit('setVipEmoji', { emoji: null });
 }
+
+function toggleHideOnline(hide) {
+  hideOnlineSelf = hide;
+  if(window.socket) window.socket.emit('setHideOnline', { hide: hide });
+}
+window.toggleHideOnline = toggleHideOnline;
 
 function activateVip() {
   var code = (document.getElementById('vipCodeInput')||{}).value;
@@ -1227,7 +1285,58 @@ var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null,
-replyTo=null,myVipUntil=0,myVipEmoji=null;
+replyTo=null,myVipUntil=0,myVipEmoji=null,
+pinnedChats=[],vipEmojiCache={},lastSeenCache={},hideOnlineSelf=false;
+
+/* ── NICK + VIP EMOJI HELPER ── */
+function getNickWithEmoji(login, nickname, inlineEmoji) {
+  var emoji = inlineEmoji || (login === myLogin ? myVipEmoji : (vipEmojiCache[login] || null));
+  if (!emoji) return nickname || login;
+  var emojiHtml = emoji.startsWith('data:')
+    ? '<img src="'+emoji+'" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-left:3px;">'
+    : '<span class="vip-nick-emoji">'+emoji+'</span>';
+  return (nickname || login) + emojiHtml;
+}
+
+function getNickPlain(login, nickname) {
+  return nickname || login;
+}
+
+function formatLastSeen(ts) {
+  if (!ts) return 'давно';
+  var diff = Date.now() - ts;
+  var min = Math.floor(diff/60000);
+  var hr = Math.floor(diff/3600000);
+  var days = Math.floor(diff/86400000);
+  if (diff < 60000) return 'только что';
+  if (min < 60) return min + ' мин назад';
+  if (hr < 24) return hr + ' ч назад';
+  if (days === 1) return 'вчера';
+  return new Date(ts).toLocaleDateString('ru');
+}
+
+/* ── NOTIFICATIONS ── */
+function initNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    document.getElementById('notifPermBar').classList.add('show');
+  }
+}
+function requestNotifPermission() {
+  Notification.requestPermission().then(function(p) {
+    document.getElementById('notifPermBar').classList.remove('show');
+    if (p === 'granted') showError('🔔 Уведомления включены!');
+  });
+}
+function dismissNotifBar() {
+  document.getElementById('notifPermBar').classList.remove('show');
+  localStorage.setItem('notif_dismissed','1');
+}
+function sendNotification(title, body, icon) {
+  if (Notification.permission !== 'granted') return;
+  if (document.hasFocus()) return;
+  try { new Notification(title, { body: body, icon: icon || '/favicon.ico' }); } catch(e) {}
+}
 
 var localStream, remoteStream, peerConnection, incomingCallData=null;
 var currentFacingMode = 'user';
@@ -1286,16 +1395,64 @@ socket.on('authSuccess',function(d){
   // apply saved background after login
   if(customBgData) applyBackground('custom', customBgData);
   else if(currentBgId !== 'none') applyBackground(currentBgId, null);
+  // fetch pinned chats
+  socket.emit('getPinnedChats');
+  // init notifications
+  if (!localStorage.getItem('notif_dismissed')) initNotifications();
   switchToGeneral();
+  // Refresh chats on login
+  socket.emit('getMyChats');
+  socket.emit('getMyRooms');
 });
 socket.on('authError',function(m){document.getElementById('authError').textContent=m;localStorage.removeItem('mychat_token');});
+
+/* ── READ RECEIPTS ── */
+socket.on('messagesRead',function(d){
+  d.msgIds.forEach(function(id){
+    var el=document.querySelector('#pm-'+id+' .msg-time');
+    if(el){ el.innerHTML=el.innerHTML.replace(/<span class="msg-checks[^"]*">.*?<\/span>/,'')+'<span class="msg-checks check-double">✓✓</span>'; }
+  });
+});
+
+/* ── LAST SEEN / ONLINE STATUS ── */
+socket.on('lastSeenResult',function(d){
+  lastSeenCache[d.login]=d;
+  updateHeaderStatus(d.login);
+});
+
+function updateHeaderStatus(login){
+  if(currentView!=='pm'||currentPrivateLogin!==login)return;
+  var sub=document.getElementById('chatSubtitle')||document.querySelector('.chat-subtitle');
+  if(!sub)return;
+  var d=lastSeenCache[login];
+  var isOnline=onlineLogins.has(login);
+  if(d&&d.hidden){sub.innerHTML='<span class="status-text offline">был(а) недавно</span>';return;}
+  if(isOnline){sub.innerHTML='<span class="status-text">● в сети</span>';return;}
+  if(d&&d.last_seen){sub.innerHTML='<span class="status-text offline">был(а) '+formatLastSeen(d.last_seen)+'</span>';return;}
+  sub.innerHTML='';
+}
 
 /* ── VIP SOCKET HANDLERS ── */
 socket.on('vipActivateResult',function(d){
   if(d.ok){myVipUntil=d.until;openVipSettings();}
   else{var err=document.getElementById('vipCodeError');if(err)err.textContent=d.msg||'Ошибка';}
 });
-socket.on('vipEmojiResult',function(d){if(d.ok){myVipEmoji=d.emoji||null;}});
+socket.on('vipEmojiResult',function(d){
+  if(d.ok){
+    myVipEmoji=d.emoji||null;
+    vipEmojiCache[myLogin]=d.emoji||null;
+    // Update display name in header etc
+    document.querySelectorAll('.my-nick-display').forEach(function(el){
+      el.innerHTML=getNickWithEmoji(myLogin,myNickname);
+    });
+  }
+});
+
+socket.on('userVipUpdated',function(d){
+  if(d.login)vipEmojiCache[d.login]=d.vip_emoji||null;
+  // Refresh chat list to show new emoji
+  renderChatList();
+});
 socket.on('userVipUpdated',function(d){});
 socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
@@ -1307,7 +1464,12 @@ socket.on('userAvatarUpdated',function(d){if(d.avatar)avatarCache[d.login]=d.ava
 });
 socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
 socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
-socket.on('onlineUsers',function(d){if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):'';} });
+socket.on('onlineUsers',function(d){
+  // Track online logins for green dots
+  onlineLogins.clear();
+  (d.users||[]).forEach(function(u){ onlineLogins.add(u.login); });
+  // Refresh chat list to update green dots
+  if(['private','pm','all'].includes(currentView)) renderChatList();if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):'';} });
 
 /* ── TYPING ── */
 var typingSet=new Set();
@@ -1320,10 +1482,30 @@ socket.on('roomUserStopTyping',function(d){if(currentView==='room'&&currentRoomI
 function showTyping(){var el=document.getElementById('typingIndicator');if(typingSet.size===0){el.textContent='';return;}var a=Array.from(typingSet);el.textContent=a.join(', ')+(a.length>1?' печатают...':' печатает...');}
 
 /* ── TABS ── */
+document.getElementById('tabAll').addEventListener('click',function(){switchToAll();});
 document.getElementById('tabGeneral').addEventListener('click',function(){switchToGeneral();});
 document.getElementById('tabPrivate').addEventListener('click',function(){switchToPrivate();});
 document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
 function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
+
+function switchToAll(){
+  currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  setActiveTab('tabAll');
+  document.getElementById('searchInput').value='';
+  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('noChat').style.display='flex';
+  document.getElementById('messages').innerHTML='';
+  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  renderAllChats();
+}
+
+function renderAllChats(){
+  if(currentView!=='all')return;
+  var list=document.getElementById('sidebarList');
+  list.innerHTML='<div class="empty-list">Загрузка...</div>';
+  socket.emit('getMyChats');
+  socket.emit('getMyRooms');
+}
 
 function switchToGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
@@ -1378,35 +1560,102 @@ socket.on('roomSearchResults',function(rooms){
   list.innerHTML=html;
 });
 
+// Store latest chats/rooms for unified view
+var latestChats=[], latestRooms=[];
+
+function buildChatItem(c, isPinned, chatType) {
+  if(c.avatar) avatarCache[c.login||''] = c.avatar;
+  if(c.vip_emoji && c.login) vipEmojiCache[c.login] = c.vip_emoji;
+  var lastText='';
+  if(c.lastMsg){
+    if(c.lastMsg.type==='image') lastText='📷 Фото';
+    else if(c.lastMsg.type==='voice') lastText='🎤 Голосовое';
+    else if(c.lastMsg.type==='video_note') lastText='⏺ Кружочек';
+    else lastText=c.lastMsg.text||'';
+  }
+  var isOnline = c.login && onlineLogins.has(c.login);
+  var avHtml;
+  if(chatType==='room'){
+    avHtml='<div class="avatar">'+(c.type==='channel'?'📢':'👥')+'</div>';
+  } else {
+    avHtml = c.avatar
+      ? '<div class="avatar" style="background:none;padding:0;"><img src="'+c.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"><div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>'
+      : '<div class="avatar">'+c.nickname[0].toUpperCase()+'<div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>';
+  }
+  var nameHtml = getNickWithEmoji(c.login||'', c.name||c.nickname||'');
+  var pinClass = isPinned ? ' pinned' : '';
+  var pinIcon = isPinned ? '<span class="pin-icon">📌</span>' : '';
+  var metaHtml = '';
+  if(c.unread>0) metaHtml+='<div class="badge">'+c.unread+'</div>';
+  if(c.lastMsg&&c.lastMsg.timestamp) metaHtml='<div class="time">'+formatTime(c.lastMsg.timestamp)+'</div>'+metaHtml;
+  var typeBadge = chatType==='room' ? '<span class="chat-type-badge">'+(c.type||'group')+'</span>' : '';
+  var onclickFn = chatType==='room'
+    ? 'openRoom('+c.id+')'
+    : 'openPM(\''+c.login+'\',\''+c.nickname+'\')'; 
+  var isActive = chatType==='room' ? currentRoomId==c.id : currentPrivateLogin===c.login;
+  return '<div class="chat-item'+(isActive?' active':'')+pinClass+'" onclick="'+onclickFn+'" oncontextmenu="showChatCtxMenu(event,\''+chatType+'\','+(chatType==='room'?c.id:'\''+c.login+'\'')+')" data-chattype="'+chatType+'" data-chatid="'+(chatType==='room'?c.id:c.login)+'">'
+    + avHtml
+    + '<div class="info"><div class="name">'+nameHtml+pinIcon+typeBadge+'</div><div class="last">'+lastText+'</div></div>'
+    + (metaHtml?'<div class="meta">'+metaHtml+'</div>':'')
+    + '</div>';
+}
+
+function renderChatList() {
+  if(document.getElementById('searchInput').value.trim()) return;
+  var list = document.getElementById('sidebarList');
+  var html = '';
+  if(currentView==='private'||currentView==='pm') {
+    var pinned = latestChats.filter(function(c){ return isPinned('pm', c.login); });
+    var unpinned = latestChats.filter(function(c){ return !isPinned('pm', c.login); });
+    if(pinned.length>0){ html+='<div class="pinned-section-title">📌 Закреплённые</div>'; pinned.forEach(function(c){html+=buildChatItem(c,true,'pm');}); }
+    if(unpinned.length===0&&pinned.length===0){html='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}
+    else unpinned.forEach(function(c){html+=buildChatItem(c,false,'pm');});
+    list.innerHTML=html;
+  } else if(currentView==='rooms'||currentView==='room') {
+    var pinned = latestRooms.filter(function(r){ return isPinned('room', r.id); });
+    var unpinned = latestRooms.filter(function(r){ return !isPinned('room', r.id); });
+    if(pinned.length>0){ html+='<div class="pinned-section-title">📌 Закреплённые</div>'; pinned.forEach(function(r){html+=buildChatItem(r,true,'room');}); }
+    if(unpinned.length===0&&pinned.length===0){html='<div class="empty-list">Нет групп. Создай ➕ или найди через поиск</div>';}
+    else unpinned.forEach(function(r){html+=buildChatItem(r,false,'room');});
+    list.innerHTML=html;
+  } else if(currentView==='all') {
+    var allItems=[];
+    pinnedChats.forEach(function(p){
+      if(p.chat_type==='pm'){var c=latestChats.find(function(x){return x.login===p.chat_id;});if(c)allItems.push({item:c,type:'pm',pinned:true});}
+      else{var r=latestRooms.find(function(x){return String(x.id)===String(p.chat_id);});if(r)allItems.push({item:r,type:'room',pinned:true});}
+    });
+    // General chat first
+    html += '<div class="chat-item'+(currentView==='general'?' active':'')+'" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
+    if(allItems.length>0){html+='<div class="pinned-section-title">📌 Закреплённые</div>';allItems.forEach(function(a){html+=buildChatItem(a.item,true,a.type);});}
+    // Then rest
+    var pinnedLogins = pinnedChats.filter(function(p){return p.chat_type==='pm';}).map(function(p){return p.chat_id;});
+    var pinnedRoomIds = pinnedChats.filter(function(p){return p.chat_type==='room';}).map(function(p){return String(p.chat_id);});
+    latestChats.filter(function(c){return !pinnedLogins.includes(c.login);}).forEach(function(c){html+=buildChatItem(c,false,'pm');});
+    latestRooms.filter(function(r){return !pinnedRoomIds.includes(String(r.id));}).forEach(function(r){html+=buildChatItem(r,false,'room');});
+    list.innerHTML=html;
+  }
+}
+
 socket.on('myChats',function(chats){
-  if(currentView!=='private'&&currentView!=='pm')return;
+  latestChats=chats;
+  if(currentView!=='private'&&currentView!=='pm'&&currentView!=='all')return;
   if(document.getElementById('searchInput').value.trim())return;
-  var list=document.getElementById('sidebarList');
-  if(chats.length===0){list.innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';return;}
-  var html='';chats.forEach(function(c){
-    if(c.avatar)avatarCache[c.login]=c.avatar;
-    var lastText='';if(c.lastMsg){if(c.lastMsg.type==='image')lastText='📷 Фото';else if(c.lastMsg.type==='voice')lastText='🎤 Голосовое';else if(c.lastMsg.type==='video_note')lastText='⏺ Кружочек';else lastText=c.lastMsg.text||'';}
-    var avHtml=c.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+c.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+c.nickname[0].toUpperCase()+'</div>';
-    html+='<div class="chat-item'+(currentPrivateLogin===c.login?' active':'')+'" onclick="openPM(\''+c.login+'\',\''+c.nickname+'\')">';
-    html+=avHtml;
-    html+='<div class="info"><div class="name">'+c.nickname+'</div><div class="last">'+lastText+'</div></div>';
-    if(c.unread>0)html+='<div class="meta"><div class="badge">'+c.unread+'</div></div>';
-    html+='</div>';
-  });list.innerHTML=html;
+  renderChatList();
 });
-socket.on('unreadNotification',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)return;if(currentView==='private'||currentView==='pm')socket.emit('getMyChats');});
+var onlineLogins = new Set();
+
+socket.on('unreadNotification',function(d){
+  if(currentView==='pm'&&currentPrivateLogin===d.from)return;
+  if(currentView==='private'||currentView==='pm'||currentView==='all')socket.emit('getMyChats');
+  // Push notification
+  sendNotification(d.nickname||'Новое сообщение','Написал тебе в MyChat');
+});
 
 socket.on('myRooms',function(rooms){
-  if(currentView!=='rooms'&&currentView!=='room')return;
+  latestRooms=rooms;
+  if(currentView!=='rooms'&&currentView!=='room'&&currentView!=='all')return;
   if(document.getElementById('searchInput').value.trim())return;
-  var list=document.getElementById('sidebarList');
-  if(rooms.length===0){list.innerHTML='<div class="empty-list">Нет групп. Создай ➕ или найди через поиск</div>';return;}
-  var html='';rooms.forEach(function(r){
-    var icon=r.type==='channel'?'📢':'👥';
-    html+='<div class="chat-item'+(currentRoomId==r.id?' active':'')+'" onclick="openRoom('+r.id+')">';
-    html+='<div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">'+r.member_count+' участников</div></div>';
-    html+='<div class="tag">'+r.type+'</div></div>';
-  });list.innerHTML=html;
+  renderChatList();
 });
 
 function openGeneral(){
@@ -1494,6 +1743,8 @@ socket.on('userProfile', function(p){
 });
 
 function openPM(login,nickname){
+  // Request last seen status
+  socket.emit('getLastSeen',{login:login});
   currentView='pm';currentPrivateLogin=login;currentPMProfile=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabPrivate');
   document.getElementById('mainChat').classList.add('show');
@@ -1570,7 +1821,8 @@ socket.on('roomSettingsUpdated',function(d){if(currentRoomId==d.roomId&&currentR
 function addRoomMsg(msg){
   var div=document.createElement('div');var isMine=msg.user_login===myLogin;
   div.className='message '+(isMine?'mine':'other');div.id='rmsg-'+msg.id;div.setAttribute('data-msg-id',msg.id||'');
-  var html='<div class="name">'+msg.username+'</div>';
+  if(msg.user_login&&msg.vip_emoji)vipEmojiCache[msg.user_login]=msg.vip_emoji;
+  var html='<div class="name msg-nick">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
     var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
@@ -1718,7 +1970,8 @@ function addPM(msg){
   var div=document.createElement('div');var isMine=msg.from_login===myLogin;
   div.className='message '+(isMine?'mine':'other');div.id='pm-'+msg.id;div.setAttribute('data-msg-id',msg.id||'');
   var html='';
-  if(!isMine)html+='<div class="name">'+msg.from_nickname+'</div>';
+  if(msg.from_login&&msg.vip_emoji)vipEmojiCache[msg.from_login]=msg.vip_emoji;
+  if(!isMine)html+='<div class="name msg-nick">'+getNickWithEmoji(msg.from_login||'',msg.from_nickname,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
     var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
@@ -1901,7 +2154,8 @@ function addMsg(msg){
   var div=document.createElement('div');var isS=msg.username==='⚡ Система',isM=msg.username===myNickname;
   div.className='message '+(isS?'system':(isM?'mine':'other'));div.id='msg-'+msg.id;
   var html='';
-  if(!isM&&!isS)html+='<div class="name">'+msg.username+'</div>';
+  if(msg.user_login&&msg.vip_emoji)vipEmojiCache[msg.user_login]=msg.vip_emoji;
+  if(!isM&&!isS)html+='<div class="name msg-nick">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
     var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
@@ -1970,6 +2224,32 @@ document.getElementById('photoInput').addEventListener('change',function(){
     else if(currentView==='general')socket.emit('chatMessage',payload);
     clearReply();self.value='';
   });
+});
+
+/* ── VIP PHOTO EMOJI ── */
+document.getElementById('vipPhotoInput').addEventListener('change',function(){
+  var file=this.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    // Crop to 40x40 circle via canvas
+    var img=new Image();
+    img.onload=function(){
+      var canvas=document.createElement('canvas');canvas.width=40;canvas.height=40;
+      var ctx=canvas.getContext('2d');
+      ctx.beginPath();ctx.arc(20,20,20,0,Math.PI*2);ctx.clip();
+      var s=Math.min(img.width,img.height);
+      var ox=(img.width-s)/2,oy=(img.height-s)/2;
+      ctx.drawImage(img,ox,oy,s,s,0,0,40,40);
+      var dataUrl=canvas.toDataURL('image/jpeg',0.85);
+      // Save as VIP emoji
+      myVipEmoji=dataUrl;vipEmojiCache[myLogin]=dataUrl;
+      if(window.socket)window.socket.emit('setVipEmoji',{emoji:dataUrl});
+      openVipSettings();
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+  this.value='';
 });
 
 /* ── VOICE ── */
@@ -2414,6 +2694,49 @@ function renderVideoNote(src,isMine){
   wrap.appendChild(vid);wrap.appendChild(btn);wrap.appendChild(dur);
   return wrap;
 }
+
+/* ── PINNED CHATS ── */
+socket.on('pinnedChats',function(rows){
+  pinnedChats=rows;
+  renderChatList();
+});
+socket.on('pinChatResult',function(d){
+  if(d.ok){socket.emit('getPinnedChats');}
+});
+socket.on('unpinChatResult',function(d){
+  if(d.ok){socket.emit('getPinnedChats');}
+});
+
+function isPinned(chatType, chatId){
+  return pinnedChats.some(function(p){ return p.chat_type===chatType&&String(p.chat_id)===String(chatId); });
+}
+
+var ctxMenu=null;
+function showChatCtxMenu(e, chatType, chatId){
+  e.preventDefault(); e.stopPropagation();
+  if(ctxMenu){ctxMenu.remove();ctxMenu=null;}
+  var pinned=isPinned(chatType,chatId);
+  var menu=document.createElement('div');
+  menu.className='chat-item-ctx-menu';
+  menu.style.left=e.clientX+'px';menu.style.top=e.clientY+'px';
+  menu.innerHTML='<div onclick="togglePin(\''+chatType+'\',\''+chatId+'\')">'+(pinned?'📌 Открепить':'📌 Закрепить')+'</div>';
+  document.body.appendChild(menu);ctxMenu=menu;
+  setTimeout(function(){document.addEventListener('click',function rm(){ctxMenu&&ctxMenu.remove();ctxMenu=null;document.removeEventListener('click',rm);});},10);
+}
+window.showChatCtxMenu=showChatCtxMenu;
+
+function togglePin(chatType, chatId){
+  if(isPinned(chatType,chatId)){socket.emit('unpinChat',{chatType,chatId});}
+  else{socket.emit('pinChat',{chatType,chatId});}
+  if(ctxMenu){ctxMenu.remove();ctxMenu=null;}
+}
+window.togglePin=togglePin;
+
+/* ── VIP EMOJI FROM PHOTO ── */
+function openVipPhotoEmoji(){
+  document.getElementById('vipPhotoInput').click();
+}
+window.openVipPhotoEmoji=openVipPhotoEmoji;
 
 /* ── PHOTO VIEWER JS ── */
 var pvImages=[], pvIndex=0, pvMsgId=null, pvSourceEl=null;

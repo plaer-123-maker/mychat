@@ -95,6 +95,19 @@ async function initDB() {
   // VIP system
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_emoji TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen BIGINT DEFAULT 0'); } catch(e) {}
+  try { await pool.query("ALTER TABLE messages ADD COLUMN IF NOT EXISTS user_login VARCHAR(50) DEFAULT NULL"); } catch(e) {}
+  try { await pool.query("ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS user_login VARCHAR(50) DEFAULT NULL"); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS hide_online BOOLEAN DEFAULT false'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS read_at BIGINT DEFAULT NULL'); } catch(e) {}
+  await pool.query(`CREATE TABLE IF NOT EXISTS pinned_chats (
+    id SERIAL PRIMARY KEY,
+    user_login VARCHAR(50) NOT NULL,
+    chat_type VARCHAR(20) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    pinned_at BIGINT DEFAULT 0,
+    UNIQUE(user_login, chat_type, chat_id)
+  )`);
   await pool.query(`CREATE TABLE IF NOT EXISTS vip_codes (
     id SERIAL PRIMARY KEY,
     code VARCHAR(32) UNIQUE NOT NULL,
@@ -360,10 +373,13 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
+    // Get vip_emoji for sender
+    let vipEmoji = null;
+    try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmoji = ve.rows[0].vip_emoji || null; } catch(e) {}
+    const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
     try {
-      const res = await pool.query('INSERT INTO messages (username,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
-        [msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
+      const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
+        [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
       msg.id = res.rows[0].id;
       io.emit('chatMessage', msg);
     } catch (e) { console.error(e); }
@@ -479,7 +495,7 @@ io.on('connection', (socket) => {
       for (var u of users.rows) {
         var last = await pool.query('SELECT text, type, timestamp FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp DESC LIMIT 1', [socket.userLogin, u.login]);
         var unread = await pool.query('SELECT COUNT(*) as c FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [u.login, socket.userLogin]);
-        chats.push({ login: u.login, nickname: u.nickname, username: u.username || null, avatar: u.avatar || null, lastMsg: last.rows[0] || null, unread: parseInt(unread.rows[0].c) });
+        chats.push({ login: u.login, nickname: u.nickname, username: u.username || null, avatar: u.avatar || null, lastMsg: last.rows[0] || null, unread: parseInt(unread.rows[0].c), vip_emoji: u.vip_emoji || null, vip_until: u.vip_until || 0 });
       }
       chats.sort(function(a,b) { return (b.lastMsg?b.lastMsg.timestamp:0) - (a.lastMsg?a.lastMsg.timestamp:0); });
       socket.emit('myChats', chats);
@@ -490,8 +506,15 @@ io.on('connection', (socket) => {
     if (!socket.userLogin) return;
     try {
       const res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 200', [socket.userLogin, otherLogin]);
-      await pool.query('UPDATE private_messages SET read=true WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
+      const now = Date.now();
+      const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
+      await pool.query('UPDATE private_messages SET read=true, read_at=$1 WHERE from_login=$2 AND to_login=$3 AND read=false', [now, otherLogin, socket.userLogin]);
       socket.emit('privateHistory', { otherLogin, messages: res.rows });
+      if (unreadRes.rows.length > 0) {
+        const readIds = unreadRes.rows.map(r => r.id);
+        const sender = findSocketByLogin(otherLogin);
+        if (sender) sender.emit('messagesRead', { byLogin: socket.userLogin, msgIds: readIds, readAt: now });
+      }
     } catch(e) { console.error(e); }
   });
 
@@ -501,7 +524,9 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
+    let vipEmojiPM = null;
+    try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiPM = ve.rows[0].vip_emoji || null; } catch(e) {}
+    const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
     try {
       const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
         [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
@@ -606,7 +631,9 @@ io.on('connection', (socket) => {
       var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return;
       if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
-      var msg = { room_id: roomId, user_login: socket.userLogin, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
+      let vipEmojiR = null;
+      try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiR = ve.rows[0].vip_emoji || null; } catch(e) {}
+      var msg = { room_id: roomId, user_login: socket.userLogin, vip_emoji: vipEmojiR, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
       var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp, reply_to_id, reply_to_text, reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
         [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
       msg.id = res.rows[0].id;
@@ -801,6 +828,61 @@ io.on('connection', (socket) => {
     io.emit('userVipUpdated', { login: socket.userLogin, vip_until: u.rows[0].vip_until, vip_emoji: emoji || null });
   });
 
+  // === ONLINE STATUS & LAST SEEN ===
+  socket.on('setHideOnline', async ({ hide }) => {
+    if (!socket.userLogin) return;
+    await pool.query('UPDATE users SET hide_online=$1 WHERE login=$2', [!!hide, socket.userLogin]);
+    socket.emit('hideOnlineUpdated', { hide: !!hide });
+  });
+
+  socket.on('getLastSeen', async ({ login }) => {
+    if (!socket.userLogin) return;
+    const r = await pool.query('SELECT last_seen, hide_online FROM users WHERE login=$1', [login]);
+    if (!r.rows.length) return;
+    const row = r.rows[0];
+    // If user hides online - send 'recently' flag
+    const isOnline = [...onlineUsers.values()].some(u => u.login === login);
+    if (row.hide_online) {
+      socket.emit('lastSeenResult', { login, hidden: true, isOnline: false });
+    } else {
+      socket.emit('lastSeenResult', { login, hidden: false, isOnline, last_seen: row.last_seen || 0 });
+    }
+  });
+
+  // === READ RECEIPTS ===
+  socket.on('markRead', async ({ msgIds, fromLogin }) => {
+    if (!socket.userLogin || !msgIds || !msgIds.length) return;
+    const now = Date.now();
+    await pool.query(
+      'UPDATE private_messages SET read=true, read_at=$1 WHERE id=ANY($2) AND to_login=$3',
+      [now, msgIds, socket.userLogin]
+    );
+    // Notify sender that their messages were read
+    const target = findSocketByLogin(fromLogin);
+    if (target) target.emit('messagesRead', { byLogin: socket.userLogin, msgIds, readAt: now });
+  });
+
+  // === PINNED CHATS ===
+  socket.on('getPinnedChats', async () => {
+    if (!socket.userLogin) return;
+    const r = await pool.query('SELECT * FROM pinned_chats WHERE user_login=$1 ORDER BY pinned_at DESC', [socket.userLogin]);
+    socket.emit('pinnedChats', r.rows);
+  });
+
+  socket.on('pinChat', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    await pool.query('INSERT INTO pinned_chats (user_login,chat_type,chat_id,pinned_at) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING',
+      [socket.userLogin, chatType, String(chatId), Date.now()]);
+    socket.emit('pinChatResult', { ok: true, chatType, chatId });
+  });
+
+  socket.on('unpinChat', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    await pool.query('DELETE FROM pinned_chats WHERE user_login=$1 AND chat_type=$2 AND chat_id=$3',
+      [socket.userLogin, chatType, String(chatId)]);
+    socket.emit('unpinChatResult', { ok: true, chatType, chatId });
+  });
+
   // === REACTIONS ===
   socket.on('addReaction', async ({ msgType, msgId, emoji }) => {
     if (!socket.userLogin) return;
@@ -838,6 +920,9 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (socket.username) addLog('logout', socket.username, 'Logout', ip);
+    if (socket.userLogin) {
+      pool.query('UPDATE users SET last_seen=$1 WHERE login=$2', [Date.now(), socket.userLogin]).catch(()=>{});
+    }
     onlineUsers.delete(socket.id); socketUsers.delete(socket.id);
     sendOnlineToAll();
   });
