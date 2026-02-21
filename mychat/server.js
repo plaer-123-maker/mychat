@@ -73,6 +73,8 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(50) DEFAULT NULL UNIQUE'); } catch(e) {}
   try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INT DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_text TEXT DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_user TEXT DEFAULT NULL'); } catch(e) {}
@@ -152,7 +154,7 @@ io.on('connection', (socket) => {
       socket.userRole = user.login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
       onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: user.avatar || null, username: user.username || null });
       sendOnlineToAll();
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
@@ -192,14 +194,13 @@ io.on('connection', (socket) => {
       await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
       onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null });
       sendOnlineToAll();
       await addLog('login', user.nickname, 'Login', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
   // === WEBRTC CALLS ===
-  // Обновлен для передачи callType
   socket.on('callUser', ({ userToCall, signalData, callType }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(userToCall);
@@ -210,6 +211,8 @@ io.on('connection', (socket) => {
         fromNickname: socket.username,
         callType: callType || 'video' 
       });
+    } else {
+      socket.emit('callEnded'); // user offline
     }
   });
 
@@ -303,12 +306,53 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('passwordResult', 'Ошибка'); }
   });
 
+  socket.on('setAvatar', async (avatarData) => {
+    if (!socket.userLogin) return;
+    try {
+      // limit avatar size (~2MB base64)
+      if (avatarData && avatarData.length > 2 * 1024 * 1024 * 1.37) return socket.emit('chatError', 'Аватарка слишком большая (макс. 2МБ)');
+      await pool.query('UPDATE users SET avatar=$1 WHERE login=$2', [avatarData || null, socket.userLogin]);
+      socket.emit('avatarChanged', avatarData || null);
+      // notify contacts about avatar change
+      io.emit('userAvatarUpdated', { login: socket.userLogin, avatar: avatarData || null });
+    } catch(e) { console.error(e); socket.emit('chatError', 'Ошибка при смене аватарки'); }
+  });
+
+  socket.on('setUsername', async (username) => {
+    if (!socket.userLogin) return;
+    if (!username) {
+      // allow clearing username
+      await pool.query('UPDATE users SET username=NULL WHERE login=$1', [socket.userLogin]).catch(()=>{});
+      return socket.emit('usernameChanged', null);
+    }
+    username = username.trim().replace(/[^a-zA-Z0-9_]/g, '');
+    if (username.length < 3 || username.length > 32) return socket.emit('chatError', 'Юзернейм: от 3 до 32 символов (латиница, цифры, _)');
+    try {
+      const exists = await pool.query('SELECT login FROM users WHERE LOWER(username)=LOWER($1) AND login!=$2', [username, socket.userLogin]);
+      if (exists.rows.length > 0) return socket.emit('chatError', 'Этот юзернейм уже занят');
+      await pool.query('UPDATE users SET username=$1 WHERE login=$2', [username, socket.userLogin]);
+      socket.emit('usernameChanged', username);
+    } catch(e) { console.error(e); socket.emit('chatError', 'Ошибка при смене юзернейма'); }
+  });
+
   socket.on('searchUser', async (query) => {
     if (!socket.userLogin || !query) return;
     try {
-      const res = await pool.query('SELECT login, nickname FROM users WHERE LOWER(nickname) LIKE LOWER($1) AND login != $2 LIMIT 10', ['%' + query + '%', socket.userLogin]);
+      // search by nickname OR username
+      const res = await pool.query(
+        'SELECT login, nickname, username, avatar FROM users WHERE (LOWER(nickname) LIKE LOWER($1) OR LOWER(username) LIKE LOWER($2)) AND login != $3 LIMIT 15',
+        ['%' + query + '%', '%' + query.replace('@','') + '%', socket.userLogin]
+      );
       socket.emit('searchResults', res.rows);
     } catch(e) { socket.emit('searchResults', []); }
+  });
+
+  socket.on('getUserProfile', async (login) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT login, nickname, username, avatar FROM users WHERE login=$1', [login]);
+      if (res.rows.length > 0) socket.emit('userProfile', res.rows[0]);
+    } catch(e) {}
   });
 
   socket.on('searchRooms', async (query) => {
@@ -325,12 +369,12 @@ io.on('connection', (socket) => {
       const res = await pool.query('SELECT DISTINCT CASE WHEN from_login=$1 THEN to_login ELSE from_login END as other_login FROM private_messages WHERE from_login=$1 OR to_login=$1', [socket.userLogin]);
       var logins = res.rows.map(r => r.other_login);
       if (logins.length === 0) return socket.emit('myChats', []);
-      var users = await pool.query('SELECT login, nickname FROM users WHERE login = ANY($1)', [logins]);
+      var users = await pool.query('SELECT login, nickname, avatar, username FROM users WHERE login = ANY($1)', [logins]);
       var chats = [];
       for (var u of users.rows) {
         var last = await pool.query('SELECT text, type, timestamp FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp DESC LIMIT 1', [socket.userLogin, u.login]);
         var unread = await pool.query('SELECT COUNT(*) as c FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [u.login, socket.userLogin]);
-        chats.push({ login: u.login, nickname: u.nickname, lastMsg: last.rows[0] || null, unread: parseInt(unread.rows[0].c) });
+        chats.push({ login: u.login, nickname: u.nickname, username: u.username || null, avatar: u.avatar || null, lastMsg: last.rows[0] || null, unread: parseInt(unread.rows[0].c) });
       }
       chats.sort(function(a,b) { return (b.lastMsg?b.lastMsg.timestamp:0) - (a.lastMsg?a.lastMsg.timestamp:0); });
       socket.emit('myChats', chats);
