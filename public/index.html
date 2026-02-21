@@ -1489,11 +1489,11 @@ function addRoomMsg(msg){
     var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
     var msgId=msg.id||msg._id||'';
     if(imgs.length===1){
-      html+='<div class="photo-img-wrap" onclick="openPV('+JSON.stringify(imgs)+',0,event,''+msgId+'')"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
+      html+='<div class="photo-img-wrap" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'" data-idx="0" onclick="pvClickHandler(this,event)"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
     } else {
       var cnt=Math.min(imgs.length,4);
-      html+='<div class="photo-grid count-'+cnt+'">';
-      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" onclick="openPV('+JSON.stringify(imgs)+','+pi+',event,''+msgId+'')">'; }
+      html+='<div class="photo-grid count-'+cnt+'" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'">';
+      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" data-idx="'+pi+'" onclick="pvClickGridHandler(this.parentNode,pi,event)">'; }
       html+='</div>';
     }
   }
@@ -1637,11 +1637,11 @@ function addPM(msg){
     var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
     var msgId=msg.id||msg._id||'';
     if(imgs.length===1){
-      html+='<div class="photo-img-wrap" onclick="openPV('+JSON.stringify(imgs)+',0,event,''+msgId+'')"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
+      html+='<div class="photo-img-wrap" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'" data-idx="0" onclick="pvClickHandler(this,event)"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
     } else {
       var cnt=Math.min(imgs.length,4);
-      html+='<div class="photo-grid count-'+cnt+'">';
-      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" onclick="openPV('+JSON.stringify(imgs)+','+pi+',event,''+msgId+'')">'; }
+      html+='<div class="photo-grid count-'+cnt+'" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'">';
+      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" data-idx="'+pi+'" onclick="pvClickGridHandler(this.parentNode,pi,event)">'; }
       html+='</div>';
     }
   }
@@ -1820,11 +1820,11 @@ function addMsg(msg){
     var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
     var msgId=msg.id||msg._id||'';
     if(imgs.length===1){
-      html+='<div class="photo-img-wrap" onclick="openPV('+JSON.stringify(imgs)+',0,event,''+msgId+'')"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
+      html+='<div class="photo-img-wrap" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'" data-idx="0" onclick="pvClickHandler(this,event)"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
     } else {
       var cnt=Math.min(imgs.length,4);
-      html+='<div class="photo-grid count-'+cnt+'">';
-      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" onclick="openPV('+JSON.stringify(imgs)+','+pi+',event,''+msgId+'')">'; }
+      html+='<div class="photo-grid count-'+cnt+'" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'">';
+      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" data-idx="'+pi+'" onclick="pvClickGridHandler(this.parentNode,pi,event)">'; }
       html+='</div>';
     }
   }
@@ -2308,6 +2308,23 @@ function renderVideoNote(src,isMine){
 
 /* ── PHOTO VIEWER JS ── */
 var pvImages=[], pvIndex=0, pvMsgId=null, pvSourceEl=null;
+
+function pvClickHandler(el, e){
+  e && e.stopPropagation();
+  var imgs = JSON.parse(decodeURIComponent(el.dataset.msgs||'[]'));
+  var msgId = el.dataset.msgid||'';
+  var idx = parseInt(el.dataset.idx||'0',10);
+  openPV(imgs, idx, null, msgId);
+}
+
+function pvClickGridHandler(el, pi, e){
+  e && e.stopPropagation();
+  var grid = el.parentNode;
+  var imgs = JSON.parse(decodeURIComponent(grid.dataset.msgs||'[]'));
+  var msgId = grid.dataset.msgid||'';
+  var idx = parseInt(el.dataset.idx||'0',10);
+  openPV(imgs, idx, null, msgId);
+}
 
 function openPV(images, idx, e, msgId){
   if(e){e.stopPropagation();}
