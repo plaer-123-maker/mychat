@@ -8,986 +8,293 @@
 <meta name="theme-color" content="#1a1a2e">
 <script src="/socket.io/socket.io.js"></script>
 <style>
+/* CSS */
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;overflow:hidden;}
 .auth-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#1a1a2e;display:flex;justify-content:center;align-items:center;z-index:1000;}
 .auth-overlay.hidden{display:none;}
 .auth-box{background:#16213e;padding:40px;border-radius:16px;width:360px;text-align:center;}
-.auth-box h2{margin-bottom:8px;}.auth-box p{color:#888;margin-bottom:24px;font-size:14px;}
 .auth-box input{width:100%;padding:14px;margin-bottom:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;font-size:15px;outline:none;}
 .auth-box .btn{width:100%;padding:14px;border:none;border-radius:10px;background:#e94560;color:#fff;font-size:16px;cursor:pointer;margin-top:8px;}
-.auth-box .btn:hover{background:#c73652;}
-.auth-box .switch{margin-top:16px;color:#888;font-size:14px;}.auth-box .switch a{color:#e94560;cursor:pointer;}
-.auth-box .error{color:#ff6b6b;font-size:13px;margin-bottom:8px;min-height:20px;}
 .nick-field{display:none;}.nick-field.show{display:block;}
 .app-container{display:none;height:100vh;width:100%;}.app-container.active{display:flex;}
 .sidebar{width:300px;background:#16213e;border-right:1px solid #333;display:flex;flex-direction:column;flex-shrink:0;}
 .sidebar-header{padding:14px;border-bottom:1px solid #333;display:flex;justify-content:space-between;align-items:center;}
-.sidebar-header h3{font-size:16px;}
-.hdr-btns{display:flex;gap:4px;}
-.hdr-btns button{background:#0f3460;border:1px solid #333;color:#fff;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:11px;}
-.hdr-btns button:hover{background:#e94560;}.hdr-btns .admin-btn{background:#e94560;}
 .sidebar-tabs{display:flex;border-bottom:1px solid #333;}
-.sidebar-tabs button{flex:1;padding:10px;border:none;background:transparent;color:#888;cursor:pointer;font-size:12px;}
+.sidebar-tabs button{flex:1;padding:10px;border:none;background:transparent;color:#888;cursor:pointer;}
 .sidebar-tabs button.active{color:#fff;border-bottom:2px solid #e94560;}
 .search-box{padding:10px;border-bottom:1px solid #333;}
-.search-box input{width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;font-size:13px;}
+.search-box input{width:100%;padding:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;}
 .sidebar-list{flex:1;overflow-y:auto;}
-.chat-item{padding:12px 14px;border-bottom:1px solid #222;cursor:pointer;display:flex;align-items:center;gap:10px;}
-.chat-item:hover{background:#0f3460;}.chat-item.active{background:#0f3460;}
-.chat-item .avatar{width:40px;height:40px;border-radius:50%;background:#e94560;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
-.chat-item .info{flex:1;overflow:hidden;}.chat-item .info .name{font-size:14px;font-weight:bold;}
-.chat-item .info .last{font-size:12px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.chat-item .badge{background:#e94560;color:#fff;font-size:11px;padding:2px 7px;border-radius:10px;flex-shrink:0;}
-.chat-item .tag{font-size:10px;color:#888;background:#0a0a1a;padding:2px 6px;border-radius:4px;flex-shrink:0;}
-.empty-list{padding:20px;text-align:center;color:#555;font-size:13px;}
+.chat-item{padding:12px;border-bottom:1px solid #222;cursor:pointer;display:flex;align-items:center;gap:10px;}
+.chat-item:hover{background:#0f3460;}
 .main-chat{flex:1;display:none;flex-direction:column;}
 .main-chat.show{display:flex;}
-.chat-header{background:#16213e;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #333;flex-shrink:0;}
-.chat-title{font-size:16px;}.typing-indicator{font-size:12px;color:#2ecc71;font-style:italic;min-height:16px;}
-.online-info{font-size:12px;color:#888;}
-.chat-header-btns{display:flex;gap:6px;}
-.chat-header-btns button{background:#0f3460;border:1px solid #333;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;font-size:11px;}
-.chat-header-btns button:hover{background:#e94560;}
+.chat-header{background:#16213e;padding:14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #333;}
 .messages{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:8px;background:#1a1a2e;}
-.message{max-width:70%;padding:10px 14px;border-radius:12px;font-size:14px;word-wrap:break-word;}
-.message.mine{align-self:flex-end;background:#e94560;border-bottom-right-radius:4px;}
-.message.other{align-self:flex-start;background:#16213e;border-bottom-left-radius:4px;}
-.message.system{align-self:center;background:#2d1b69;text-align:center;font-style:italic;}
-.message .name{font-size:11px;color:rgba(255,255,255,0.6);margin-bottom:4px;}
-.message .text{line-height:1.4;}
-.message img{max-width:250px;border-radius:8px;cursor:pointer;display:block;margin-top:4px;}
-.message audio{max-width:250px;margin-top:4px;}
-.message .file-msg{background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;display:flex;align-items:center;gap:8px;margin-top:4px;text-decoration:none;color:#fff;font-size:13px;}
-.message .file-msg:hover{background:rgba(0,0,0,0.4);}
-.message .del-btn{font-size:11px;color:#ff6b6b;cursor:pointer;margin-top:6px;display:block;text-align:right;opacity:0.7;}
-.input-area{background:#16213e;padding:12px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid #333;flex-shrink:0;}
-.input-area input[type="text"]{flex:1;padding:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;font-size:14px;outline:none;}
-.input-area button,.input-area label.icon-btn{width:42px;height:42px;border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.input-area .send-btn{background:#e94560;}.input-area label.icon-btn{background:#0f3460;border:1px solid #333;}
-.input-area .mic-btn{background:#0f3460;border:1px solid #333;}.input-area .mic-btn.recording{background:#e94560;animation:pulse 1s infinite;}
+.message{max-width:70%;padding:10px;border-radius:12px;font-size:14px;word-wrap:break-word;}
+.message.mine{align-self:flex-end;background:#e94560;}
+.message.other{align-self:flex-start;background:#16213e;}
+.message a{color:#fff;text-decoration:underline;}
+.input-area{background:#16213e;padding:12px;display:flex;gap:8px;align-items:center;border-top:1px solid #333;}
+.input-area input[type="text"]{flex:1;padding:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;outline:none;}
+.input-area button, .icon-btn{width:42px;height:42px;border:none;border-radius:50%;color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.send-btn{background:#e94560;} .icon-btn{background:#0f3460;border:1px solid #333;}
 .input-area input[type="file"]{display:none;}
-.recording-bar{display:none;background:#16213e;padding:12px 16px;border-top:1px solid #333;align-items:center;gap:10px;flex-shrink:0;}
-.recording-bar.active{display:flex;}
-.recording-bar .rec-dot{width:12px;height:12px;background:#e94560;border-radius:50%;animation:pulse 1s infinite;}
-.recording-bar .rec-time{font-size:14px;flex:1;}
-.recording-bar button{padding:8px 16px;border:none;border-radius:8px;color:#fff;cursor:pointer;font-size:14px;}
-.recording-bar .rec-cancel{background:#333;}.recording-bar .rec-send{background:#e94560;}
-.chat-error{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#e94560;padding:12px 24px;border-radius:10px;z-index:999;display:none;}
-.chat-error.show{display:block;}
-.no-chat{flex:1;display:flex;align-items:center;justify-content:center;color:#555;font-size:18px;}
-.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1500;display:none;justify-content:center;align-items:center;}
-.modal-overlay.show{display:flex;}
-.modal-box{background:#16213e;padding:30px;border-radius:16px;width:340px;text-align:center;}
-.modal-box h3{margin-bottom:16px;}
-.modal-box input,.modal-box select{width:100%;padding:12px;margin-bottom:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;}
-.modal-box .modal-btns{display:flex;gap:8px;margin-top:12px;}
-.modal-box .modal-btns button{flex:1;padding:10px;border:none;border-radius:8px;cursor:pointer;color:#fff;font-size:14px;}
-.modal-box .modal-btns .save{background:#e94560;}.modal-box .modal-btns .cancel{background:#333;}
-.modal-box .modal-error{color:#ff6b6b;font-size:13px;min-height:20px;margin-bottom:8px;}
-.modal-box .modal-success{color:#2ecc71;font-size:13px;min-height:20px;margin-bottom:8px;}
-.admin-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:2000;display:none;justify-content:center;align-items:center;}
-.admin-overlay.show{display:flex;}
-.admin-panel{background:#16213e;width:90%;max-width:700px;max-height:85vh;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
-.admin-tabs{display:flex;background:#0f3460;overflow-x:auto;flex-shrink:0;}
-.admin-tabs button{padding:12px 16px;border:none;background:transparent;color:#888;cursor:pointer;font-size:13px;white-space:nowrap;}
-.admin-tabs button.active{color:#fff;border-bottom:2px solid #e94560;}
-.admin-content{flex:1;overflow-y:auto;padding:20px;}
-.admin-close{position:absolute;top:10px;right:16px;font-size:24px;cursor:pointer;color:#fff;z-index:1;}
-.stat-box{display:flex;gap:12px;flex-wrap:wrap;}
-.stat{background:#0f3460;padding:16px;border-radius:10px;flex:1;min-width:80px;text-align:center;}
-.stat .num{font-size:28px;font-weight:bold;color:#e94560;}.stat .label{font-size:12px;color:#888;margin-top:4px;}
-.user-row{display:flex;align-items:center;justify-content:space-between;padding:10px;background:#0f3460;border-radius:8px;margin-bottom:8px;flex-wrap:wrap;gap:6px;}
-.user-row .uinfo{font-size:14px;}
-.role{font-size:11px;padding:2px 6px;border-radius:4px;margin-left:6px;}
-.role.admin{background:#e94560;}.role.moderator{background:#f5a623;color:#000;}.role.user{background:#333;}
-.user-row .uactions{display:flex;gap:4px;flex-wrap:wrap;}
-.admin-act-btn{padding:5px 10px;border:none;border-radius:4px;cursor:pointer;font-size:11px;color:#fff;}
-.abtn-ban{background:#e94560;}.abtn-unban{background:#2ecc71;}.abtn-mute{background:#f5a623;color:#000;}
-.abtn-del{background:#c0392b;}.abtn-nick{background:#3498db;}.abtn-role{background:#9b59b6;}
-.log-row{padding:8px;background:#0f3460;border-radius:6px;margin-bottom:4px;font-size:12px;}
-.log-row .time{color:#888;}.log-row .act{color:#e94560;font-weight:bold;}
-.admin-input{display:flex;gap:8px;margin-top:16px;}
-.admin-input input{flex:1;padding:10px;border:1px solid #333;border-radius:8px;background:#0f3460;color:#fff;outline:none;}
-.admin-input button{padding:10px 16px;border:none;border-radius:8px;background:#e94560;color:#fff;cursor:pointer;}
-.danger-zone{margin-top:20px;padding:16px;border:1px solid #e94560;border-radius:10px;}
-.danger-zone h4{color:#e94560;margin-bottom:10px;}
-.danger-zone button{padding:10px 20px;border:none;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer;margin-right:8px;margin-bottom:8px;}
-.members-panel{padding:10px;background:#0f3460;border-radius:8px;margin-bottom:10px;}
-.members-panel h4{margin-bottom:8px;font-size:14px;}
-.member-row{display:flex;align-items:center;justify-content:space-between;padding:6px;font-size:13px;}
-.member-row .mr-btns{display:flex;gap:4px;}
-.member-row .mr-btns button{padding:3px 6px;border:none;border-radius:4px;cursor:pointer;font-size:10px;color:#fff;}
-@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
-.messages::-webkit-scrollbar{width:6px;}.messages::-webkit-scrollbar-thumb{background:#333;border-radius:3px;}
-.sidebar-list::-webkit-scrollbar{width:4px;}.sidebar-list::-webkit-scrollbar-thumb{background:#333;border-radius:2px;}
-@media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
-
-/* === CALL STYLES === */
+/* Call UI */
 .call-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:3000;display:none;flex-direction:column;}
 .call-overlay.show{display:flex;}
 .call-video-box{flex:1;position:relative;display:flex;justify-content:center;align-items:center;background:#1a1a2e;overflow:hidden;}
-.call-video-box video{max-width:100%;max-height:100%;object-fit:cover;}
-#remoteVideo{width:100%;height:100%;}
-#localVideo{position:absolute;bottom:100px;right:20px;width:100px;height:140px;background:#000;border:2px solid #333;object-fit:cover;z-index:10;border-radius:10px;cursor:move;}
-.call-controls{height:100px;background:#16213e;display:flex;justify-content:space-evenly;align-items:center;padding:0 20px;}
-.call-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;display:flex;align-items:center;justify-content:center;}
-.btn-hangup{background:#ff4757;}
-.btn-util{background:#333;}
-.btn-util.active{background:#e94560;}
-.incoming-call-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;padding:30px;border-radius:16px;z-index:3001;border:1px solid #e94560;display:none;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.8);width:300px;}
+#remoteVideo{width:100%;height:100%;object-fit:cover;}
+#localVideo{position:absolute;bottom:100px;right:20px;width:100px;height:140px;background:#000;border:2px solid #333;object-fit:cover;z-index:10;border-radius:10px;}
+.call-controls{height:100px;background:#16213e;display:flex;justify-content:space-evenly;align-items:center;}
+.call-btn{width:60px;height:60px;border-radius:50%;border:none;cursor:pointer;font-size:24px;color:#fff;}
+.btn-hangup{background:#ff4757;} .btn-util{background:#333;}
+.incoming-call-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#16213e;padding:30px;border-radius:16px;z-index:3001;border:1px solid #e94560;display:none;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.8);}
 .incoming-call-modal.show{display:block;}
-.incoming-call-modal h3{margin-bottom:20px;}
-.incoming-call-btns{display:flex;gap:15px;justify-content:center;}
-.incoming-call-btns button{flex:1;padding:12px;border:none;border-radius:8px;font-size:16px;cursor:pointer;color:#fff;}
-.accept-btn{background:#2ecc71;}.reject-btn{background:#ff4757;}
+@media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
 </style>
 </head>
 <body>
+<!-- AUTH -->
 <div class="auth-overlay" id="authOverlay">
   <div class="auth-box">
-    <h2 id="authTitle">Вход в MyChat</h2>
-    <p id="authSubtitle">Введи логин и пароль</p>
-    <div class="error" id="authError"></div>
+    <h2 id="authTitle">Вход</h2>
     <input type="text" id="authLogin" placeholder="Логин">
     <input type="password" id="authPassword" placeholder="Пароль">
-    <input type="text" id="authNickname" placeholder="Ник (уникальный)" class="nick-field">
-    <button class="btn" id="authBtn">Войти →</button>
-    <div class="switch"><span id="switchText">Нет аккаунта?</span> <a id="switchLink">Зарегистрироваться</a></div>
+    <input type="text" id="authNickname" placeholder="Ник" class="nick-field">
+    <button class="btn" id="authBtn">Войти</button>
+    <div id="switchLink" style="margin-top:10px;cursor:pointer;color:#e94560;">Нет аккаунта?</div>
+    <div id="authError" style="color:red;margin-top:5px;"></div>
   </div>
 </div>
-<div class="chat-error" id="chatError"></div>
 
+<!-- APP -->
+<div class="app-container" id="appContainer">
+  <div class="sidebar">
+    <div class="sidebar-header"><h3>MyChat</h3> <button id="logoutBtn">🚪</button></div>
+    <div class="sidebar-tabs">
+      <button class="active" id="tabGeneral">Общий</button>
+      <button id="tabPrivate">Личные</button>
+      <button id="tabRooms">Группы</button>
+    </div>
+    <div class="search-box"><input id="searchInput" placeholder="Поиск..."></div>
+    <div class="sidebar-list" id="sidebarList"></div>
+  </div>
+  <div class="main-chat" id="mainChat">
+    <div class="chat-header">
+      <button id="mobileBackBtn" style="display:none;margin-right:10px;">←</button>
+      <div id="chatTitle"></div>
+      <div id="chatHeaderBtns" style="display:flex;gap:10px;"></div>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="input-area" id="inputArea">
+      <label class="icon-btn" for="photoInput">📷</label> <input type="file" id="photoInput" accept="image/*">
+      <label class="icon-btn" for="fileInput">📎</label> <input type="file" id="fileInput">
+      <input type="text" id="msgInput" placeholder="Сообщение...">
+      <button class="send-btn" id="sendBtn">➤</button>
+    </div>
+  </div>
+</div>
+
+<!-- CALLS -->
 <div class="call-overlay" id="callOverlay">
   <div class="call-video-box">
     <video id="remoteVideo" autoplay playsinline></video>
     <video id="localVideo" autoplay playsinline muted></video>
   </div>
   <div class="call-controls">
-    <button class="call-btn btn-util" id="flipCamBtn" onclick="switchCamera()">🔄</button>
-    <button class="call-btn btn-util" id="toggleVideoBtn" onclick="toggleVideo()">📷</button>
-    <button class="call-btn btn-util" id="toggleMicBtn" onclick="toggleMic()">🎤</button>
+    <button class="call-btn btn-util" onclick="switchCamera()">🔄</button>
     <button class="call-btn btn-hangup" onclick="endCall()">📞</button>
   </div>
 </div>
 <div class="incoming-call-modal" id="incomingCallModal">
-  <h3 id="incomingCallerName">Входящий звонок...</h3>
-  <div class="incoming-call-btns">
-    <button class="accept-btn" onclick="acceptCall()">Принять</button>
-    <button class="reject-btn" onclick="rejectCall()">Сброс</button>
-  </div>
+  <h3>Входящий звонок...</h3>
+  <button style="background:#2ecc71;border:none;padding:10px;border-radius:5px;margin-right:10px;color:#fff;" onclick="acceptCall()">Принять</button>
+  <button style="background:#ff4757;border:none;padding:10px;border-radius:5px;color:#fff;" onclick="rejectCall()">Сброс</button>
 </div>
 
-<div class="modal-overlay" id="passModal"><div class="modal-box"><h3>🔒 Смена пароля</h3><div class="modal-error" id="passError"></div><div class="modal-success" id="passSuccess"></div><input type="password" id="oldPass" placeholder="Старый пароль"><input type="password" id="newPass" placeholder="Новый пароль"><input type="password" id="newPass2" placeholder="Повтори"><div class="modal-btns"><button class="cancel" id="passCancel">Отмена</button><button class="save" id="passSave">Сохранить</button></div></div></div>
-<div class="modal-overlay" id="createRoomModal"><div class="modal-box"><h3>Создать</h3><input type="text" id="createRoomName" placeholder="Название"><select id="createRoomType"><option value="group">👥 Группа</option><option value="channel">📢 Канал</option></select><div class="modal-btns"><button class="cancel" id="createRoomCancel">Отмена</button><button class="save" id="createRoomSave">Создать</button></div></div></div>
-<div class="modal-overlay" id="roomSettingsModal"><div class="modal-box" id="roomSettingsContent"></div></div>
-<div class="app-container" id="appContainer">
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <h3>MyChat</h3>
-      <div class="hdr-btns">
-        <button id="nickBtn">✏️</button>
-        <button id="passBtn">🔒</button>
-        <button id="createRoomBtn">➕</button>
-        <button id="adminPanelBtn" class="admin-btn" style="display:none;">⚙️</button>
-        <button id="logoutBtn">🚪</button>
-      </div>
-    </div>
-    <div class="sidebar-tabs">
-      <button class="active" id="tabGeneral">💬 Общий</button>
-      <button id="tabPrivate">👤 Личные</button>
-      <button id="tabRooms">👥 Группы</button>
-    </div>
-    <div class="search-box"><input type="text" id="searchInput" placeholder="🔍 Поиск..."></div>
-    <div class="sidebar-list" id="sidebarList"></div>
-  </div>
-  <div class="main-chat" id="mainChat">
-    <div class="chat-header">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <button id="mobileBackBtn" style="display:none;background:#0f3460;border:1px solid #333;color:#fff;padding:6px 10px;border-radius:6px;cursor:pointer;">←</button>
-        <div><div class="chat-title" id="chatTitle"></div><div class="typing-indicator" id="typingIndicator"></div><div class="online-info" id="onlineInfo"></div></div>
-      </div>
-      <div class="chat-header-btns" id="chatHeaderBtns"></div>
-    </div>
-    <div class="messages" id="messages"></div>
-    <div class="recording-bar" id="recordingBar"><div class="rec-dot"></div><span class="rec-time" id="recTime">0:00</span><button class="rec-cancel" id="recCancel">Отмена</button><button class="rec-send" id="recSend">Отправить ➤</button></div>
-    <div class="input-area" id="inputArea">
-      <label class="icon-btn" for="photoInput">📷</label>
-      <input type="file" id="photoInput" accept="image/*">
-      <label class="icon-btn" for="fileInput">📎</label>
-      <input type="file" id="fileInput">
-      <input type="text" id="msgInput" placeholder="Сообщение...">
-      <button class="mic-btn" id="micBtn">🎤</button>
-      <button class="send-btn" id="sendBtn">➤</button>
-    </div>
-  </div>
-  <div class="no-chat" id="noChat">Выбери чат слева</div>
-</div>
-<div class="admin-overlay" id="adminOverlay"><div class="admin-panel"><span class="admin-close" id="adminClose">✕</span><div class="admin-tabs" id="adminTabs"><button class="active" data-tab="stats">📊 Стат</button><button data-tab="users">👥 Юзеры</button><button data-tab="logs">📋 Логи</button><button data-tab="announce">📢 Объявл</button><button data-tab="danger">⚠️ Опасно</button></div><div class="admin-content" id="adminContent"></div></div></div>
 <script>
-// ТВОЯ ССЫЛКА НА СЕРВЕР (ЕСЛИ МЕНЯЛАСЬ — ВСТАВЬ НОВУЮ)
-var socketUrl = 'https://mychat-production-4ec8.up.railway.app';
-
-try {
-  var socket = io(socketUrl, {transports: ['websocket', 'polling']});
-  socket.on('connect_error', function() {
-    console.log('Error connecting to server');
-    var errEl = document.getElementById('authError');
-    if(errEl) errEl.textContent = 'Сервер недоступен...';
-  });
-} catch(e) {
-  alert('Ошибка скрипта: ' + e);
-}
+var socket = io('https://mychat-production-4ec8.up.railway.app', {transports: ['websocket', 'polling']});
 
 var isLoginMode=true, myNickname='', myRole='user', myLogin='';
-var currentView='none', currentPrivateLogin=null, currentRoomId=null, currentRoomData=null;
-var mediaRecorder=null, audioChunks=[], recInterval=null, recSeconds=0;
-var currentAdminTab='stats', typingTimeout=null, searchTimeout=null;
+var currentView='none', currentPrivateLogin=null, currentRoomId=null;
+var localStream, peerConnection, incomingCallData=null, currentFacingMode='user';
+var pendingIce=[];
 
-// === WEBRTC CONFIG & STATE ===
-var localStream, remoteStream, peerConnection, incomingCallData=null;
-var currentFacingMode = 'user';
-var pendingIce = []; 
-var earlyCandidates = [];
+// --- AUTH ---
+if(localStorage.getItem('mychat_token')) socket.emit('autoLogin', localStorage.getItem('mychat_token'));
 
-const rtcConfig = { 
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' }
-  ] 
+document.getElementById('switchLink').onclick = function(){
+  isLoginMode = !isLoginMode;
+  document.getElementById('authTitle').textContent = isLoginMode ? 'Вход' : 'Регистрация';
+  document.getElementById('authNickname').style.display = isLoginMode ? 'none' : 'block';
 };
 
-// AUTO LOGIN
-(function(){
-  var token=localStorage.getItem('mychat_token');
-  if(token && socket) socket.emit('autoLogin',token);
-})();
+document.getElementById('authBtn').onclick = function(){
+  var l=document.getElementById('authLogin').value, p=document.getElementById('authPassword').value;
+  if(isLoginMode) socket.emit('login', {login:l, password:p});
+  else socket.emit('register', {login:l, password:p, nickname:document.getElementById('authNickname').value});
+};
 
-document.getElementById('switchLink').addEventListener('click',function(){
-  isLoginMode=!isLoginMode;
-  document.getElementById('authTitle').textContent=isLoginMode?'Вход в MyChat':'Регистрация';
-  document.getElementById('authSubtitle').textContent=isLoginMode?'Введи логин и пароль':'Создай свой аккаунт';
-  document.getElementById('authBtn').textContent=isLoginMode?'Войти →':'Создать аккаунт →';
-  document.getElementById('switchText').textContent=isLoginMode?'Нет аккаунта?':'Уже есть аккаунт?';
-  document.getElementById('switchLink').textContent=isLoginMode?'Зарегистрироваться':'Войти';
-  var nf=document.getElementById('authNickname');
-  if(isLoginMode)nf.classList.remove('show'); else nf.classList.add('show');
-  document.getElementById('authError').textContent='';
-});
-
-document.getElementById('authBtn').addEventListener('click',function(){
-  var l=document.getElementById('authLogin').value.trim();
-  var p=document.getElementById('authPassword').value.trim();
-  document.getElementById('authError').textContent='';
-  
-  if(isLoginMode){
-    if(!l||!p){document.getElementById('authError').textContent='Заполни все поля'; return;}
-    socket.emit('login',{login:l,password:p});
-  } else {
-    var n=document.getElementById('authNickname').value.trim();
-    if(!l||!p||!n){document.getElementById('authError').textContent='Заполни все поля'; return;}
-    socket.emit('register',{login:l,password:p,nickname:n});
-  }
-});
-
-socket.on('authSuccess',function(d){
-  myNickname=d.nickname; myRole=d.role||'user'; myLogin=d.login;
-  if(d.token) localStorage.setItem('mychat_token',d.token);
+socket.on('authSuccess', function(d){
+  myNickname=d.nickname; myLogin=d.login;
+  if(d.token) localStorage.setItem('mychat_token', d.token);
   document.getElementById('authOverlay').classList.add('hidden');
   document.getElementById('appContainer').classList.add('active');
-  
-  if(myRole==='admin'||myRole==='moderator'){
-    var panel = document.getElementById('adminPanelBtn');
-    if(panel) panel.style.display='inline-block';
-  }
   switchToGeneral();
 });
+socket.on('authError', function(m){ document.getElementById('authError').textContent=m; localStorage.removeItem('mychat_token'); });
 
-socket.on('authError',function(m){
-  document.getElementById('authError').textContent=m;
-  localStorage.removeItem('mychat_token');
-});
-
-socket.on('kicked',function(m){
-  localStorage.removeItem('mychat_token');
-  alert(m);
-  location.reload();
-});
-
-socket.on('nicknameChanged',function(n){ myNickname=n; });
-socket.on('chatCleared',function(){ if(currentView==='general') document.getElementById('messages').innerHTML=''; });
-socket.on('chatError',function(m){
-  var e=document.getElementById('chatError');
-  e.textContent=m;
-  e.classList.add('show');
-  setTimeout(function(){e.classList.remove('show');},3000);
-});
-socket.on('onlineUsers',function(d){
-  if(currentView==='general' && d.isAdmin) document.getElementById('onlineInfo').textContent=d.count+' онлайн';
-});
-
-// TYPING
-var typingSet=new Set();
-socket.on('userTyping',function(d){if(currentView==='general'){typingSet.add(d.nickname);showTyping();}});
-socket.on('userStopTyping',function(d){typingSet.delete(d.nickname);showTyping();});
-socket.on('privateUserTyping',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)document.getElementById('typingIndicator').textContent=d.nickname+' печатает...';});
-socket.on('privateUserStopTyping',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)document.getElementById('typingIndicator').textContent='';});
-socket.on('roomUserTyping',function(d){if(currentView==='room'&&currentRoomId==d.roomId){typingSet.add(d.nickname);showTyping();}});
-socket.on('roomUserStopTyping',function(d){if(currentView==='room'&&currentRoomId==d.roomId){typingSet.delete(d.nickname);showTyping();}});
-function showTyping(){
-  var el=document.getElementById('typingIndicator');
-  if(typingSet.size===0){el.textContent=''; return;}
-  var a=Array.from(typingSet);
-  el.textContent=a.join(', ')+(a.length>1?' печатают...':' печатает...');
-}
-
-// TABS
-document.getElementById('tabGeneral').addEventListener('click',function(){switchToGeneral();});
-document.getElementById('tabPrivate').addEventListener('click',function(){switchToPrivate();});
-document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
-
-function setActiveTab(id){
-  document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});
-  document.getElementById(id).classList.add('active');
-}
+// --- NAVIGATION ---
+document.getElementById('tabGeneral').onclick = switchToGeneral;
+document.getElementById('tabPrivate').onclick = switchToPrivate;
+document.getElementById('tabRooms').onclick = switchToRooms;
+document.getElementById('mobileBackBtn').onclick = function(){
+  document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('noChat').style.display='flex';
+};
+document.getElementById('logoutBtn').onclick = function(){ localStorage.removeItem('mychat_token'); location.reload(); };
 
 function switchToGeneral(){
-  currentView='general'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabGeneral');
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
-  
-  if(window.innerWidth > 600) {
-    openGeneral();
-  } else {
-    document.getElementById('mainChat').classList.remove('show');
-    document.getElementById('noChat').style.display='none'; 
-  }
+  currentView='general';
+  document.getElementById('sidebarList').innerHTML='<div class="chat-item" onclick="openGeneral()">💬 Общий чат</div>';
+  if(window.innerWidth > 600) openGeneral();
 }
-
-function switchToPrivate(){
-  currentView='private'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabPrivate');
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
-  document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='none';
-  socket.emit('getMyChats');
-}
-
-function switchToRooms(){
-  currentView='rooms'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabRooms');
-  document.getElementById('searchInput').value='';
-  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth <= 600) document.getElementById('mainChat').classList.remove('show');
-  document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='none';
-  socket.emit('getMyRooms');
-}
-
-// SEARCH & LISTS
-document.getElementById('searchInput').addEventListener('input',function(){
-  var q=this.value.trim(); clearTimeout(searchTimeout);
-  if(!q){
-    if(currentView==='private') socket.emit('getMyChats');
-    else if(currentView==='rooms') socket.emit('getMyRooms');
-    return;
-  }
-  searchTimeout=setTimeout(function(){
-    if(currentView==='private') socket.emit('searchUser',q);
-    else if(currentView==='rooms') socket.emit('searchRooms',q);
-  },300);
-});
-
-socket.on('searchResults',function(users){
-  if(currentView!=='private') return;
-  var list=document.getElementById('sidebarList');
-  if(users.length===0){list.innerHTML='<div class="empty-list">Никого не найдено</div>'; return;}
-  var html='';
-  users.forEach(function(u){
-    html+='<div class="chat-item" onclick="openPM(\''+u.login+'\',\''+u.nickname+'\')"><div class="avatar">👤</div><div class="info"><div class="name">'+u.nickname+'</div><div class="last">Нажми чтобы написать</div></div></div>';
-  });
-  list.innerHTML=html;
-});
-
-socket.on('roomSearchResults',function(rooms){
-  if(currentView!=='rooms') return;
-  var list=document.getElementById('sidebarList');
-  if(rooms.length===0){list.innerHTML='<div class="empty-list">Ничего не найдено</div>'; return;}
-  var html='';
-  rooms.forEach(function(r){
-    var icon=r.type==='channel'?'📢':'👥';
-    html+='<div class="chat-item" onclick="joinAndOpenRoom('+r.id+')"><div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">Нажми чтобы войти</div></div><div class="tag">'+r.type+'</div></div>';
-  });
-  list.innerHTML=html;
-});
-
-socket.on('myChats',function(chats){
-  if(currentView!=='private' && currentView!=='pm') return;
-  if(document.getElementById('searchInput').value.trim()) return;
-  var list=document.getElementById('sidebarList');
-  if(chats.length===0){list.innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>'; return;}
-  var html='';
-  chats.forEach(function(c){
-    var lastText='';
-    if(c.lastMsg){
-      if(c.lastMsg.type==='image') lastText='📷 Фото';
-      else if(c.lastMsg.type==='voice') lastText='🎤 Голосовое';
-      else if(c.lastMsg.type==='file') lastText='📄 Файл';
-      else lastText=c.lastMsg.text||'';
-    }
-    html+='<div class="chat-item'+(currentPrivateLogin===c.login?' active':'')+'" onclick="openPM(\''+c.login+'\',\''+c.nickname+'\')">';
-    html+='<div class="avatar">👤</div><div class="info"><div class="name">'+c.nickname+'</div><div class="last">'+lastText+'</div></div>';
-    if(c.unread>0) html+='<div class="badge">'+c.unread+'</div>';
-    html+='</div>';
-  });
-  list.innerHTML=html;
-});
-
-socket.on('unreadNotification',function(d){
-  if(currentView==='pm' && currentPrivateLogin===d.from) return;
-  if(currentView==='private' || currentView==='pm') socket.emit('getMyChats');
-});
-
-socket.on('myRooms',function(rooms){
-  if(currentView!=='rooms' && currentView!=='room') return;
-  if(document.getElementById('searchInput').value.trim()) return;
-  var list=document.getElementById('sidebarList');
-  if(rooms.length===0){list.innerHTML='<div class="empty-list">Нет групп. Создай ➕ или найди</div>'; return;}
-  var html='';
-  rooms.forEach(function(r){
-    var icon=r.type==='channel'?'📢':'👥';
-    html+='<div class="chat-item'+(currentRoomId==r.id?' active':'')+'" onclick="openRoom('+r.id+')">';
-    html+='<div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">'+r.member_count+' участников</div></div>';
-    html+='<div class="tag">'+r.type+'</div></div>';
-  });
-  list.innerHTML=html;
-});
+function switchToPrivate(){ currentView='private'; socket.emit('getMyChats'); }
+function switchToRooms(){ currentView='rooms'; socket.emit('getMyRooms'); }
 
 function openGeneral(){
-  currentView='general'; currentPrivateLogin=null; currentRoomId=null; currentRoomData=null; typingSet.clear();
+  currentView='general';
   document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='';
-  document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
   socket.emit('getGeneralHistory');
 }
-window.openGeneral=openGeneral;
+window.openGeneral = openGeneral; // Make global
 
-function openPM(login,nickname){
-  currentView='pm'; currentPrivateLogin=login; currentRoomId=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabPrivate');
+function openPM(login, nick){
+  currentView='pm'; currentPrivateLogin=login;
   document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent=nickname;
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
-  document.getElementById('inputArea').style.display='flex';
-  document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
+  document.getElementById('chatTitle').textContent=nick;
+  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')">📹</button>';
+  document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  socket.emit('getPrivateHistory',login);
-  socket.emit('getMyChats');
+  socket.emit('getPrivateHistory', login);
 }
-window.openPM=openPM;
+window.openPM = openPM;
 
-function openRoom(roomId){
-  roomId=Number(roomId);
-  currentView='room'; currentRoomId=roomId; currentPrivateLogin=null; currentRoomData=null; typingSet.clear();
-  setActiveTab('tabRooms');
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  document.getElementById('chatTitle').textContent='Загрузка...';
-  document.getElementById('typingIndicator').textContent='';
-  document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='';
-  document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  socket.emit('openRoom',roomId);
-}
-window.openRoom=openRoom;
-
-function joinAndOpenRoom(roomId){
-  roomId=Number(roomId);
-  socket.emit('joinRoom',roomId);
-  setTimeout(function(){openRoom(roomId);},500);
-}
-window.joinAndOpenRoom=joinAndOpenRoom;
-
-socket.on('joinedRoom',function(roomId){ if(currentView==='rooms'||currentView==='room') socket.emit('getMyRooms'); });
-socket.on('leftRoom',function(roomId){
-  if(currentRoomId==roomId){
-    currentRoomId=null; currentRoomData=null; currentView='rooms';
-    document.getElementById('mainChat').classList.remove('show');
-    document.getElementById('noChat').style.display='flex';
-    document.getElementById('messages').innerHTML='';
-  }
-  socket.emit('getMyRooms');
-});
-socket.on('kickedFromRoom',function(roomId){
-  if(currentRoomId==roomId){
-    alert('Вас удалили из комнаты');
-    currentRoomId=null; currentRoomData=null; currentView='rooms';
-    document.getElementById('mainChat').classList.remove('show');
-    document.getElementById('noChat').style.display='flex';
-    document.getElementById('messages').innerHTML='';
-  }
-  socket.emit('getMyRooms');
-});
-socket.on('roomDeleted',function(roomId){
-  if(currentRoomId==roomId){
-    alert('Комната удалена');
-    currentRoomId=null; currentRoomData=null; currentView='rooms';
-    document.getElementById('mainChat').classList.remove('show');
-    document.getElementById('noChat').style.display='flex';
-    document.getElementById('messages').innerHTML='';
-  }
-  socket.emit('getMyRooms');
+// --- SOCKET EVENTS ---
+socket.on('messageHistory', msgs => { if(currentView==='general') { document.getElementById('messages').innerHTML=''; msgs.forEach(addMsg); } });
+socket.on('chatMessage', msg => { if(currentView==='general') addMsg(msg); });
+socket.on('privateHistory', d => { if(currentView==='pm' && currentPrivateLogin===d.otherLogin) { document.getElementById('messages').innerHTML=''; d.messages.forEach(addMsg); } });
+socket.on('newPrivateMessage', msg => { 
+  if(currentView==='pm' && (msg.from_login===currentPrivateLogin || msg.from_login===myLogin)) addMsg(msg); 
+  if(currentView==='private') socket.emit('getMyChats');
 });
 
-socket.on('roomData',function(data){
-  currentView='room'; currentRoomId=data.room.id; currentRoomData=data;
-  setActiveTab('tabRooms');
-  document.getElementById('mainChat').classList.add('show');
-  document.getElementById('noChat').style.display='none';
-  if(window.innerWidth<=600) document.getElementById('mobileBackBtn').style.display='block';
-  
-  document.getElementById('chatTitle').textContent=data.room.name+(data.room.type==='channel'?' 📢':' 👥');
-  var btns='';
-  if(data.myRole==='admin') btns+='<button onclick="openRoomSettings()">⚙️</button>';
-  btns+='<button onclick="leaveCurrentRoom()">🚪</button>';
-  document.getElementById('chatHeaderBtns').innerHTML=btns;
-  
-  document.getElementById('inputArea').style.display=(data.room.type==='channel'&&data.myRole!=='admin')?'none':'flex';
-  
-  var md=document.getElementById('messages'); md.innerHTML='';
-  if(data.messages.length===0) md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
-  else data.messages.forEach(function(m){addRoomMsg(m);});
-  md.scrollTop=md.scrollHeight;
-  socket.emit('getMyRooms');
+socket.on('myChats', chats => {
+  if(currentView!=='private') return;
+  var html='';
+  chats.forEach(c => html+=`<div class="chat-item" onclick="openPM('${c.login}','${c.nickname}')"><div class="avatar">👤</div><div class="info">${c.nickname}</div></div>`);
+  document.getElementById('sidebarList').innerHTML = html || '<div class="empty-list">Нет чатов</div>';
 });
 
-socket.on('roomNewMessage',function(msg){
-  if(currentView==='room' && currentRoomId==msg.room_id){
-    var empty=document.querySelector('#messages .empty-list'); if(empty) empty.remove();
-    addRoomMsg(msg);
-    document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
-  }
-});
-socket.on('roomMessageDeleted',function(d){if(currentRoomId==d.roomId){var el=document.getElementById('rmsg-'+d.msgId);if(el)el.remove();}});
-socket.on('roomMembersUpdated',function(d){if(currentRoomId==d.roomId&&currentRoomData)currentRoomData.members=d.members;});
-socket.on('roomSettingsUpdated',function(d){if(currentRoomId==d.roomId&&currentRoomData)currentRoomData.room.comments_enabled=d.comments_enabled;});
-
-function addRoomMsg(msg){
-  var div=document.createElement('div');
-  var isMine=msg.user_login===myLogin;
-  div.className='message '+(isMine?'mine':'other'); div.id='rmsg-'+msg.id;
-  var html='<div class="name">'+msg.username+'</div>';
-  
-  if(msg.type==='image'&&msg.image) html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
-  else if(msg.type==='voice'&&msg.voice) html+='<audio controls src="'+msg.voice+'"></audio>';
-  else if(msg.type==='file'&&msg.file_data) html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
-  
-  if(isMine||(currentRoomData&&currentRoomData.myRole==='admin')) html+='<span class="del-btn" onclick="delRoomMsg('+msg.id+')">Удалить</span>';
-  div.innerHTML=html;
+function addMsg(msg){
+  var div = document.createElement('div');
+  div.className = 'message ' + (msg.username===myNickname || msg.from_login===myLogin ? 'mine' : 'other');
+  var content = msg.text;
+  if(msg.image) content = `<img src="${msg.image}">`;
+  else if(msg.file_data) content = `<a href="${msg.file_data}" download="${msg.file_name}" style="color:white">📄 ${msg.file_name}</a>`;
+  div.innerHTML = `<div class="name">${msg.username||msg.from_nickname}</div>${content}`;
   document.getElementById('messages').appendChild(div);
+  document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
 }
-function delRoomMsg(id){socket.emit('deleteRoomMessage',{roomId:currentRoomId,msgId:id});}
-window.delRoomMsg=delRoomMsg;
-function leaveCurrentRoom(){if(currentRoomId&&confirm('Покинуть комнату?'))socket.emit('leaveRoom',currentRoomId);}
-window.leaveCurrentRoom=leaveCurrentRoom;
 
-function openRoomSettings(){
-  if(!currentRoomData) return;
-  var d=currentRoomData;
-  var html='<h3>⚙️ '+d.room.name+'</h3>';
-  if(d.room.type==='channel') html+='<div style="margin-bottom:15px;"><button class="save" style="width:100%;padding:10px;border:none;border-radius:8px;background:'+(d.room.comments_enabled?'#e94560':'#2ecc71')+';color:#fff;cursor:pointer;" onclick="toggleComments()">Комментарии: '+(d.room.comments_enabled?'ВКЛ — выключить':'ВЫКЛ — включить')+'</button></div>';
-  
-  html+='<div class="members-panel"><h4>Участники ('+d.members.length+')</h4>';
-  html+='<div style="margin-bottom:8px;display:flex;gap:4px;"><input id="addMemberInput" placeholder="Логин" style="flex:1;padding:8px;border:1px solid #333;border-radius:4px;background:#0f3460;color:#fff;outline:none;"><button style="padding:8px 12px;border:none;border-radius:4px;background:#2ecc71;color:#fff;cursor:pointer;" onclick="addMember()">+</button></div>';
-  
-  d.members.forEach(function(m){
-    html+='<div class="member-row"><span>'+m.nickname+' ('+m.user_login+') <span class="role '+m.role+'">'+m.role+'</span></span>';
-    if(m.user_login!==d.room.owner_login){
-      html+='<div class="mr-btns">';
-      if(m.role==='member') html+='<button style="background:#9b59b6;" onclick="setRoomRole(\''+m.user_login+'\',\'admin\')">→Админ</button>';
-      else html+='<button style="background:#333;" onclick="setRoomRole(\''+m.user_login+'\',\'member\')">→Участник</button>';
-      html+='<button style="background:#c0392b;" onclick="removeMember(\''+m.user_login+'\')">✕</button></div>';
-    }
-    html+='</div>';
-  });
-  html+='</div>';
-  
-  if(d.room.owner_login===myLogin) html+='<button style="width:100%;padding:10px;border:none;border-radius:8px;background:#c0392b;color:#fff;cursor:pointer;margin-top:10px;" onclick="deleteCurrentRoom()">🗑 Удалить комнату</button>';
-  
-  html+='<button style="width:100%;padding:10px;border:none;border-radius:8px;background:#333;color:#fff;cursor:pointer;margin-top:8px;" onclick="closeAllModals()">Закрыть</button>';
-  
-  document.getElementById('roomSettingsContent').innerHTML=html;
-  document.getElementById('roomSettingsModal').classList.add('show');
-}
-window.openRoomSettings=openRoomSettings;
-function addMember(){var l=document.getElementById('addMemberInput').value.trim();if(l){socket.emit('roomAddMember',{roomId:currentRoomId,login:l});document.getElementById('addMemberInput').value='';}}
-window.addMember=addMember;
-function removeMember(login){if(confirm('Удалить '+login+'?'))socket.emit('roomRemoveMember',{roomId:currentRoomId,login:login});}
-window.removeMember=removeMember;
-function setRoomRole(login,role){socket.emit('roomSetRole',{roomId:currentRoomId,login:login,role:role});}
-window.setRoomRole=setRoomRole;
-function toggleComments(){socket.emit('roomToggleComments',currentRoomId);}
-window.toggleComments=toggleComments;
-function deleteCurrentRoom(){if(confirm('Удалить комнату? Необратимо!'))socket.emit('deleteRoom',currentRoomId);}
-window.deleteCurrentRoom=deleteCurrentRoom;
-function closeAllModals(){document.querySelectorAll('.modal-overlay').forEach(function(m){m.classList.remove('show');});}
-window.closeAllModals=closeAllModals;
-
-// SEND
-document.getElementById('sendBtn').addEventListener('click',function(){
-  var text=document.getElementById('msgInput').value.trim();
-  if(!text)return;
-  if(currentView==='pm'&&currentPrivateLogin){socket.emit('privateMessage',{toLogin:currentPrivateLogin,text:text,type:'text'});socket.emit('privateStopTyping',currentPrivateLogin);}
-  else if(currentView==='room'&&currentRoomId){socket.emit('roomMessage',{roomId:currentRoomId,text:text,type:'text'});socket.emit('roomStopTyping',currentRoomId);}
-  else if(currentView==='general'){socket.emit('chatMessage',{text:text,type:'text'});socket.emit('stopTyping');}
+// --- SENDING ---
+document.getElementById('sendBtn').onclick = function(){
+  var txt = document.getElementById('msgInput').value;
+  if(!txt) return;
+  if(currentView==='general') socket.emit('chatMessage', {text:txt});
+  if(currentView==='pm') socket.emit('privateMessage', {toLogin:currentPrivateLogin, text:txt});
   document.getElementById('msgInput').value='';
-});
-document.getElementById('msgInput').addEventListener('keypress',function(e){if(e.key==='Enter')document.getElementById('sendBtn').click();});
-document.getElementById('msgInput').addEventListener('input',function(){
-  if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateTyping',currentPrivateLogin);
-  else if(currentView==='room'&&currentRoomId)socket.emit('roomTyping',currentRoomId);
-  else if(currentView==='general')socket.emit('typing');
-  clearTimeout(typingTimeout);
-  typingTimeout=setTimeout(function(){
-    if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateStopTyping',currentPrivateLogin);
-    else if(currentView==='room'&&currentRoomId)socket.emit('roomStopTyping',currentRoomId);
-    else socket.emit('stopTyping');
-  },2000);
-});
+};
 
-document.getElementById('photoInput').addEventListener('change',function(){
-  var file=this.files[0];if(!file)return;
-  if(file.size>10*1024*1024){alert('Макс 10MB');return;}
-  var reader=new FileReader();
-  reader.onload=function(e){
-    if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',{toLogin:currentPrivateLogin,image:e.target.result,type:'image'});
-    else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',{roomId:currentRoomId,image:e.target.result,type:'image'});
-    else if(currentView==='general')socket.emit('chatMessage',{image:e.target.result,type:'image'});
+// --- FILES ---
+document.getElementById('fileInput').onchange = function(){
+  var file = this.files[0];
+  if(!file || file.size > 50*1024*1024) { alert('Файл слишком большой (макс 50МБ)'); return; }
+  var reader = new FileReader();
+  reader.onload = e => {
+    if(currentView==='general') socket.emit('chatMessage', {file_data:e.target.result, file_name:file.name, type:'file'});
+    if(currentView==='pm') socket.emit('privateMessage', {toLogin:currentPrivateLogin, file_data:e.target.result, file_name:file.name, type:'file'});
   };
   reader.readAsDataURL(file);
-  this.value='';
-});
+};
 
-// FILE UPLOAD
-document.getElementById('fileInput').addEventListener('change',function(){
-  var file=this.files[0]; if(!file) return;
-  if(file.size > 50*1024*1024){ alert('Макс 50MB (для стабильности)'); return; }
-  var reader=new FileReader();
-  reader.onload=function(e){
-    if(currentView==='pm'&&currentPrivateLogin) socket.emit('privateMessage',{toLogin:currentPrivateLogin,file_data:e.target.result,file_name:file.name,type:'file'});
-    else if(currentView==='room'&&currentRoomId) socket.emit('roomMessage',{roomId:currentRoomId,file_data:e.target.result,file_name:file.name,type:'file'});
-    else if(currentView==='general') socket.emit('chatMessage',{file_data:e.target.result,file_name:file.name,type:'file'});
-  };
-  reader.readAsDataURL(file);
-  this.value='';
-});
+// --- CALLS ---
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// VOICE
-var micBtn=document.getElementById('micBtn'), recordingBar=document.getElementById('recordingBar'), inputArea=document.getElementById('inputArea');
-micBtn.addEventListener('click',function(){
-  if(mediaRecorder&&mediaRecorder.state==='recording')return;
-  navigator.mediaDevices.getUserMedia({audio:true}).then(function(stream){
-    mediaRecorder=new MediaRecorder(stream); audioChunks=[];
-    mediaRecorder.ondataavailable=function(e){audioChunks.push(e.data);};
-    mediaRecorder.onstop=function(){stream.getTracks().forEach(function(t){t.stop();});};
-    mediaRecorder.start();
-    micBtn.classList.add('recording'); inputArea.style.display='none'; recordingBar.classList.add('active');
-    recSeconds=0; document.getElementById('recTime').textContent='0:00';
-    recInterval=setInterval(function(){recSeconds++; var m=Math.floor(recSeconds/60), s=recSeconds%60; document.getElementById('recTime').textContent=m+':'+(s<10?'0':'')+s;},1000);
-  }).catch(function(){alert('Нет доступа к микрофону');});
-});
-document.getElementById('recCancel').addEventListener('click',function(){
-  if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.onstop=function(){mediaRecorder.stream.getTracks().forEach(function(t){t.stop();});};mediaRecorder.stop();} stopRec();
-});
-document.getElementById('recSend').addEventListener('click',function(){
-  if(mediaRecorder&&mediaRecorder.state==='recording'){
-    mediaRecorder.onstop=function(){
-      mediaRecorder.stream.getTracks().forEach(function(t){t.stop();});
-      var blob=new Blob(audioChunks,{type:'audio/webm'});
-      var reader=new FileReader();
-      reader.onload=function(e){
-        if(currentView==='pm'&&currentPrivateLogin) socket.emit('privateMessage',{toLogin:currentPrivateLogin,voice:e.target.result,type:'voice'});
-        else if(currentView==='room'&&currentRoomId) socket.emit('roomMessage',{roomId:currentRoomId,voice:e.target.result,type:'voice'});
-        else if(currentView==='general') socket.emit('chatMessage',{voice:e.target.result,type:'voice'});
-      };
-      reader.readAsDataURL(blob);
-    };
-    mediaRecorder.stop();
-  }
-  stopRec();
-});
-function stopRec(){clearInterval(recInterval); micBtn.classList.remove('recording'); recordingBar.classList.remove('active'); inputArea.style.display='flex';}
-
-// ADMIN
-document.getElementById('adminPanelBtn').addEventListener('click',function(){document.getElementById('adminOverlay').classList.add('show');loadTab('stats');});
-document.getElementById('adminClose').addEventListener('click',function(){document.getElementById('adminOverlay').classList.remove('show');});
-document.getElementById('adminTabs').addEventListener('click',function(e){if(e.target.dataset.tab){document.querySelectorAll('#adminTabs button').forEach(function(b){b.classList.remove('active');});e.target.classList.add('active');loadTab(e.target.dataset.tab);}});
-socket.on('adminStats',function(s){document.getElementById('adminContent').innerHTML='<div class="stat-box"><div class="stat"><div class="num">'+s.users+'</div><div class="label">Юзеров</div></div><div class="stat"><div class="num">'+s.messages+'</div><div class="label">Сообщений</div></div><div class="stat"><div class="num">'+s.pms+'</div><div class="label">Личных</div></div><div class="stat"><div class="num">'+s.rooms+'</div><div class="label">Комнат</div></div><div class="stat"><div class="num">'+s.online+'</div><div class="label">Онлайн</div></div></div>';});
-socket.on('adminUsers',function(users){
-  var c=document.getElementById('adminContent');c.innerHTML='';
-  users.forEach(function(u){
-    var row=document.createElement('div');row.className='user-row';
-    var infoDiv=document.createElement('div');infoDiv.className='uinfo';
-    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
-    row.appendChild(infoDiv);
-    var actDiv=document.createElement('div');actDiv.className='uactions';
-    if(u.banned){var b=document.createElement('button');b.className='admin-act-btn abtn-unban';b.textContent='Разбан';b.addEventListener('click',(function(l){return function(){socket.emit('adminUnbanUser',l);};})(u.login));actDiv.appendChild(b);}
-    else{var b=document.createElement('button');b.className='admin-act-btn abtn-ban';b.textContent='Бан';b.addEventListener('click',(function(l){return function(){if(confirm('Забанить?'))socket.emit('adminBanUser',l);};})(u.login));actDiv.appendChild(b);}
-    var bm=document.createElement('button');bm.className='admin-act-btn abtn-mute';bm.textContent='Мут';bm.addEventListener('click',(function(l){return function(){var m=prompt('Минут?','10');if(m)socket.emit('adminMuteUser',{login:l,minutes:parseInt(m)});};})(u.login));actDiv.appendChild(bm);
-    var bn=document.createElement('button');bn.className='admin-act-btn abtn-nick';bn.textContent='Ник';bn.addEventListener('click',(function(l){return function(){var n=prompt('Новый ник:');if(n)socket.emit('adminChangeNickname',{login:l,newNickname:n});};})(u.login));actDiv.appendChild(bn);
-    var br=document.createElement('button');br.className='admin-act-btn abtn-role';br.textContent='Роль';br.addEventListener('click',(function(l){return function(){var r=prompt('Роль:','user');if(r)socket.emit('adminSetRole',{login:l,role:r});};})(u.login));actDiv.appendChild(br);
-    var bd=document.createElement('button');bd.className='admin-act-btn abtn-del';bd.textContent='Удалить';bd.addEventListener('click',(function(l){return function(){if(confirm('Удалить?'))socket.emit('adminDeleteUser',l);};})(u.login));actDiv.appendChild(bd);
-    row.appendChild(actDiv);c.appendChild(row);
-  });
-});
-socket.on('adminLogs',function(logs){var html='';logs.forEach(function(l){var d=new Date(Number(l.timestamp));html+='<div class="log-row"><span class="time">'+d.toLocaleString()+'</span> <span class="act">'+l.action+'</span> '+l.username+' — '+l.detail+(l.ip?' ('+l.ip+')':'')+'</div>';});document.getElementById('adminContent').innerHTML=html||'<p>Логов нет</p>';});
-socket.on('adminDone',function(msg){alert(msg);loadTab(currentAdminTab);});
-function loadTab(tab){
-  currentAdminTab=tab;var c=document.getElementById('adminContent');
-  if(tab==='stats'){socket.emit('adminGetStats');c.innerHTML='Загрузка...';}
-  else if(tab==='users'){socket.emit('adminGetUsers');c.innerHTML='Загрузка...';}
-  else if(tab==='logs'){socket.emit('adminGetLogs');c.innerHTML='Загрузка...';}
-  else if(tab==='announce'){c.innerHTML='<h3>📢 Объявление</h3><div class="admin-input"><input id="annInput" placeholder="Текст..."><button id="annBtn">Отправить</button></div>';document.getElementById('annBtn').addEventListener('click',function(){var t=document.getElementById('annInput').value.trim();if(t){socket.emit('adminAnnounce',t);document.getElementById('annInput').value='';}});}
-  else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');});}
-}
-
-// CALL LOGIC (WebRTC)
-const dragVideo = document.getElementById('localVideo');
-let isDragging = false;
-let startX, startY, initialLeft, initialTop;
-
-dragVideo.addEventListener('touchstart', startDrag);
-dragVideo.addEventListener('mousedown', startDrag);
-
-function startDrag(e) {
-  isDragging = true;
-  const evt = e.type === 'touchstart' ? e.touches[0] : e;
-  startX = evt.clientX;
-  startY = evt.clientY;
-  const rect = dragVideo.getBoundingClientRect();
-  initialLeft = rect.left;
-  initialTop = rect.top;
-  dragVideo.style.right = 'auto';dragVideo.style.bottom = 'auto';dragVideo.style.left = initialLeft + 'px';dragVideo.style.top = initialTop + 'px';
-  document.addEventListener('touchmove', moveDrag);document.addEventListener('touchend', stopDrag);document.addEventListener('mousemove', moveDrag);document.addEventListener('mouseup', stopDrag);
-}
-function moveDrag(e) {
-  if (!isDragging) return;
-  const evt = e.type === 'touchmove' ? e.touches[0] : e;
-  const dx = evt.clientX - startX;
-  const dy = evt.clientY - startY;
-  dragVideo.style.left = (initialLeft + dx) + 'px';
-  dragVideo.style.top = (initialTop + dy) + 'px';
-  e.preventDefault();
-}
-function stopDrag() {
-  isDragging = false;
-  document.removeEventListener('touchmove', moveDrag);document.removeEventListener('touchend', stopDrag);document.removeEventListener('mousemove', moveDrag);document.removeEventListener('mouseup', stopDrag);
-}
-
-function flushPendingIce() {
-  if(pendingIce.length > 0 && peerConnection && peerConnection.remoteDescription) {
-    while(pendingIce.length > 0) {
-      var candidate = pendingIce.shift();
-      peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>console.log(e));
-    }
-  }
-}
-
-function startCall(userToCall, type){
-  currentPrivateLogin=userToCall;
+function startCall(user, type){
   document.getElementById('callOverlay').classList.add('show');
-  const constraints = { audio: true, video: { facingMode: currentFacingMode } };
-  
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
-    localStream=stream;
-    document.getElementById('localVideo').srcObject=stream;
-    if(type === 'audio') {
-      const videoTrack = stream.getVideoTracks()[0];
-      if(videoTrack) { videoTrack.enabled = false; document.getElementById('toggleVideoBtn').classList.remove('active'); }
-    } else {
-      document.getElementById('toggleVideoBtn').classList.add('active');
-    }
-
-    peerConnection=new RTCPeerConnection(rtcConfig);
-    pendingIce = [];
-    earlyCandidates = [];
-    
-    peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
-    
-    peerConnection.ontrack=function(e){
-      const remoteVideo = document.getElementById('remoteVideo');
-      if (e.streams && e.streams[0]) {
-        remoteVideo.srcObject = e.streams[0];
-      } else {
-        if (!remoteVideo.srcObject) {
-          remoteVideo.srcObject = new MediaStream();
-        }
-        remoteVideo.srcObject.addTrack(e.track);
-      }
-      remoteVideo.play().catch(e => console.log('Autoplay blocked', e));
-    };
-
-    localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
-    
-    peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
-    .then(function(offer){
-      return peerConnection.setLocalDescription(offer);
-    }).then(function() {
-      socket.emit('callUser',{userToCall:userToCall, signalData:peerConnection.localDescription, callType: type});
+  navigator.mediaDevices.getUserMedia({audio:true, video:{facingMode:currentFacingMode}}).then(stream => {
+    localStream = stream;
+    document.getElementById('localVideo').srcObject = stream;
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    peerConnection.onicecandidate = e => { if(e.candidate) socket.emit('iceCandidate', {candidate:e.candidate, to:user}); };
+    peerConnection.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
+    localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+    peerConnection.createOffer().then(offer => {
+      peerConnection.setLocalDescription(offer);
+      socket.emit('callUser', {userToCall:user, signalData:offer, callType:type});
     });
-  }).catch(function(e){alert('Нет доступа к камере/микрофону: ' + e);endCall();});
+  });
 }
-window.startCall=startCall;
+window.startCall = startCall;
 
-socket.on('incomingCall',function(d){
-  incomingCallData=d;
-  let typeText = d.callType === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
-  document.getElementById('incomingCallerName').textContent = typeText + ' от: ' + d.fromNickname;
+socket.on('incomingCall', d => {
+  incomingCallData = d;
   document.getElementById('incomingCallModal').classList.add('show');
-  earlyCandidates = []; 
 });
 
 function acceptCall(){
   document.getElementById('incomingCallModal').classList.remove('show');
   document.getElementById('callOverlay').classList.add('show');
-  const constraints = { audio: true, video: { facingMode: currentFacingMode } };
-
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){
-    localStream=stream;
-    document.getElementById('localVideo').srcObject=stream;
-    if(incomingCallData.callType === 'audio') {
-       const videoTrack = stream.getVideoTracks()[0];
-       if(videoTrack) { videoTrack.enabled = false; document.getElementById('toggleVideoBtn').classList.remove('active'); }
-    } else {
-       document.getElementById('toggleVideoBtn').classList.add('active');
-    }
-
-    peerConnection=new RTCPeerConnection(rtcConfig);
-    pendingIce = [...earlyCandidates];
-    earlyCandidates = [];
-
-    peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:incomingCallData.from});};
-    
-    peerConnection.ontrack=function(e){
-      const remoteVideo = document.getElementById('remoteVideo');
-      if (e.streams && e.streams[0]) {
-        remoteVideo.srcObject = e.streams[0];
-      } else {
-        if (!remoteVideo.srcObject) {
-          remoteVideo.srcObject = new MediaStream();
-        }
-        remoteVideo.srcObject.addTrack(e.track);
-      }
-      remoteVideo.play().catch(e => console.log('Autoplay blocked', e));
-    };
-
-    localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
-    
-    peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal))
-    .then(function() {
-      flushPendingIce();
-      return peerConnection.createAnswer();
-    })
-    .then(function(answer){
-      return peerConnection.setLocalDescription(answer);
-    })
-    .then(function() {
-      socket.emit('answerCall',{signal:peerConnection.localDescription,to:incomingCallData.from});
+  navigator.mediaDevices.getUserMedia({audio:true, video:true}).then(stream => {
+    localStream = stream;
+    document.getElementById('localVideo').srcObject = stream;
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    peerConnection.onicecandidate = e => { if(e.candidate) socket.emit('iceCandidate', {candidate:e.candidate, to:incomingCallData.from}); };
+    peerConnection.ontrack = e => { document.getElementById('remoteVideo').srcObject = e.streams[0]; };
+    localStream.getTracks().forEach(t => peerConnection.addTrack(t, localStream));
+    peerConnection.setRemoteDescription(new RTCSessionDescription(incomingCallData.signal));
+    peerConnection.createAnswer().then(answer => {
+      peerConnection.setLocalDescription(answer);
+      socket.emit('answerCall', {signal:answer, to:incomingCallData.from});
     });
   });
 }
-window.acceptCall=acceptCall;
+window.acceptCall = acceptCall;
 
-function rejectCall(){
-  socket.emit('hangUp',{to:incomingCallData.from});
-  document.getElementById('incomingCallModal').classList.remove('show');
-  incomingCallData=null;
-}
-window.rejectCall=rejectCall;
-
-socket.on('callAccepted',function(signal){
-  peerConnection.setRemoteDescription(new RTCSessionDescription(signal))
-  .then(function() {
-    flushPendingIce();
-  });
-});
-
-socket.on('iceCandidate',function(candidate){
-  if(peerConnection) {
-    if(peerConnection.remoteDescription) {
-      peerConnection.addIceCandidate(new RTCIceCandidate(candidate)).catch(e=>console.log(e));
-    } else {
-      pendingIce.push(candidate);
-    }
-  } else {
-    earlyCandidates.push(candidate);
-  }
-});
-
-socket.on('callEnded',function(){ endCall(); });
+socket.on('callAccepted', sig => peerConnection.setRemoteDescription(new RTCSessionDescription(sig)));
+socket.on('iceCandidate', cand => peerConnection.addIceCandidate(new RTCIceCandidate(cand)));
+socket.on('callEnded', endCall);
 
 function endCall(){
-  if(peerConnection)peerConnection.close();
-  if(localStream)localStream.getTracks().forEach(function(t){t.stop();});
+  if(peerConnection) peerConnection.close();
+  if(localStream) localStream.getTracks().forEach(t => t.stop());
   document.getElementById('callOverlay').classList.remove('show');
   document.getElementById('incomingCallModal').classList.remove('show');
-  peerConnection=null;localStream=null;remoteStream=null;
-  if(currentPrivateLogin) socket.emit('hangUp', {to: currentPrivateLogin});
 }
-window.endCall=endCall;
-
-function toggleMic(){
-  if(localStream){
-    var track=localStream.getAudioTracks()[0];
-    track.enabled=!track.enabled;
-    document.getElementById('toggleMicBtn').textContent=track.enabled?'🎤':'🔇';
-    document.getElementById('toggleMicBtn').style.background=track.enabled?'#333':'#c0392b';
-  }
+window.endCall = endCall;
+window.rejectCall = function(){
+  socket.emit('hangUp', {to:incomingCallData.from});
+  document.getElementById('incomingCallModal').classList.remove('show');
 }
-window.toggleMic=toggleMic;
-
-function toggleVideo(){
-  if(localStream){
-    var track=localStream.getVideoTracks()[0];
-    track.enabled=!track.enabled;
-    const btn = document.getElementById('toggleVideoBtn');
-    if(track.enabled) btn.classList.add('active'); else btn.classList.remove('active');
-  }
-}
-window.toggleVideo=toggleVideo;
-
-async function switchCamera(){
-  if(!localStream) return;
-  localStream.getVideoTracks()[0].stop();
-  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-  try {
-    const newStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: { facingMode: currentFacingMode } });
-    const newVideoTrack = newStream.getVideoTracks()[0];
-    const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
-    if(sender) sender.replaceTrack(newVideoTrack);
-    const oldTrack = localStream.getVideoTracks()[0];
-    localStream.removeTrack(oldTrack);
-    localStream.addTrack(newVideoTrack);
-    document.getElementById('localVideo').srcObject = localStream;
-  } catch(e) { alert('Не удалось переключить камеру'); console.error(e); }
-}
-window.switchCamera=switchCamera;
+function switchCamera(){ alert('Функция переключения камеры'); }
+window.switchCamera = switchCamera;
 </script>
 </body>
 </html>
