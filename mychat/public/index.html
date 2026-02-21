@@ -1240,6 +1240,13 @@ window.doLogout = doLogout;
 /* ════════════════════════════════════════════
    SOCKET & APP
 ════════════════════════════════════════════ */
+
+document.addEventListener('DOMContentLoaded', function() {
+if(typeof io === 'undefined'){
+  document.getElementById('authError').textContent='Нет соединения с сервером. Открой через Railway/сервер.';
+  document.getElementById('authBtn').disabled=true;
+  return;
+}
 var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
@@ -2551,6 +2558,7 @@ document.getElementById('photoViewer').addEventListener('click',function(e){
   if(e.target===this){closePV();}
 });
 
-</script>
+
+});</script>
 </body>
 </html>
