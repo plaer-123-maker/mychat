@@ -8,8 +8,11 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// ЛИМИТ 50 МБ
-const io = new Server(server, { maxHttpBufferSize: 5e7, cors: { origin: "*" } });
+// ЛИМИТ 50 МБ (Стабильный максимум)
+const io = new Server(server, { 
+  maxHttpBufferSize: 5e7, 
+  cors: { origin: "*" } 
+});
 
 app.use(express.static('public'));
 
@@ -21,29 +24,76 @@ const pool = new Pool({
 const ADMIN_LOGIN = 'pekka';
 
 async function safeQuery(text, params) {
-  try { return await pool.query(text, params); } 
-  catch (e) { console.error("SQL Error:", e.message); return null; }
+  try {
+    return await pool.query(text, params);
+  } catch (e) {
+    console.error("SQL Error:", e.message);
+    return null;
+  }
 }
 
 async function initDB() {
   console.log('--- RE-INIT DB ---');
-  // СБРОС ТАБЛИЦ ДЛЯ ИСПРАВЛЕНИЯ ОШИБОК
+  
+  // 1. ОЧИСТКА СТАРЫХ ТАБЛИЦ (Чтобы исправить структуру)
   try {
     await pool.query('DROP TABLE IF EXISTS room_messages CASCADE');
     await pool.query('DROP TABLE IF EXISTS room_members CASCADE');
     await pool.query('DROP TABLE IF EXISTS rooms CASCADE');
     await pool.query('DROP TABLE IF EXISTS private_messages CASCADE');
     await pool.query('DROP TABLE IF EXISTS messages CASCADE');
+    // await pool.query('DROP TABLE IF EXISTS users CASCADE'); // Раскомментируй если нужно удалить юзеров
   } catch(e) {}
 
-  // СОЗДАНИЕ
-  await safeQuery(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, login VARCHAR(50) UNIQUE, password VARCHAR(200), nickname VARCHAR(50), banned BOOLEAN DEFAULT false, muted_until BIGINT DEFAULT 0, role VARCHAR(20) DEFAULT 'user', token VARCHAR(200))`);
-  await safeQuery(`CREATE TABLE IF NOT EXISTS messages (id SERIAL PRIMARY KEY, username VARCHAR(100), text TEXT, image TEXT, voice TEXT, file_data TEXT, file_name TEXT, type VARCHAR(20) DEFAULT 'text', timestamp BIGINT)`);
-  await safeQuery(`CREATE TABLE IF NOT EXISTS private_messages (id SERIAL PRIMARY KEY, from_login VARCHAR(50), to_login VARCHAR(50), from_nickname VARCHAR(100), text TEXT, image TEXT, voice TEXT, file_data TEXT, file_name TEXT, type VARCHAR(20) DEFAULT 'text', timestamp BIGINT, read BOOLEAN DEFAULT false)`);
-  await safeQuery(`CREATE TABLE IF NOT EXISTS rooms (id SERIAL PRIMARY KEY, name VARCHAR(100), type VARCHAR(20), owner_login VARCHAR(50), comments_enabled BOOLEAN DEFAULT true, timestamp BIGINT)`);
-  await safeQuery(`CREATE TABLE IF NOT EXISTS room_members (id SERIAL PRIMARY KEY, room_id INT, user_login VARCHAR(50), role VARCHAR(20) DEFAULT 'member', UNIQUE(room_id, user_login))`);
-  await safeQuery(`CREATE TABLE IF NOT EXISTS room_messages (id SERIAL PRIMARY KEY, room_id INT, user_login VARCHAR(50), username VARCHAR(100), text TEXT, image TEXT, voice TEXT, file_data TEXT, file_name TEXT, type VARCHAR(20) DEFAULT 'text', timestamp BIGINT)`);
-  await safeQuery(`CREATE TABLE IF NOT EXISTS logs (id SERIAL PRIMARY KEY, action VARCHAR(50), username VARCHAR(100), detail TEXT, ip VARCHAR(50), timestamp BIGINT)`);
+  // 2. СОЗДАНИЕ ТАБЛИЦ (Полная версия)
+  await safeQuery(`CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY, login VARCHAR(50) UNIQUE, 
+    password VARCHAR(200), nickname VARCHAR(50), 
+    banned BOOLEAN DEFAULT false, muted_until BIGINT DEFAULT 0, 
+    role VARCHAR(20) DEFAULT 'user', token VARCHAR(200)
+  )`);
+
+  await safeQuery(`CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY, username VARCHAR(100), 
+    text TEXT, image TEXT, voice TEXT, 
+    file_data TEXT, file_name TEXT, 
+    type VARCHAR(20) DEFAULT 'text', timestamp BIGINT
+  )`);
+
+  await safeQuery(`CREATE TABLE IF NOT EXISTS private_messages (
+    id SERIAL PRIMARY KEY, from_login VARCHAR(50), 
+    to_login VARCHAR(50), from_nickname VARCHAR(100), 
+    text TEXT, image TEXT, voice TEXT, 
+    file_data TEXT, file_name TEXT, 
+    type VARCHAR(20) DEFAULT 'text', timestamp BIGINT, 
+    read BOOLEAN DEFAULT false
+  )`);
+
+  await safeQuery(`CREATE TABLE IF NOT EXISTS rooms (
+    id SERIAL PRIMARY KEY, name VARCHAR(100), 
+    type VARCHAR(20), owner_login VARCHAR(50), 
+    comments_enabled BOOLEAN DEFAULT true, timestamp BIGINT
+  )`);
+
+  await safeQuery(`CREATE TABLE IF NOT EXISTS room_members (
+    id SERIAL PRIMARY KEY, room_id INT, 
+    user_login VARCHAR(50), role VARCHAR(20) DEFAULT 'member', 
+    UNIQUE(room_id, user_login)
+  )`);
+
+  await safeQuery(`CREATE TABLE IF NOT EXISTS room_messages (
+    id SERIAL PRIMARY KEY, room_id INT, 
+    user_login VARCHAR(50), username VARCHAR(100), 
+    text TEXT, image TEXT, voice TEXT, 
+    file_data TEXT, file_name TEXT, 
+    type VARCHAR(20) DEFAULT 'text', timestamp BIGINT
+  )`);
+
+  await safeQuery(`CREATE TABLE IF NOT EXISTS logs (
+    id SERIAL PRIMARY KEY, action VARCHAR(50), 
+    username VARCHAR(100), detail TEXT, ip VARCHAR(50), 
+    timestamp BIGINT
+  )`);
 
   try { await safeQuery("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
   console.log('--- DB READY ---');
@@ -55,6 +105,7 @@ const socketUsers = new Map();
 
 function getIP(socket) { return socket.handshake.headers['x-forwarded-for'] || socket.handshake.address || 'unknown'; }
 function isAdmin(socket) { return socket.userLogin === ADMIN_LOGIN || socket.userRole === 'admin' || socket.userRole === 'moderator'; }
+function isSuperAdmin(socket) { return socket.userLogin === ADMIN_LOGIN; }
 function findSocketByLogin(login) { for (let [sid, info] of onlineUsers) { if (info.login === login) return socketUsers.get(sid); } return null; }
 
 function sendOnlineToAll() {
@@ -82,7 +133,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('register', async ({ login, password, nickname }) => {
-    if (!login || !password || !nickname) return socket.emit('authError', 'Пусто');
+    if (!login || !password || !nickname) return socket.emit('authError', 'Заполни все поля');
     const exists = await safeQuery('SELECT id FROM users WHERE login=$1', [login]);
     if (exists && exists.rows.length > 0) return socket.emit('authError', 'Логин занят');
     const hash = await bcrypt.hash(password, 10);
@@ -123,12 +174,13 @@ io.on('connection', (socket) => {
     const res=await safeQuery('INSERT INTO messages (username,text,image,voice,file_data,file_name,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id', [msg.username,msg.text,msg.image,msg.voice,msg.file_data,msg.file_name,msg.type,msg.timestamp]);
     if(res){ msg.id=res.rows[0].id; io.emit('chatMessage', msg); }
   });
+  socket.on('deleteMessage', async (id) => { if(!socket.username) return; if(isAdmin(socket)) await safeQuery('DELETE FROM messages WHERE id=$1', [id]); else await safeQuery('DELETE FROM messages WHERE id=$1 AND username=$2', [id, socket.username]); io.emit('messageDeleted', id); });
 
-  // PRIVATE & ROOMS (Simplified for brevity but fully functional based on previous code)
+  // PRIVATE & ROOMS
   socket.on('getMyChats', async () => { if(!socket.userLogin) return; const res=await safeQuery('SELECT DISTINCT CASE WHEN from_login=$1 THEN to_login ELSE from_login END as other FROM private_messages WHERE from_login=$1 OR to_login=$1', [socket.userLogin]); if(!res) return socket.emit('myChats',[]); var users=await safeQuery('SELECT login,nickname FROM users WHERE login=ANY($1)', [res.rows.map(r=>r.other)]); if(users) socket.emit('myChats', users.rows.map(u=>({login:u.login, nickname:u.nickname, unread:0}))); });
   socket.on('getPrivateHistory', async (l) => { if(!socket.userLogin) return; const res=await safeQuery('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC', [socket.userLogin, l]); if(res) socket.emit('privateHistory', {otherLogin:l, messages:res.rows}); });
   socket.on('privateMessage', async (d) => { if(!socket.userLogin) return; const msg={from_login:socket.userLogin, to_login:d.toLogin, from_nickname:socket.username, text:d.text||'', image:d.image, voice:d.voice, file_data:d.file_data, file_name:d.file_name, type:d.type||'text', timestamp:Date.now()}; const res=await safeQuery('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,file_data,file_name,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id', [msg.from_login,msg.to_login,msg.from_nickname,msg.text,msg.image,msg.voice,msg.file_data,msg.file_name,msg.type,msg.timestamp]); if(res){ msg.id=res.rows[0].id; socket.emit('newPrivateMessage', msg); var t=findSocketByLogin(d.toLogin); if(t) t.emit('newPrivateMessage', msg); } });
-
+  
   socket.on('createRoom', async (d) => { if(!socket.userLogin) return; const res=await safeQuery('INSERT INTO rooms (name,type,owner_login,timestamp) VALUES ($1,$2,$3,$4) RETURNING *', [d.name, d.type, socket.userLogin, Date.now()]); if(res && res.rows[0]){ var r=res.rows[0]; await safeQuery('INSERT INTO room_members (room_id,user_login,role) VALUES ($1,$2,$3)', [r.id, socket.userLogin, 'admin']); socket.join('room_'+r.id); socket.emit('roomCreated', r); } });
   socket.on('getMyRooms', async () => { if(!socket.userLogin) return; const res=await safeQuery('SELECT r.*, rm.role FROM rooms r JOIN room_members rm ON r.id=rm.room_id WHERE rm.user_login=$1', [socket.userLogin]); if(res) socket.emit('myRooms', res.rows); });
   socket.on('joinRoom', async (rid) => { if(!socket.userLogin) return; await safeQuery('INSERT INTO room_members (room_id,user_login,role) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [rid, socket.userLogin, 'member']); socket.join('room_'+rid); socket.emit('joinedRoom', rid); });
@@ -137,6 +189,9 @@ io.on('connection', (socket) => {
   
   socket.on('searchUser', async (q) => { if(q) { const res=await safeQuery('SELECT login,nickname FROM users WHERE nickname ILIKE $1 LIMIT 10', ['%'+q+'%']); if(res) socket.emit('searchResults', res.rows); } });
   socket.on('searchRooms', async (q) => { if(q) { const res=await safeQuery('SELECT * FROM rooms WHERE name ILIKE $1 LIMIT 10', ['%'+q+'%']); if(res) socket.emit('roomSearchResults', res.rows); } });
+
+  // ADMIN ... (оставлены основные для краткости, они работают)
+  socket.on('adminGetStats', async () => { if(!isAdmin(socket)) return; const u=await safeQuery('SELECT count(*) FROM users'); const m=await safeQuery('SELECT count(*) FROM messages'); socket.emit('adminStats', {users:u.rows[0].count, messages:m.rows[0].count, online:onlineUsers.size}); });
 
   socket.on('disconnect', () => { onlineUsers.delete(socket.id); socketUsers.delete(socket.id); sendOnlineToAll(); });
 });
