@@ -201,18 +201,21 @@ io.on('connection', (socket) => {
   });
 
   // === WEBRTC CALLS ===
+  const activeCalls = new Map();
+
   socket.on('callUser', ({ userToCall, signalData, callType }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(userToCall);
     if (targetSocket) {
-      targetSocket.emit('incomingCall', { 
-        signal: signalData, 
-        from: socket.userLogin, 
+      activeCalls.set(socket.userLogin, { calleeLogin: userToCall, callType: callType||'video', startTime: Date.now(), answered: false });
+      targetSocket.emit('incomingCall', {
+        signal: signalData,
+        from: socket.userLogin,
         fromNickname: socket.username,
-        callType: callType || 'video' 
+        callType: callType || 'video'
       });
     } else {
-      socket.emit('callEnded'); // user offline
+      socket.emit('callEnded', { reason: 'offline' });
     }
   });
 
@@ -221,23 +224,47 @@ io.on('connection', (socket) => {
     const targetSocket = findSocketByLogin(to);
     if (targetSocket) {
       targetSocket.emit('callAccepted', signal);
+      if (activeCalls.has(to)) activeCalls.get(to).answered = true;
     }
   });
 
-  socket.on('hangUp', ({ to }) => {
+  socket.on('hangUp', async ({ to, duration }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
-    if (targetSocket) {
-      targetSocket.emit('callEnded');
-    }
+    if (targetSocket) targetSocket.emit('callEnded', { reason: 'hangup' });
+
+    const callInfo = activeCalls.get(socket.userLogin) || activeCalls.get(to);
+    const callType = callInfo ? callInfo.callType : 'audio';
+    const answered = callInfo ? callInfo.answered : false;
+    const dur = duration || 0;
+    activeCalls.delete(socket.userLogin);
+    activeCalls.delete(to);
+
+    try {
+      const callerNick = socket.username;
+      const calleeRes = await pool.query('SELECT nickname FROM users WHERE login=$1', [to]);
+      const calleeNick = calleeRes.rows[0]?.nickname || to;
+      const ts = Date.now();
+      const textVal = JSON.stringify({ callType, answered, duration: dur, callerLogin: socket.userLogin, callerNick, calleeLogin: to, calleeNick });
+      const r1 = await pool.query(
+        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp,read) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+        [socket.userLogin, to, callerNick, textVal, 'call_log', ts, true]
+      );
+      const r2 = await pool.query(
+        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp,read) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+        [to, socket.userLogin, calleeNick, textVal, 'call_log', ts, false]
+      );
+      const callMsg1 = { id: r1.rows[0].id, from_login: socket.userLogin, to_login: to, from_nickname: callerNick, text: textVal, type: 'call_log', timestamp: ts, read: true };
+      const callMsg2 = { id: r2.rows[0].id, from_login: to, to_login: socket.userLogin, from_nickname: calleeNick, text: textVal, type: 'call_log', timestamp: ts, read: false };
+      socket.emit('newPrivateMessage', callMsg1);
+      if (targetSocket) targetSocket.emit('newPrivateMessage', callMsg2);
+    } catch(e) { console.error('call log error', e); }
   });
 
   socket.on('iceCandidate', ({ candidate, to }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
-    if (targetSocket) {
-      targetSocket.emit('iceCandidate', candidate);
-    }
+    if (targetSocket) targetSocket.emit('iceCandidate', candidate);
   });
 
   // === GENERAL CHAT ===
