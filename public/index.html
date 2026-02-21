@@ -512,21 +512,40 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
   .message{max-width:85%;}
   .settings-panel{width:100%;}
 }
+/* ── VIP ── */
+.vip-badge{display:inline-flex;align-items:center;gap:4px;background:linear-gradient(135deg,#f7c948,#e8870a);border-radius:20px;padding:1px 8px;font-size:11px;font-weight:700;color:#1a0a00;margin-left:6px;vertical-align:middle;flex-shrink:0;}
+.vip-crown{font-size:13px;}
+.vip-emoji-nick{font-size:16px;margin-left:4px;}
+.settings-row.vip-row{background:linear-gradient(135deg,rgba(247,201,72,0.08),rgba(232,135,10,0.08));border:1px solid rgba(247,201,72,0.25);}
+.vip-status-card{background:linear-gradient(135deg,#2d1f00,#1a1200);border:1px solid rgba(247,201,72,0.3);border-radius:16px;padding:18px;margin:14px 0;display:flex;align-items:center;gap:14px;}
+.vip-status-icon{font-size:32px;}
+.vip-status-info{flex:1;}
+.vip-status-title{font-size:15px;font-weight:700;color:#f7c948;}
+.vip-status-sub{font-size:12px;color:rgba(247,201,72,0.7);margin-top:2px;}
+.emoji-grid{display:flex;flex-wrap:wrap;gap:8px;padding:10px 0;}
+.emoji-opt{font-size:26px;cursor:pointer;width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:2px solid transparent;transition:all 0.15s;}
+.emoji-opt:hover,.emoji-opt.selected{border-color:var(--accent);background:rgba(46,169,223,0.1);}
+.admin-vip-code{background:var(--bg-input);border-radius:10px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;font-size:13px;}
+.admin-vip-code .code-val{font-family:monospace;font-size:14px;font-weight:700;color:#f7c948;letter-spacing:1px;}
+.admin-vip-code .code-used{color:#ff4757;font-size:11px;}
+.admin-vip-code .code-ok{color:#2ecc71;font-size:11px;}
+
 /* ── PHOTO VIEWER ── */
 #photoViewer{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.97);display:none;flex-direction:column;align-items:center;justify-content:center;}
 #photoViewer.active{display:flex;}
-#pvImg{max-width:100%;max-height:calc(100vh - 140px);object-fit:contain;user-select:none;border-radius:0;}
-.pv-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:linear-gradient(180deg,rgba(0,0,0,0.7) 0%,transparent 100%);z-index:2;}
-.pv-top-title{color:#fff;font-size:14px;font-weight:500;opacity:0.85;}
-.pv-close{background:none;border:none;color:#fff;font-size:24px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s;}
+#pvImg{max-width:100%;max-height:calc(100vh - 80px);object-fit:contain;user-select:none;border-radius:0;cursor:default;}
+.pv-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:linear-gradient(180deg,rgba(0,0,0,0.75) 0%,transparent 100%);z-index:4;}
+.pv-top-title{color:#fff;font-size:14px;font-weight:500;opacity:0.85;flex:1;text-align:center;}
+.pv-close{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s;flex-shrink:0;}
 .pv-close:hover{background:rgba(255,255,255,0.1);}
-.pv-menu{position:absolute;bottom:0;left:0;right:0;background:rgba(20,20,20,0.97);backdrop-filter:blur(20px);border-radius:20px 20px 0 0;padding:8px 0 env(safe-area-inset-bottom,12px);z-index:3;}
-.pv-menu-item{display:flex;align-items:center;gap:16px;padding:14px 22px;color:#fff;font-size:15px;cursor:pointer;transition:background 0.12s;}
-.pv-menu-item:hover{background:rgba(255,255,255,0.07);}
-.pv-menu-item .pv-icon{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+#pvMenuBtn{font-size:26px;font-weight:700;letter-spacing:1px;position:relative;}
+.pv-menu{position:absolute;top:58px;right:10px;background:rgba(28,28,30,0.98);backdrop-filter:blur(24px);border-radius:16px;padding:6px 0;z-index:5;min-width:230px;box-shadow:0 8px 40px rgba(0,0,0,0.7);border:1px solid rgba(255,255,255,0.1);}
+.pv-menu-item{display:flex;align-items:center;gap:14px;padding:13px 18px;color:#fff;font-size:14px;cursor:pointer;transition:background 0.1s;}
+.pv-menu-item:hover,.pv-menu-item:active{background:rgba(255,255,255,0.08);}
+.pv-menu-item .pv-icon{width:26px;height:26px;border-radius:7px;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;}
 .pv-menu-sep{height:1px;background:rgba(255,255,255,0.1);margin:4px 0;}
 .pv-menu-item.danger{color:#ff4757;}
-.pv-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;justify-content:space-between;width:100%;padding:0 10px;pointer-events:none;}
+.pv-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;justify-content:space-between;width:100%;padding:0 10px;pointer-events:none;z-index:3;}
 .pv-nav-btn{pointer-events:all;background:rgba(255,255,255,0.15);border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:background 0.15s;}
 .pv-nav-btn:hover{background:rgba(255,255,255,0.25);}
 
@@ -585,15 +604,16 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 <!-- Photo Viewer -->
 <div id="photoViewer">
   <div class="pv-top">
-    <span class="pv-top-title" id="pvTitle">Фото</span>
     <button class="pv-close" onclick="closePV()">✕</button>
+    <span class="pv-top-title" id="pvTitle">Фото</span>
+    <button class="pv-close" onclick="pvToggleMenu(event)" id="pvMenuBtn">⋮</button>
   </div>
   <div class="pv-nav">
     <button class="pv-nav-btn" id="pvPrev" onclick="pvNav(-1)">‹</button>
     <button class="pv-nav-btn" id="pvNext" onclick="pvNav(1)">›</button>
   </div>
-  <img id="pvImg" src="" alt="">
-  <div class="pv-menu" id="pvMenu">
+  <img id="pvImg" src="" alt="" onclick="pvToggleMenu(event)">
+  <div class="pv-menu" id="pvMenu" style="display:none">
     <div class="pv-menu-item" onclick="pvSave()">
       <div class="pv-icon">⬇️</div>Сохранить в галерею
     </div>
@@ -787,6 +807,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <button class="active" data-tab="stats">📊 Статистика</button>
       <button data-tab="users">👥 Пользователи</button>
       <button data-tab="logs">📋 Логи</button>
+      <button data-tab="vip">👑 VIP</button>
       <button data-tab="announce">📢 Объявление</button>
       <button data-tab="danger">⚠️ Опасно</button>
     </div>
@@ -916,6 +937,11 @@ function renderSettingsMain() {
       <div class="sr-info"><div class="sr-label">О приложении</div></div>
       <span class="sr-arrow">›</span>
     </div>
+    <div class="settings-row vip-row" onclick="openVipSettings()">
+      <div class="sr-icon" style="background:linear-gradient(135deg,rgba(247,201,72,0.2),rgba(232,135,10,0.2))">👑</div>
+      <div class="sr-info"><div class="sr-label" style="color:#f7c948">MyChat VIP</div><div class="sr-desc">${myVipUntil>Date.now()?'Активен до '+new Date(myVipUntil).toLocaleDateString('ru'):'Не активирован — введи код'}</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
     <div class="settings-row" onclick="doLogout()" style="color:#ff6b6b">
       <div class="sr-icon" style="background:rgba(255,59,48,0.15)">🚪</div>
       <div class="sr-info"><div class="sr-label" style="color:#ff6b6b">Выйти</div></div>
@@ -957,6 +983,75 @@ function openAvatarSettings() {
   `;
 }
 window.openAvatarSettings = openAvatarSettings;
+function openVipSettings() {
+  var body = document.getElementById('settingsBody');
+  var isVip = myVipUntil > Date.now();
+  var VIP_EMOJIS = ['⭐','🌟','💎','👑','🔥','❤️','🎯','🚀','🦋','🎪','🌈','💫','🎭','🎨','🏆'];
+  var emojiGrid = VIP_EMOJIS.map(function(em){
+    return '<div class="emoji-opt'+(myVipEmoji===em?' selected':'')+'" onclick="selectVipEmoji(\''+em+'\')">'+em+'</div>';
+  }).join('');
+
+  var backBtn = '<div style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);"><button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button><h3 style="font-size:16px;font-weight:700;">👑 MyChat VIP</h3></div>';
+
+  var bodyContent;
+  if (isVip) {
+    bodyContent = '<div class="vip-status-card"><div class="vip-status-icon">👑</div><div class="vip-status-info"><div class="vip-status-title">VIP активен!</div><div class="vip-status-sub">Действует до '+new Date(myVipUntil).toLocaleDateString('ru')+'</div></div></div>'
+      + '<div style="padding:0 20px 20px"><div style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;font-weight:600;">Смайлик в никнейм</div>'
+      + '<div class="emoji-grid" id="vipEmojiGrid">'+emojiGrid+'</div>'
+      + '<button onclick="clearVipEmoji()" style="margin-top:8px;width:100%;padding:11px;border:1px solid var(--border);border-radius:12px;background:transparent;color:var(--text-secondary);font-size:13px;cursor:pointer;">Убрать смайлик</button></div>';
+  } else {
+    bodyContent = '<div style="padding:20px">'
+      + '<div style="text-align:center;padding:20px 0"><div style="font-size:48px;margin-bottom:12px">👑</div>'
+      + '<div style="font-size:18px;font-weight:700;color:#f7c948;margin-bottom:8px">MyChat VIP</div>'
+      + '<div style="font-size:13px;color:var(--text-secondary);margin-bottom:24px;line-height:1.5">Смайлик в никнейм и другие привилегии.<br>Введи код активации ниже.</div></div>'
+      + '<div id="vipCodeError" style="color:#ff4757;font-size:12px;text-align:center;margin-bottom:8px;"></div>'
+      + '<div style="display:flex;gap:8px">'
+      + '<input id="vipCodeInput" placeholder="Введи код VIP" style="flex:1;padding:12px 14px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-input);color:var(--text-primary);outline:none;font-size:14px;font-family:monospace;letter-spacing:1px;" maxlength="32">'
+      + '<button onclick="activateVip()" style="padding:12px 18px;border:none;border-radius:12px;background:linear-gradient(135deg,#f7c948,#e8870a);color:#1a0a00;font-size:14px;font-weight:700;cursor:pointer;">Активировать</button>'
+      + '</div></div>';
+  }
+  body.innerHTML = backBtn + bodyContent;
+}
+window.openVipSettings = openVipSettings;
+
+function selectVipEmoji(em) {
+  myVipEmoji = em;
+  document.querySelectorAll('.emoji-opt').forEach(function(el){ el.classList.remove('selected'); });
+  event.target.classList.add('selected');
+  socket.emit('setVipEmoji', { emoji: em });
+}
+
+function clearVipEmoji() {
+  myVipEmoji = null;
+  document.querySelectorAll('.emoji-opt').forEach(function(el){ el.classList.remove('selected'); });
+  socket.emit('setVipEmoji', { emoji: null });
+}
+
+function activateVip() {
+  var code = (document.getElementById('vipCodeInput')||{}).value;
+  if (!code) return;
+  socket.emit('activateVip', { code });
+}
+
+socket.on('vipActivateResult', function(d) {
+  if (d.ok) {
+    myVipUntil = d.until;
+    openVipSettings();
+  } else {
+    var err = document.getElementById('vipCodeError');
+    if (err) err.textContent = d.msg || 'Ошибка';
+  }
+});
+
+socket.on('vipEmojiResult', function(d) {
+  if (d.ok) { myVipEmoji = d.emoji || null; }
+});
+
+socket.on('userVipUpdated', function(d) {
+  // could update name display if needed
+});
+
+
 
 function handleAvatarUpload(input) {
   var file = input.files[0];
@@ -1149,7 +1244,7 @@ var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null,
-replyTo=null;
+replyTo=null,myVipUntil=0,myVipEmoji=null;
 
 var localStream, remoteStream, peerConnection, incomingCallData=null;
 var currentFacingMode = 'user';
@@ -1199,6 +1294,7 @@ document.getElementById('authBtn').addEventListener('click',function(){
 socket.on('authSuccess',function(d){
   myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
   myAvatar=d.avatar||null;myUsername=d.username||null;
+  myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;
   if(d.avatar)avatarCache[d.login]=d.avatar;
   if(d.token)localStorage.setItem('mychat_token',d.token);
   document.getElementById('authOverlay').classList.add('hidden');
@@ -1974,12 +2070,34 @@ socket.on('adminUsers',function(users){
 });
 socket.on('adminLogs',function(logs){var html='';logs.forEach(function(l){var d=new Date(Number(l.timestamp));html+='<div class="log-row"><span class="time">'+d.toLocaleString()+'</span> <span class="act">'+l.action+'</span> '+l.username+' — '+l.detail+(l.ip?' ('+l.ip+')':'')+'</div>';});document.getElementById('adminContent').innerHTML=html||'<p>Логов нет</p>';});
 socket.on('adminDone',function(msg){alert(msg);loadTab(currentAdminTab);});
+socket.on('adminVipCodeCreated',function(d){
+  alert('Код создан:\n'+d.code+'\n('+d.days+' дней)');
+  loadTab('vip');
+});
+socket.on('adminVipCodes',function(rows){
+  var el=document.getElementById('vipCodesList');if(!el)return;
+  if(!rows.length){el.innerHTML='<div style="color:var(--text-muted);font-size:13px">Кодов ещё нет</div>';return;}
+  el.innerHTML=rows.map(function(r){
+    return '<div class="admin-vip-code"><span class="code-val">'+r.code+'</span>'
+      +'<span>'+r.duration_days+' дн.</span>'
+      +(r.used?'<span class="code-used">Использован: '+r.used_by+'</span>':'<span class="code-ok">Свободен</span>')
+      +'</div>';
+  }).join('');
+});
 function loadTab(tab){
   currentAdminTab=tab;var c=document.getElementById('adminContent');
   if(tab==='stats'){socket.emit('adminGetStats');c.innerHTML='Загрузка...';}
   else if(tab==='users'){socket.emit('adminGetUsers');c.innerHTML='Загрузка...';}
   else if(tab==='logs'){socket.emit('adminGetLogs');c.innerHTML='Загрузка...';}
   else if(tab==='announce'){c.innerHTML='<h3>📢 Объявление в общий чат</h3><div class="admin-input"><input id="annInput" placeholder="Текст..."><button id="annBtn">Отправить</button></div>';document.getElementById('annBtn').addEventListener('click',function(){var t=document.getElementById('annInput').value.trim();if(t){socket.emit('adminAnnounce',t);document.getElementById('annInput').value='';}});}
+  else if(tab==='vip'){
+    c.innerHTML='<div style="padding:16px"><h3 style="margin-bottom:14px">👑 VIP коды</h3><div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap"><input id="vipDaysInput" type="number" min="1" max="365" value="30" style="width:80px;padding:9px 12px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);outline:none;" placeholder="Дней"><button id="genVipBtn" style="padding:9px 16px;border:none;border-radius:10px;background:linear-gradient(135deg,#f7c948,#e8870a);color:#1a0a00;font-weight:700;cursor:pointer;">+ Создать код</button></div><div id="vipCodesList">Загрузка...</div></div>';
+    document.getElementById('genVipBtn').addEventListener('click',function(){
+      var days=parseInt(document.getElementById('vipDaysInput').value)||30;
+      socket.emit('adminGenerateVipCode',{days});
+    });
+    socket.emit('adminGetVipCodes');
+  }
   else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ сообщения?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('ТОЧНО?'))socket.emit('adminDeleteAllUsers');});}
 }
 
@@ -2346,6 +2464,7 @@ function _pvShow(){
 }
 
 function closePV(){
+  document.getElementById('pvMenu').style.display='none';
   document.getElementById('photoViewer').classList.remove('active');
   document.removeEventListener('keydown',pvKeyHandler);
   pvImages=[];pvIndex=0;pvMsgId=null;
@@ -2378,11 +2497,26 @@ function pvShowInChat(){
   }
 }
 
+function pvToggleMenu(e){
+  if(e){e.stopPropagation();}
+  var menu=document.getElementById('pvMenu');
+  menu.style.display=menu.style.display==='block'?'none':'block';
+}
+
 function pvReply(){
+  // save values before close clears them
+  var msgId=pvMsgId;
+  var imgSrc=pvImages[pvIndex];
   closePV();
-  if(pvMsgId){
-    var el=document.querySelector('[data-msg-id="'+pvMsgId+'"]');
-    if(el)el.dispatchEvent(new CustomEvent('startReply',{bubbles:true}));
+  // find message and trigger reply
+  var el = msgId ? document.querySelector('[data-msg-id="'+msgId+'"]') : null;
+  if(el){
+    // extract text or use photo placeholder
+    var textEl=el.querySelector('.text');
+    var replyText=textEl?textEl.textContent.trim():'📷 Фото';
+    var nameEl=el.querySelector('.name');
+    var replyUser=nameEl?nameEl.textContent.trim():'';
+    setReply(msgId, replyUser||'Фото', replyText||'📷 Фото');
   }
 }
 
@@ -2406,13 +2540,15 @@ function pvDelete(){
   closePV();
 }
 
-// Close on backdrop click (not on image or menu)
+// Close menu when clicking outside it
 document.getElementById('photoViewer').addEventListener('click',function(e){
-  if(e.target===this||e.target===document.getElementById('pvImg')){
-    // toggle menu
-    var menu=document.getElementById('pvMenu');
-    menu.style.display=menu.style.display==='none'?'':'none';
+  var menu=document.getElementById('pvMenu');
+  var menuBtn=document.getElementById('pvMenuBtn');
+  if(menu.style.display==='block'&&!menu.contains(e.target)&&e.target!==menuBtn){
+    menu.style.display='none';
   }
+  // close viewer on backdrop (not on image, menu, nav, top bar)
+  if(e.target===this){closePV();}
 });
 
 </script>

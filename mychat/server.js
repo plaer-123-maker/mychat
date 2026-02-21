@@ -92,6 +92,17 @@ async function initDB() {
     emoji VARCHAR(10) NOT NULL,
     UNIQUE(msg_type, msg_id, user_login)
   )`);
+  // VIP system
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_until BIGINT DEFAULT 0'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_emoji TEXT DEFAULT NULL'); } catch(e) {}
+  await pool.query(`CREATE TABLE IF NOT EXISTS vip_codes (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(32) UNIQUE NOT NULL,
+    duration_days INT NOT NULL DEFAULT 30,
+    used BOOLEAN DEFAULT false,
+    used_by VARCHAR(50) DEFAULT NULL,
+    created_at BIGINT DEFAULT 0
+  )`);
   console.log('Database ready');
 }
 initDB();
@@ -173,7 +184,7 @@ io.on('connection', (socket) => {
       socket.username = nickname; socket.userLogin = login; socket.userRole = role;
       onlineUsers.set(socket.id, { nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname, role, login, token });
+      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null });
       sendOnlineToAll();
       await addLog('register', nickname, 'Registered', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
@@ -742,6 +753,52 @@ io.on('connection', (socket) => {
   socket.on('adminChangeNickname', async ({ login, newNickname }) => {
     if (!isAdmin(socket)) return;
     try { await pool.query('UPDATE users SET nickname=$1 WHERE login=$2', [newNickname, login]); var s = findSocketByLogin(login); if (s) { s.username = newNickname; s.emit('nicknameChanged', newNickname); } for (let [sid, info] of onlineUsers) { if (info.login === login) info.nickname = newNickname; } socket.emit('adminDone', 'Ник изменён'); } catch(e) {}
+  });
+
+  // === VIP SYSTEM ===
+  socket.on('adminGenerateVipCode', async ({ days }) => {
+    if (!isAdmin(socket)) return;
+    const crypto = require('crypto');
+    const code = 'VIP-' + crypto.randomBytes(6).toString('hex').toUpperCase();
+    const d = parseInt(days) || 30;
+    try {
+      await pool.query('INSERT INTO vip_codes (code, duration_days, created_at) VALUES ($1,$2,$3)', [code, d, Date.now()]);
+      socket.emit('adminVipCodeCreated', { code, days: d });
+    } catch(e) { socket.emit('adminDone', 'Ошибка: ' + e.message); }
+  });
+
+  socket.on('adminGetVipCodes', async () => {
+    if (!isAdmin(socket)) return;
+    try {
+      const res = await pool.query('SELECT * FROM vip_codes ORDER BY id DESC LIMIT 50');
+      socket.emit('adminVipCodes', res.rows);
+    } catch(e) {}
+  });
+
+  socket.on('activateVip', async ({ code }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT * FROM vip_codes WHERE code=$1 AND used=false', [code.trim().toUpperCase()]);
+      if (!res.rows.length) { socket.emit('vipActivateResult', { ok: false, msg: 'Неверный или использованный код' }); return; }
+      const row = res.rows[0];
+      const until = Date.now() + row.duration_days * 86400000;
+      await pool.query('UPDATE vip_codes SET used=true, used_by=$1 WHERE id=$2', [socket.userLogin, row.id]);
+      await pool.query('UPDATE users SET vip_until=$1 WHERE login=$2', [until, socket.userLogin]);
+      socket.emit('vipActivateResult', { ok: true, until, days: row.duration_days });
+    } catch(e) { socket.emit('vipActivateResult', { ok: false, msg: 'Ошибка сервера' }); }
+  });
+
+  socket.on('setVipEmoji', async ({ emoji }) => {
+    if (!socket.userLogin) return;
+    // check user has VIP
+    const u = await pool.query('SELECT vip_until FROM users WHERE login=$1', [socket.userLogin]);
+    if (!u.rows.length || (u.rows[0].vip_until || 0) < Date.now()) {
+      socket.emit('vipEmojiResult', { ok: false, msg: 'Нужен VIP для установки смайлика' }); return;
+    }
+    await pool.query('UPDATE users SET vip_emoji=$1 WHERE login=$2', [emoji || null, socket.userLogin]);
+    socket.emit('vipEmojiResult', { ok: true, emoji });
+    // broadcast updated profile to all (so others see the emoji)
+    io.emit('userVipUpdated', { login: socket.userLogin, vip_until: u.rows[0].vip_until, vip_emoji: emoji || null });
   });
 
   // === REACTIONS ===
