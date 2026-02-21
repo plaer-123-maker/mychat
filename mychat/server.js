@@ -7,7 +7,7 @@ const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 15e6 });
+const io = new Server(server, { maxHttpBufferSize: 25e6 });
 
 app.use(express.static('public'));
 
