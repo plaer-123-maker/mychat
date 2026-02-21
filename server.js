@@ -73,6 +73,23 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_text TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_user TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS reply_to_id INT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS reply_to_text TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS reply_to_user TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS reply_to_id INT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS reply_to_text TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS reply_to_user TEXT DEFAULT NULL'); } catch(e) {}
+  await pool.query(`CREATE TABLE IF NOT EXISTS reactions (
+    id SERIAL PRIMARY KEY,
+    msg_type VARCHAR(20) NOT NULL,
+    msg_id INT NOT NULL,
+    user_login VARCHAR(50) NOT NULL,
+    emoji VARCHAR(10) NOT NULL,
+    UNIQUE(msg_type, msg_id, user_login)
+  )`);
   console.log('Database ready');
 }
 initDB();
@@ -235,10 +252,10 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
+    const msg = { username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
     try {
-      const res = await pool.query('INSERT INTO messages (username,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-        [msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      const res = await pool.query('INSERT INTO messages (username,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+        [msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
       msg.id = res.rows[0].id;
       io.emit('chatMessage', msg);
     } catch (e) { console.error(e); }
@@ -335,10 +352,10 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
+    const msg = { from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
     try {
-      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
+        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
       msg.id = res.rows[0].id;
       socket.emit('newPrivateMessage', msg);
       var target = findSocketByLogin(data.toLogin);
@@ -440,9 +457,9 @@ io.on('connection', (socket) => {
       var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return;
       if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
-      var msg = { room_id: roomId, user_login: socket.userLogin, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
-      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      var msg = { room_id: roomId, user_login: socket.userLogin, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
+      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp, reply_to_id, reply_to_text, reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
+        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
       msg.id = res.rows[0].id;
       io.to('room_' + roomId).emit('roomNewMessage', msg);
     } catch(e) { console.error(e); }
@@ -587,6 +604,41 @@ io.on('connection', (socket) => {
   socket.on('adminChangeNickname', async ({ login, newNickname }) => {
     if (!isAdmin(socket)) return;
     try { await pool.query('UPDATE users SET nickname=$1 WHERE login=$2', [newNickname, login]); var s = findSocketByLogin(login); if (s) { s.username = newNickname; s.emit('nicknameChanged', newNickname); } for (let [sid, info] of onlineUsers) { if (info.login === login) info.nickname = newNickname; } socket.emit('adminDone', 'Ник изменён'); } catch(e) {}
+  });
+
+  // === REACTIONS ===
+  socket.on('addReaction', async ({ msgType, msgId, emoji }) => {
+    if (!socket.userLogin) return;
+    try {
+      await pool.query('INSERT INTO reactions (msg_type, msg_id, user_login, emoji) VALUES ($1,$2,$3,$4) ON CONFLICT (msg_type, msg_id, user_login) DO UPDATE SET emoji=$4',
+        [msgType, msgId, socket.userLogin, emoji]);
+      const res = await pool.query('SELECT emoji, COUNT(*)::int as count FROM reactions WHERE msg_type=$1 AND msg_id=$2 GROUP BY emoji', [msgType, msgId]);
+      const userRes = await pool.query('SELECT user_login FROM reactions WHERE msg_type=$1 AND msg_id=$2 AND emoji=$3', [msgType, msgId, emoji]);
+      const payload = { msgType, msgId, reactions: res.rows };
+      if (msgType === 'general') io.emit('reactionUpdated', payload);
+      else if (msgType === 'pm') {
+        // find both users involved
+        const msg = await pool.query('SELECT from_login, to_login FROM private_messages WHERE id=$1', [msgId]);
+        if (msg.rows.length > 0) {
+          socket.emit('reactionUpdated', payload);
+          const other = msg.rows[0].from_login === socket.userLogin ? msg.rows[0].to_login : msg.rows[0].from_login;
+          const target = findSocketByLogin(other);
+          if (target) target.emit('reactionUpdated', payload);
+        }
+      } else if (msgType === 'room') {
+        const msg = await pool.query('SELECT room_id FROM room_messages WHERE id=$1', [msgId]);
+        if (msg.rows.length > 0) io.to('room_' + msg.rows[0].room_id).emit('reactionUpdated', payload);
+      }
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('getReactions', async ({ msgType, msgId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT emoji, COUNT(*)::int as count FROM reactions WHERE msg_type=$1 AND msg_id=$2 GROUP BY emoji', [msgType, msgId]);
+      const mine = await pool.query('SELECT emoji FROM reactions WHERE msg_type=$1 AND msg_id=$2 AND user_login=$3', [msgType, msgId, socket.userLogin]);
+      socket.emit('reactionsData', { msgType, msgId, reactions: res.rows, myEmoji: mine.rows[0]?.emoji || null });
+    } catch(e) {}
   });
 
   socket.on('disconnect', () => {
