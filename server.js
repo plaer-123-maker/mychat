@@ -116,6 +116,55 @@ async function initDB() {
     used_by VARCHAR(50) DEFAULT NULL,
     created_at BIGINT DEFAULT 0
   )`);
+
+  // === NEW FEATURES ===
+  // Verification badge
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false'); } catch(e) {}
+  // Promo codes for verification
+  await pool.query(`CREATE TABLE IF NOT EXISTS verify_codes (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(32) UNIQUE NOT NULL,
+    used BOOLEAN DEFAULT false,
+    used_by VARCHAR(50) DEFAULT NULL,
+    created_at BIGINT DEFAULT 0
+  )`);
+  // Muted chats
+  await pool.query(`CREATE TABLE IF NOT EXISTS muted_chats (
+    id SERIAL PRIMARY KEY,
+    user_login VARCHAR(50) NOT NULL,
+    chat_type VARCHAR(20) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    muted_until BIGINT NOT NULL,
+    UNIQUE(user_login, chat_type, chat_id)
+  )`);
+  // Message edits
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT false'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT false'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT false'); } catch(e) {}
+  // Forwarded messages
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS fwd_from_nick TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS fwd_from_nick TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS fwd_from_nick TEXT DEFAULT NULL'); } catch(e) {}
+  // Saved messages (special PM to self — no extra table needed)
+  // Group read receipts
+  await pool.query(`CREATE TABLE IF NOT EXISTS room_message_reads (
+    id SERIAL PRIMARY KEY,
+    msg_id INT NOT NULL,
+    user_login VARCHAR(50) NOT NULL,
+    read_at BIGINT NOT NULL,
+    UNIQUE(msg_id, user_login)
+  )`);
+  // Per-dialog chat background
+  await pool.query(`CREATE TABLE IF NOT EXISTS dialog_bg (
+    id SERIAL PRIMARY KEY,
+    user_login VARCHAR(50) NOT NULL,
+    chat_type VARCHAR(20) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    bg_id VARCHAR(50) NOT NULL DEFAULT 'none',
+    bg_data TEXT DEFAULT NULL,
+    UNIQUE(user_login, chat_type, chat_id)
+  )`);
+
   console.log('Database ready');
 }
 initDB();
@@ -178,7 +227,7 @@ io.on('connection', (socket) => {
       socket.userRole = user.login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
       onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: user.avatar || null, username: user.username || null });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false });
       sendOnlineToAll();
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
@@ -218,7 +267,7 @@ io.on('connection', (socket) => {
       await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
       onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false });
       sendOnlineToAll();
       await addLog('login', user.nickname, 'Login', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
@@ -471,7 +520,7 @@ io.on('connection', (socket) => {
   socket.on('getUserProfile', async (login) => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT login, nickname, username, avatar FROM users WHERE login=$1', [login]);
+      const res = await pool.query('SELECT login, nickname, username, avatar, verified FROM users WHERE login=$1', [login]);
       if (res.rows.length > 0) socket.emit('userProfile', res.rows[0]);
     } catch(e) {}
   });
@@ -915,6 +964,169 @@ io.on('connection', (socket) => {
       const res = await pool.query('SELECT emoji, COUNT(*)::int as count FROM reactions WHERE msg_type=$1 AND msg_id=$2 GROUP BY emoji', [msgType, msgId]);
       const mine = await pool.query('SELECT emoji FROM reactions WHERE msg_type=$1 AND msg_id=$2 AND user_login=$3', [msgType, msgId, socket.userLogin]);
       socket.emit('reactionsData', { msgType, msgId, reactions: res.rows, myEmoji: mine.rows[0]?.emoji || null });
+    } catch(e) {}
+  });
+
+  // === VERIFICATION ===
+  socket.on('adminGenerateVerifyCode', async () => {
+    if (!isAdmin(socket)) return;
+    const code = 'VRF-' + crypto.randomBytes(6).toString('hex').toUpperCase();
+    try {
+      await pool.query('INSERT INTO verify_codes (code, created_at) VALUES ($1,$2)', [code, Date.now()]);
+      socket.emit('adminVerifyCodeCreated', { code });
+    } catch(e) { socket.emit('adminDone', 'Ошибка: ' + e.message); }
+  });
+
+  socket.on('adminGetVerifyCodes', async () => {
+    if (!isAdmin(socket)) return;
+    try {
+      const res = await pool.query('SELECT * FROM verify_codes ORDER BY id DESC LIMIT 50');
+      socket.emit('adminVerifyCodes', res.rows);
+    } catch(e) {}
+  });
+
+  socket.on('activateVerify', async ({ code }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT * FROM verify_codes WHERE code=$1 AND used=false', [code.trim().toUpperCase()]);
+      if (!res.rows.length) { socket.emit('verifyActivateResult', { ok: false, msg: 'Неверный или использованный код' }); return; }
+      await pool.query('UPDATE verify_codes SET used=true, used_by=$1 WHERE id=$2', [socket.userLogin, res.rows[0].id]);
+      await pool.query('UPDATE users SET verified=true WHERE login=$1', [socket.userLogin]);
+      socket.emit('verifyActivateResult', { ok: true });
+      io.emit('userVerified', { login: socket.userLogin });
+    } catch(e) { socket.emit('verifyActivateResult', { ok: false, msg: 'Ошибка сервера' }); }
+  });
+
+  // === MUTE CHAT ===
+  socket.on('muteChat', async ({ chatType, chatId, hours }) => {
+    if (!socket.userLogin) return;
+    const until = Date.now() + (hours || 1) * 3600000;
+    await pool.query('INSERT INTO muted_chats (user_login,chat_type,chat_id,muted_until) VALUES ($1,$2,$3,$4) ON CONFLICT (user_login,chat_type,chat_id) DO UPDATE SET muted_until=$4',
+      [socket.userLogin, chatType, String(chatId), until]);
+    socket.emit('muteChatResult', { ok: true, chatType, chatId, until });
+  });
+
+  socket.on('unmuteChat', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    await pool.query('DELETE FROM muted_chats WHERE user_login=$1 AND chat_type=$2 AND chat_id=$3', [socket.userLogin, chatType, String(chatId)]);
+    socket.emit('muteChatResult', { ok: true, chatType, chatId, until: 0 });
+  });
+
+  socket.on('getMutedChats', async () => {
+    if (!socket.userLogin) return;
+    const res = await pool.query('SELECT * FROM muted_chats WHERE user_login=$1 AND muted_until>$2', [socket.userLogin, Date.now()]);
+    socket.emit('mutedChats', res.rows);
+  });
+
+  // === EDIT MESSAGE ===
+  socket.on('editMessage', async ({ msgType, msgId, newText }) => {
+    if (!socket.userLogin || !newText || !newText.trim()) return;
+    try {
+      if (msgType === 'general') {
+        const res = await pool.query('UPDATE messages SET text=$1, edited=true WHERE id=$2 AND (username=$3 OR $4=true) RETURNING id', [newText.trim(), msgId, socket.username, isAdmin(socket)]);
+        if (res.rows.length) io.emit('messageEdited', { msgType, msgId, newText: newText.trim() });
+      } else if (msgType === 'pm') {
+        const res = await pool.query('UPDATE private_messages SET text=$1, edited=true WHERE id=$2 AND from_login=$3 RETURNING from_login, to_login', [newText.trim(), msgId, socket.userLogin]);
+        if (res.rows.length) {
+          const other = res.rows[0].to_login;
+          const payload = { msgType, msgId, newText: newText.trim() };
+          socket.emit('messageEdited', payload);
+          const t = findSocketByLogin(other); if (t) t.emit('messageEdited', payload);
+        }
+      } else if (msgType === 'room') {
+        const msg = await pool.query('SELECT room_id FROM room_messages WHERE id=$1', [msgId]);
+        if (!msg.rows.length) return;
+        const roomId = msg.rows[0].room_id;
+        const res = await pool.query('UPDATE room_messages SET text=$1, edited=true WHERE id=$2 AND (user_login=$3 OR $4=true) RETURNING id', [newText.trim(), msgId, socket.userLogin, isAdmin(socket)]);
+        if (res.rows.length) io.to('room_' + roomId).emit('messageEdited', { msgType, msgId, newText: newText.trim() });
+      }
+    } catch(e) { console.error(e); }
+  });
+
+  // === FORWARD MESSAGE ===
+  socket.on('forwardMessage', async ({ msgType, msgId, toType, toId }) => {
+    if (!socket.userLogin) return;
+    try {
+      let origText = '', origImage = null, origVoice = null, origMsgType = 'text';
+      if (msgType === 'general') {
+        const r = await pool.query('SELECT * FROM messages WHERE id=$1', [msgId]);
+        if (!r.rows.length) return;
+        const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
+      } else if (msgType === 'pm') {
+        const r = await pool.query('SELECT * FROM private_messages WHERE id=$1 AND (from_login=$2 OR to_login=$2)', [msgId, socket.userLogin]);
+        if (!r.rows.length) return;
+        const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
+      } else if (msgType === 'room') {
+        const r = await pool.query('SELECT * FROM room_messages WHERE id=$1', [msgId]);
+        if (!r.rows.length) return;
+        const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
+      }
+      const fwdNick = socket.username;
+      let vipEmojiF = null;
+      try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiF = ve.rows[0].vip_emoji || null; } catch(e) {}
+
+      if (toType === 'general') {
+        const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,fwd_from_nick) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+          [socket.username, socket.userLogin, origText, origImage, origVoice, origMsgType, Date.now(), fwdNick]);
+        const msg = { id: res.rows[0].id, username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
+        io.emit('chatMessage', msg);
+      } else if (toType === 'pm') {
+        const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,fwd_from_nick) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+          [socket.userLogin, toId, socket.username, origText, origImage, origVoice, origMsgType, Date.now(), fwdNick]);
+        const msg = { id: res.rows[0].id, from_login: socket.userLogin, to_login: toId, from_nickname: socket.username, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
+        socket.emit('newPrivateMessage', msg);
+        const t = findSocketByLogin(toId); if (t) { t.emit('newPrivateMessage', msg); t.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+      } else if (toType === 'room') {
+        const roomId = Number(toId);
+        const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+        if (!member.rows.length) return;
+        const res = await pool.query('INSERT INTO room_messages (room_id,user_login,username,text,image,voice,type,timestamp,fwd_from_nick) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+          [roomId, socket.userLogin, socket.username, origText, origImage, origVoice, origMsgType, Date.now(), fwdNick]);
+        const msg = { id: res.rows[0].id, room_id: roomId, user_login: socket.userLogin, username: socket.username, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
+        io.to('room_' + roomId).emit('roomNewMessage', msg);
+      }
+      socket.emit('forwardDone', { ok: true });
+    } catch(e) { console.error(e); socket.emit('forwardDone', { ok: false }); }
+  });
+
+  // === SAVED MESSAGES (send to self) ===
+  // Handled via normal privateMessage to own login on frontend
+
+  // === GROUP READ RECEIPTS ===
+  socket.on('markRoomRead', async ({ roomId, msgIds }) => {
+    if (!socket.userLogin || !msgIds || !msgIds.length) return;
+    const now = Date.now();
+    for (const mid of msgIds) {
+      try {
+        await pool.query('INSERT INTO room_message_reads (msg_id,user_login,read_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [mid, socket.userLogin, now]);
+      } catch(e) {}
+    }
+  });
+
+  socket.on('getRoomMsgReaders', async ({ msgId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT r.user_login, u.nickname FROM room_message_reads r JOIN users u ON r.user_login=u.login WHERE r.msg_id=$1', [msgId]);
+      socket.emit('roomMsgReaders', { msgId, readers: res.rows });
+    } catch(e) {}
+  });
+
+  // === PER-DIALOG BACKGROUND ===
+  socket.on('setDialogBg', async ({ chatType, chatId, bgId, bgData }) => {
+    if (!socket.userLogin) return;
+    try {
+      await pool.query('INSERT INTO dialog_bg (user_login,chat_type,chat_id,bg_id,bg_data) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_login,chat_type,chat_id) DO UPDATE SET bg_id=$4, bg_data=$5',
+        [socket.userLogin, chatType, String(chatId), bgId || 'none', bgData || null]);
+      socket.emit('dialogBgResult', { ok: true, chatType, chatId, bgId, bgData });
+    } catch(e) { socket.emit('dialogBgResult', { ok: false }); }
+  });
+
+  socket.on('getDialogBg', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT bg_id, bg_data FROM dialog_bg WHERE user_login=$1 AND chat_type=$2 AND chat_id=$3', [socket.userLogin, chatType, String(chatId)]);
+      if (res.rows.length) socket.emit('dialogBgData', { chatType, chatId, bgId: res.rows[0].bg_id, bgData: res.rows[0].bg_data });
+      else socket.emit('dialogBgData', { chatType, chatId, bgId: 'none', bgData: null });
     } catch(e) {}
   });
 

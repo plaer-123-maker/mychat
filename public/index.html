@@ -583,6 +583,38 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .pv-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;justify-content:space-between;width:100%;padding:0 10px;pointer-events:none;z-index:3;}
 .pv-nav-btn{pointer-events:all;background:rgba(255,255,255,0.15);border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:background 0.15s;}
 .pv-nav-btn:hover{background:rgba(255,255,255,0.25);}
+/* ── VERIFICATION BADGE ── */
+.verified-badge{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;background:var(--accent);color:#fff;border-radius:50%;font-size:9px;font-weight:700;margin-left:3px;vertical-align:middle;flex-shrink:0;}
+
+/* ── MUTED CHAT ── */
+.mute-icon{font-size:13px;color:var(--text-muted);margin-left:3px;}
+.chat-item.muted .chat-item-nick{opacity:0.6;}
+
+/* ── EDIT MODE ── */
+.edit-bar{display:none;align-items:center;gap:8px;padding:6px 14px;background:var(--bg-panel);border-top:1px solid var(--border);}
+.edit-bar.active{display:flex;}
+.edit-bar span{font-size:12px;color:var(--accent);font-weight:600;flex:1;}
+
+/* ── FORWARD MODAL ── */
+.forward-modal{position:fixed;inset:0;z-index:7000;background:rgba(0,0,0,0.7);display:none;align-items:flex-end;justify-content:center;}
+.forward-modal.show{display:flex;}
+.forward-sheet{background:var(--bg-panel);border-radius:20px 20px 0 0;padding:20px 0 30px;width:100%;max-height:70vh;display:flex;flex-direction:column;}
+.forward-sheet-title{font-size:15px;font-weight:700;padding:0 20px 12px;border-bottom:1px solid var(--border);margin-bottom:8px;}
+.forward-list{overflow-y:auto;flex:1;}
+.forward-item{display:flex;align-items:center;gap:12px;padding:10px 20px;cursor:pointer;transition:background 0.15s;}
+.forward-item:hover{background:var(--bg-hover);}
+.forward-cancel{margin:12px 20px 0;padding:12px;border:none;border-radius:12px;background:var(--bg-input);color:var(--text-primary);font-size:14px;font-weight:600;cursor:pointer;width:calc(100% - 40px);}
+
+/* ── READERS POPUP ── */
+.readers-popup{position:fixed;background:var(--bg-panel);border:1px solid var(--border);border-radius:14px;padding:10px 16px;z-index:5500;min-width:180px;max-width:260px;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
+.readers-popup .rp-title{font-size:11px;color:var(--text-muted);font-weight:700;margin-bottom:6px;text-transform:uppercase;}
+.readers-popup .rp-reader{font-size:13px;color:var(--text-primary);padding:2px 0;}
+
+/* ── EDITED TAG ── */
+.edited-tag{font-size:10px;color:var(--text-muted);margin-left:4px;font-style:italic;}
+
+/* ── FORWARDED HEADER ── */
+.fwd-header{font-size:11px;color:var(--accent);font-weight:600;margin-bottom:3px;padding-left:2px;}
 
 </style>
 </head>
@@ -752,6 +784,21 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
   <div style="flex:1;" onclick="closeSettings()"></div>
 </div>
 
+<!-- ══════════════ FORWARD MODAL ══════════════ -->
+<div class="forward-modal" id="forwardModal">
+  <div class="forward-sheet">
+    <div class="forward-sheet-title">📤 Переслать в...</div>
+    <div class="forward-list" id="forwardList"></div>
+    <button class="forward-cancel" onclick="closeForwardModal()">Отмена</button>
+  </div>
+</div>
+
+<!-- ══════════════ READERS POPUP ══════════════ -->
+<div class="readers-popup" id="readersPopup" style="display:none">
+  <div class="rp-title">👁 Прочитали</div>
+  <div id="readersPopupList"></div>
+</div>
+
 <!-- ══════════════ APP ══════════════ -->
 <div class="app-container" id="appContainer">
   <div class="sidebar">
@@ -778,6 +825,9 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <button id="tabPrivate">✉️ Личные</button>
       <button id="tabRooms">👥 Группы</button>
     </div>
+    <div style="padding:6px 12px;border-bottom:1px solid var(--border);">
+      <button onclick="openSavedMessages()" style="width:100%;padding:8px 12px;border:none;border-radius:10px;background:var(--bg-input);color:var(--text-secondary);font-size:13px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;">📁 Избранное</button>
+    </div>
     <div class="search-box">
       <div class="search-wrap">
         <input type="text" id="searchInput" placeholder="Поиск...">
@@ -800,6 +850,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
         </div>
       </div>
       <div class="chat-header-btns" id="chatHeaderBtns"></div>
+      <button id="dialogBgBtn" onclick="openDialogBgSettings()" title="Фон диалога" style="background:transparent;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer;padding:6px;border-radius:8px;display:none;">🖼</button>
     </div>
     <div class="messages" id="messages"></div>
     <!-- Video Note Recorder -->
@@ -829,6 +880,10 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <button class="rec-cancel" id="recCancel">Отмена</button>
       <button class="rec-send" id="recSend">Отправить ➤</button>
     </div>
+    <div class="edit-bar" id="editBar">
+      <span>✏️ Редактирование сообщения</span>
+      <button onclick="cancelEdit()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
+    </div>
     <div class="input-area" id="inputArea">
       <label class="ia-btn" for="photoInput" title="Фото">📎</label>
       <input type="file" id="photoInput" accept="image/*" multiple>
@@ -854,6 +909,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <button data-tab="users">👥 Пользователи</button>
       <button data-tab="logs">📋 Логи</button>
       <button data-tab="vip">👑 VIP</button>
+      <button data-tab="verify">✓ Верификация</button>
       <button data-tab="announce">📢 Объявление</button>
       <button data-tab="danger">⚠️ Опасно</button>
     </div>
@@ -1285,17 +1341,22 @@ var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null,
-replyTo=null,myVipUntil=0,myVipEmoji=null,
-pinnedChats=[],vipEmojiCache={},lastSeenCache={},hideOnlineSelf=false;
+replyTo=null,myVipUntil=0,myVipEmoji=null,myVerified=false,
+pinnedChats=[],vipEmojiCache={},verifiedCache={},lastSeenCache={},hideOnlineSelf=false,
+mutedChats=[];
 
-/* ── NICK + VIP EMOJI HELPER ── */
+/* ── NICK + VIP EMOJI + VERIFIED HELPER ── */
 function getNickWithEmoji(login, nickname, inlineEmoji) {
   var emoji = inlineEmoji || (login === myLogin ? myVipEmoji : (vipEmojiCache[login] || null));
-  if (!emoji) return nickname || login;
+  var isVerif = (login === myLogin ? myVerified : (verifiedCache[login] || false));
+  var nick = nickname || login;
+  var result = nick;
+  if (isVerif) result += '<span class="verified-badge" title="Верифицирован">✓</span>';
+  if (!emoji) return result;
   var emojiHtml = emoji.startsWith('data:')
     ? '<img src="'+emoji+'" style="width:16px;height:16px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-left:3px;">'
     : '<span class="vip-nick-emoji">'+emoji+'</span>';
-  return (nickname || login) + emojiHtml;
+  return result + emojiHtml;
 }
 
 function getNickPlain(login, nickname) {
@@ -1386,7 +1447,8 @@ document.getElementById('authBtn').addEventListener('click',function(){
 socket.on('authSuccess',function(d){
   myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
   myAvatar=d.avatar||null;myUsername=d.username||null;
-  myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;
+  myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;myVerified=d.verified||false;
+  if(d.verified)verifiedCache[d.login]=true;
   if(d.avatar)avatarCache[d.login]=d.avatar;
   if(d.token)localStorage.setItem('mychat_token',d.token);
   document.getElementById('authOverlay').classList.add('hidden');
@@ -1397,6 +1459,7 @@ socket.on('authSuccess',function(d){
   else if(currentBgId !== 'none') applyBackground(currentBgId, null);
   // fetch pinned chats
   socket.emit('getPinnedChats');
+  socket.emit('getMutedChats');
   // init notifications
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
   switchToGeneral();
@@ -1509,6 +1572,7 @@ function renderAllChats(){
 
 function switchToGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  document.getElementById('dialogBgBtn').style.display='none';
   setActiveTab('tabGeneral');
   document.getElementById('searchInput').value='';
   document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
@@ -1839,7 +1903,9 @@ function addRoomMsg(msg){
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
+  if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html.replace('<div class="name','<div class="name');
   html+=buildMsgTime(msg.timestamp);
+  if(isMine&&msg.id)html=html.replace('</div>','<span class="msg-checks check-single" style="cursor:pointer;margin-left:4px;" onclick="showReadersPopup(event,'+msg.id+')" title="Кто прочитал">✓</span></div>');
   if(isMine||(currentRoomData&&currentRoomData.myRole==='admin'))html+='<span class="del-btn" onclick="delRoomMsg('+msg.id+')">Удалить</span>';
   div.innerHTML=html;
   if(msg.type==='video_note'&&msg.voice){div.classList.add('video-note-msg');div.appendChild(renderVideoNote(msg.voice,isMine));}
@@ -1988,6 +2054,7 @@ function addPM(msg){
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
+  if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html;
   html+=buildMsgTime(msg.timestamp);
   if(isMine||myRole==='admin')html+='<span class="del-btn" onclick="delPM('+msg.id+')">Удалить</span>';
   div.innerHTML=html;
@@ -2865,7 +2932,485 @@ document.getElementById('photoViewer').addEventListener('click',function(e){
   if(e.target===this){closePV();}
 });
 
+/* ══════════════════════════════════════════
+   NEW FEATURES
+══════════════════════════════════════════ */
 
-</script>
+/* ── 1. VERIFICATION ── */
+socket.on('userVerified', function(d) {
+  verifiedCache[d.login] = true;
+  if (d.login === myLogin) myVerified = true;
+  // Refresh visible messages
+  document.querySelectorAll('.msg-nick, .name').forEach(function(el) {
+    // lightweight: just trigger re-render by reloading chat list
+  });
+  renderChatList();
+});
+socket.on('verifyActivateResult', function(d) {
+  var el = document.getElementById('verifyResult');
+  if (el) el.textContent = d.ok ? '✅ Аккаунт верифицирован!' : (d.msg || 'Ошибка');
+  if (d.ok) { myVerified = true; verifiedCache[myLogin] = true; setTimeout(renderSettingsMain, 1500); }
+});
+
+/* ── 2. MUTED CHATS ── */
+socket.on('mutedChats', function(rows) {
+  mutedChats = rows;
+  renderChatList();
+});
+socket.on('muteChatResult', function(d) {
+  if (d.ok) {
+    socket.emit('getMutedChats');
+  }
+});
+
+function isChatMuted(chatType, chatId) {
+  var now = Date.now();
+  return mutedChats.some(function(m) { return m.chat_type === chatType && String(m.chat_id) === String(chatId) && m.muted_until > now; });
+}
+
+function showMuteMenu(e, chatType, chatId) {
+  e.preventDefault(); e.stopPropagation();
+  if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; }
+  var pinned = isPinned(chatType, chatId);
+  var muted = isChatMuted(chatType, chatId);
+  var menu = document.createElement('div');
+  menu.className = 'chat-item-ctx-menu';
+  menu.style.left = e.clientX + 'px'; menu.style.top = e.clientY + 'px';
+  var pinHtml = '<div onclick="togglePin(\''+chatType+'\',\''+chatId+'\')">'+(pinned?'📌 Открепить':'📌 Закрепить')+'</div>';
+  var muteHtml = muted
+    ? '<div onclick="unmuteChat(\''+chatType+'\',\''+chatId+'\')">🔔 Включить уведомления</div>'
+    : '<div>🔇 Заглушить<div style="margin-left:auto;display:flex;flex-direction:column;gap:4px;padding:4px 0;">'+
+      '<span onclick="muteChat(\''+chatType+'\',\''+chatId+'\',1)" style="padding:4px 10px;cursor:pointer;font-size:13px;">1 час</span>'+
+      '<span onclick="muteChat(\''+chatType+'\',\''+chatId+'\',8)" style="padding:4px 10px;cursor:pointer;font-size:13px;">8 часов</span>'+
+      '<span onclick="muteChat(\''+chatType+'\',\''+chatId+'\',24)" style="padding:4px 10px;cursor:pointer;font-size:13px;">24 часа</span>'+
+      '<span onclick="muteChat(\''+chatType+'\',\''+chatId+'\',9999)" style="padding:4px 10px;cursor:pointer;font-size:13px;">Навсегда</span>'+
+      '</div></div>';
+  menu.innerHTML = pinHtml + muteHtml;
+  document.body.appendChild(menu); ctxMenu = menu;
+  setTimeout(function(){document.addEventListener('click',function rm(){ctxMenu&&ctxMenu.remove();ctxMenu=null;document.removeEventListener('click',rm);});},10);
+}
+window.showMuteMenu = showMuteMenu;
+
+// Override showChatCtxMenu to use showMuteMenu
+window.showChatCtxMenu = showMuteMenu;
+
+function muteChat(chatType, chatId, hours) {
+  socket.emit('muteChat', { chatType, chatId, hours });
+  if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; }
+}
+window.muteChat = muteChat;
+
+function unmuteChat(chatType, chatId) {
+  socket.emit('unmuteChat', { chatType, chatId });
+  if (ctxMenu) { ctxMenu.remove(); ctxMenu = null; }
+}
+window.unmuteChat = unmuteChat;
+
+/* ── 3. EDIT MESSAGE ── */
+var editingMsgId = null, editingMsgType = null;
+
+function startEdit(msgId, msgType, currentText) {
+  editingMsgId = msgId; editingMsgType = msgType;
+  document.getElementById('editBar').classList.add('active');
+  var inp = document.getElementById('msgInput');
+  inp.value = currentText || '';
+  inp.focus();
+  closeReactionPanel();
+}
+window.startEdit = startEdit;
+
+function cancelEdit() {
+  editingMsgId = null; editingMsgType = null;
+  document.getElementById('editBar').classList.remove('active');
+  document.getElementById('msgInput').value = '';
+}
+window.cancelEdit = cancelEdit;
+
+// Override send to handle edit mode
+var origSendClick = document.getElementById('sendBtn').onclick;
+document.getElementById('sendBtn').addEventListener('click', function(e) {
+  if (editingMsgId) {
+    var text = document.getElementById('msgInput').value.trim();
+    if (!text) return;
+    socket.emit('editMessage', { msgType: editingMsgType, msgId: editingMsgId, newText: text });
+    cancelEdit();
+    return;
+  }
+}, true);
+
+socket.on('messageEdited', function(d) {
+  var el = document.getElementById('msg-' + d.msgId) || document.getElementById('pm-' + d.msgId) || document.getElementById('rmsg-' + d.msgId);
+  if (!el) return;
+  var textEl = el.querySelector('.text');
+  if (textEl) {
+    textEl.innerHTML = escHtml(d.newText);
+    // Add edited tag if not there
+    if (!el.querySelector('.edited-tag')) {
+      var tag = document.createElement('span'); tag.className = 'edited-tag'; tag.textContent = 'ред.';
+      var timeEl = el.querySelector('.msg-time'); if (timeEl) timeEl.insertBefore(tag, timeEl.firstChild); else el.appendChild(tag);
+    }
+  }
+});
+
+/* ── 4. FORWARD MESSAGE ── */
+var forwardingMsg = null;
+
+function showForwardModal(msgId, msgType) {
+  forwardingMsg = { msgId, msgType };
+  var list = document.getElementById('forwardList');
+  list.innerHTML = '';
+
+  // Saved messages (self)
+  var selfItem = document.createElement('div'); selfItem.className = 'forward-item';
+  selfItem.innerHTML = '<div class="avatar" style="width:40px;height:40px;font-size:18px;">📁</div><div><div style="font-size:14px;font-weight:600;">Избранное</div></div>';
+  selfItem.onclick = function() { doForward('pm', myLogin); };
+  list.appendChild(selfItem);
+
+  // PM chats
+  if (window._myChatsCache) {
+    window._myChatsCache.forEach(function(u) {
+      var item = document.createElement('div'); item.className = 'forward-item';
+      item.innerHTML = getAvatarHtml(u.login, u.nickname, 40) + '<div><div style="font-size:14px;font-weight:600;">'+escHtml(u.nickname)+'</div></div>';
+      item.onclick = function() { doForward('pm', u.login); };
+      list.appendChild(item);
+    });
+  }
+  // Room chats
+  if (window._myRoomsCache) {
+    window._myRoomsCache.forEach(function(r) {
+      var item = document.createElement('div'); item.className = 'forward-item';
+      item.innerHTML = '<div class="avatar" style="width:40px;height:40px;font-size:18px;">'+(r.type==='channel'?'📢':'👥')+'</div><div><div style="font-size:14px;font-weight:600;">'+escHtml(r.name)+'</div></div>';
+      item.onclick = function() { doForward('room', r.id); };
+      list.appendChild(item);
+    });
+  }
+  // General
+  var genItem = document.createElement('div'); genItem.className = 'forward-item';
+  genItem.innerHTML = '<div class="avatar" style="width:40px;height:40px;font-size:18px;">🌐</div><div><div style="font-size:14px;font-weight:600;">Общий чат</div></div>';
+  genItem.onclick = function() { doForward('general', null); };
+  list.appendChild(genItem);
+
+  document.getElementById('forwardModal').classList.add('show');
+  closeReactionPanel();
+}
+window.showForwardModal = showForwardModal;
+
+function doForward(toType, toId) {
+  if (!forwardingMsg) return;
+  socket.emit('forwardMessage', { msgType: forwardingMsg.msgType, msgId: forwardingMsg.msgId, toType, toId: String(toId || '') });
+  closeForwardModal();
+  showError('✅ Сообщение переслано');
+}
+window.doForward = doForward;
+
+function closeForwardModal() {
+  document.getElementById('forwardModal').classList.remove('show');
+  forwardingMsg = null;
+}
+window.closeForwardModal = closeForwardModal;
+
+socket.on('forwardDone', function(d) { /* handled in doForward */ });
+
+/* Cache chats/rooms for forward modal */
+socket.on('myChats', function(chats) { window._myChatsCache = chats; });
+socket.on('myRooms', function(rooms) { window._myRoomsCache = rooms; });
+
+/* ── 5. SAVED MESSAGES ── */
+function openSavedMessages() {
+  openPM(myLogin, '📁 Избранное');
+}
+window.openSavedMessages = openSavedMessages;
+
+/* ── 6. GROUP READ RECEIPTS ── */
+var readersPopupTimeout = null;
+
+function showReadersPopup(e, msgId) {
+  e.stopPropagation();
+  socket.emit('getRoomMsgReaders', { msgId: Number(msgId) });
+  socket.once('roomMsgReaders', function(d) {
+    if (d.msgId != msgId) return;
+    var popup = document.getElementById('readersPopup');
+    var listEl = document.getElementById('readersPopupList');
+    if (!d.readers.length) { listEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Никто ещё не прочитал</div>'; }
+    else listEl.innerHTML = d.readers.map(function(r) { return '<div class="rp-reader">'+escHtml(r.nickname)+'</div>'; }).join('');
+    popup.style.display = 'block';
+    popup.style.left = Math.min(e.clientX, window.innerWidth - 200) + 'px';
+    popup.style.top = (e.clientY - popup.offsetHeight - 8) + 'px';
+    if (readersPopupTimeout) clearTimeout(readersPopupTimeout);
+    readersPopupTimeout = setTimeout(function() { popup.style.display = 'none'; }, 4000);
+  });
+}
+window.showReadersPopup = showReadersPopup;
+document.addEventListener('click', function() { document.getElementById('readersPopup').style.display = 'none'; });
+
+// Mark room messages as read when viewing room
+function markRoomMessagesRead() {
+  if (currentView !== 'room' || !currentRoomId) return;
+  var msgs = document.querySelectorAll('#messages [data-msg-id]');
+  var ids = [];
+  msgs.forEach(function(el) { if (el.dataset.msgId) ids.push(Number(el.dataset.msgId)); });
+  if (ids.length) socket.emit('markRoomRead', { roomId: currentRoomId, msgIds: ids });
+}
+
+// Call markRoomMessagesRead when room is opened
+var origRoomData = socket.listeners ? null : null;
+socket.on('roomData', function() { setTimeout(markRoomMessagesRead, 500); });
+
+/* ── 7. PER-DIALOG BACKGROUND ── */
+var currentDialogBg = null;
+
+function applyDialogBg(bgId, bgData) {
+  currentDialogBg = { bgId, bgData };
+  var msgEl = document.getElementById('messages');
+  if (!msgEl) return;
+  if (bgId === 'none' || !bgId) {
+    msgEl.style.backgroundImage = '';
+    msgEl.style.backgroundColor = '';
+    // restore global bg
+    if (customBgData) applyBackground('custom', customBgData);
+    else applyBackground(currentBgId, null);
+  } else if (bgId === 'custom' && bgData) {
+    msgEl.style.backgroundImage = 'url(' + bgData + ')';
+    msgEl.style.backgroundSize = 'cover';
+  } else {
+    var bg = CHAT_BGSVAR.find(function(b) { return b.id === bgId; });
+    if (bg && bg.value) { msgEl.style.backgroundImage = bg.value; msgEl.style.backgroundSize = 'cover'; }
+  }
+}
+
+socket.on('dialogBgData', function(d) {
+  if ((currentView === 'pm' && String(d.chatId) === String(currentPrivateLogin)) ||
+      (currentView === 'room' && String(d.chatId) === String(currentRoomId))) {
+    applyDialogBg(d.bgId, d.bgData);
+  }
+});
+
+function openDialogBgSettings() {
+  if (!currentPrivateLogin && !currentRoomId) return;
+  var chatType = currentView === 'pm' ? 'pm' : 'room';
+  var chatId = currentView === 'pm' ? currentPrivateLogin : currentRoomId;
+  var body = document.getElementById('settingsBody');
+  var cardsHtml = CHAT_BGSVAR.map(function(bg) {
+    var active = (currentDialogBg && currentDialogBg.bgId === bg.id) ? ' active' : '';
+    var style = bg.id === 'none'
+      ? 'background:var(--bg-base);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:12px;'
+      : 'background:' + bg.value + ';background-size:cover;';
+    return '<div class="bg-card' + active + '" onclick="setDialogBgChoice(\'' + chatType + '\',\'' + chatId + '\',\'' + bg.id + '\',null)" style="' + style + '">'+
+      (bg.id === 'none' ? '<span style="position:absolute;font-size:11px;font-weight:600;">Нет</span>' : '') + '</div>';
+  }).join('');
+  openSettings();
+  var settingsBody = document.getElementById('settingsBody');
+  settingsBody.innerHTML = '<div class="settings-header" style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);"><button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button><h3 style="font-size:16px;font-weight:700;">Фон этого диалога</h3></div><div class="bg-grid">' + cardsHtml + '<label class="bg-upload-card" for="dialogBgInput"><span style="font-size:28px;">📷</span><span>Загрузить</span></label><input type="file" id="dialogBgInput" accept="image/*" style="display:none;" onchange="handleDialogBgUpload(this,\'' + chatType + '\',\'' + chatId + '\')"></div>';
+}
+window.openDialogBgSettings = openDialogBgSettings;
+
+function setDialogBgChoice(chatType, chatId, bgId, bgData) {
+  socket.emit('setDialogBg', { chatType, chatId, bgId, bgData });
+  applyDialogBg(bgId, bgData);
+}
+window.setDialogBgChoice = setDialogBgChoice;
+
+function handleDialogBgUpload(input, chatType, chatId) {
+  var file = input.files[0]; if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var data = e.target.result;
+    socket.emit('setDialogBg', { chatType, chatId, bgId: 'custom', bgData: data });
+    applyDialogBg('custom', data);
+  };
+  reader.readAsDataURL(file);
+}
+window.handleDialogBgUpload = handleDialogBgUpload;
+
+/* Fetch dialog bg when opening PM or room */
+var _origOpenPM = openPM;
+window.openPM = function(login, nickname) {
+  _origOpenPM(login, nickname);
+  currentDialogBg = null;
+  document.getElementById('dialogBgBtn').style.display = 'block';
+  setTimeout(function() { socket.emit('getDialogBg', { chatType: 'pm', chatId: login }); }, 200);
+};
+
+var _origOpenRoom = openRoom;
+window.openRoom = function(roomId) {
+  _origOpenRoom(roomId);
+  currentDialogBg = null;
+  document.getElementById('dialogBgBtn').style.display = 'block';
+  setTimeout(function() { socket.emit('getDialogBg', { chatType: 'room', chatId: roomId }); }, 200);
+};
+
+/* ── EXTEND REACTION PANEL with Edit/Forward ── */
+var _origShowReactionPanel = showReactionPanel;
+window.showReactionPanel = function(msgId, msgType, anchorEl, replyUser, replyText, canDelete) {
+  closeReactionPanel();
+  var panel = document.createElement('div'); panel.className = 'reaction-panel';
+
+  // Reply
+  var rb = document.createElement('button'); rb.className = 'rp-reply'; rb.textContent = '↩ Ответить';
+  rb.addEventListener('click', function(e) { e.stopPropagation(); setReply(msgId, replyUser, replyText); closeReactionPanel(); });
+  panel.appendChild(rb);
+
+  // Forward
+  var fb = document.createElement('button'); fb.className = 'rp-reply'; fb.textContent = '📤 Переслать';
+  fb.addEventListener('click', function(e) { e.stopPropagation(); showForwardModal(msgId, msgType); });
+  panel.appendChild(fb);
+
+  // Edit (only own text messages)
+  var msgEl = document.getElementById('msg-' + msgId) || document.getElementById('pm-' + msgId) || document.getElementById('rmsg-' + msgId);
+  if (msgEl && msgEl.classList.contains('mine')) {
+    var textEl = msgEl.querySelector('.text');
+    if (textEl) {
+      var eb = document.createElement('button'); eb.className = 'rp-reply'; eb.textContent = '✏️ Редактировать';
+      eb.addEventListener('click', function(e) { e.stopPropagation(); startEdit(msgId, msgType, textEl.textContent); });
+      panel.appendChild(eb);
+    }
+  }
+
+  var div1 = document.createElement('div'); div1.className = 'rp-divider'; panel.appendChild(div1);
+
+  // Reactions
+  EMOJIS.forEach(function(em) {
+    var b = document.createElement('button'); b.textContent = em;
+    b.addEventListener('click', function(e) { e.stopPropagation(); socket.emit('addReaction', { msgType, msgId, emoji: em }); closeReactionPanel(); });
+    panel.appendChild(b);
+  });
+
+  // Delete
+  if (canDelete) {
+    var div2 = document.createElement('div'); div2.className = 'rp-divider'; panel.appendChild(div2);
+    var db = document.createElement('button'); db.className = 'rp-delete'; db.textContent = '🗑 Удалить';
+    db.addEventListener('click', function(e) {
+      e.stopPropagation(); closeReactionPanel();
+      if (msgType === 'general') socket.emit('deleteMessage', msgId);
+      else if (msgType === 'pm') socket.emit('deletePrivateMessage', msgId);
+      else if (msgType === 'room') socket.emit('deleteRoomMessage', { roomId: currentRoomId, msgId });
+    });
+    panel.appendChild(db);
+  }
+
+  document.body.appendChild(panel); activePanel = panel;
+  var rect = anchorEl.getBoundingClientRect();
+  var pw = panel.offsetWidth || 380;
+  var left = rect.left + (rect.width / 2) - (pw / 2);
+  if (left < 8) left = 8; if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+  var top = rect.top - panel.offsetHeight - 8; if (top < 8) top = rect.bottom + 8;
+  panel.style.left = left + 'px'; panel.style.top = top + 'px';
+  setTimeout(function() { document.addEventListener('click', closeReactionPanel, { once: true }); document.addEventListener('touchstart', closeReactionPanel, { once: true, passive: true }); }, 50);
+};
+
+/* ── ADD SAVED MESSAGES TO SETTINGS ── */
+var _origRenderSettingsMain = renderSettingsMain;
+window.renderSettingsMain = function() {
+  _origRenderSettingsMain();
+  // Inject "Saved messages" and "Verification" after VIP section
+  var body = document.getElementById('settingsBody');
+  if (!body) return;
+  // Find VIP section and add after it
+  var vipSection = body.querySelector('[onclick*="openVipSettings"]');
+  if (vipSection) {
+    var parent = vipSection.closest('.settings-section') || vipSection.parentElement;
+    if (parent) {
+      // Add saved messages item
+      var savedItem = document.createElement('div');
+      savedItem.className = 'settings-item';
+      savedItem.innerHTML = '<div class="si-icon">📁</div><div class="si-info"><div class="si-title">Избранное</div><div class="si-sub">Сохранённые сообщения</div></div><div class="si-arrow">›</div>';
+      savedItem.onclick = function() { closeSettings(); openSavedMessages(); };
+      parent.parentNode.insertBefore(savedItem, parent.nextSibling);
+
+      // Add verification item
+      var verifyItem = document.createElement('div');
+      verifyItem.className = 'settings-item';
+      verifyItem.innerHTML = '<div class="si-icon">✓</div><div class="si-info"><div class="si-title">Верификация</div><div class="si-sub">'+(myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации')+'</div></div><div class="si-arrow">›</div>';
+      verifyItem.onclick = openVerifySettings;
+      parent.parentNode.insertBefore(verifyItem, savedItem.nextSibling);
+    }
+  }
+};
+
+function openVerifySettings() {
+  var body = document.getElementById('settingsBody');
+  body.innerHTML = '<div class="settings-header" style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);"><button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button><h3 style="font-size:16px;font-weight:700;">✓ Верификация</h3></div>'
+    + '<div style="padding:24px 20px;">'
+    + (myVerified
+        ? '<div style="text-align:center;font-size:40px;margin-bottom:12px;">✓</div><div style="text-align:center;color:var(--online);font-weight:700;font-size:16px;">Аккаунт верифицирован!</div>'
+        : '<div style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">Введи промокод верификации от администратора. Галочка ✓ будет видна рядом с твоим именем.</div>'
+          + '<input id="verifyCodeInput" placeholder="Промокод верификации (VRF-...)" style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-input);color:var(--text-primary);font-size:14px;box-sizing:border-box;margin-bottom:10px;">'
+          + '<div id="verifyResult" style="font-size:13px;color:var(--accent);min-height:20px;margin-bottom:10px;"></div>'
+          + '<button onclick="submitVerifyCode()" style="width:100%;padding:13px;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:15px;font-weight:700;cursor:pointer;">Активировать</button>'
+      )
+    + '</div>';
+}
+window.openVerifySettings = openVerifySettings;
+
+function submitVerifyCode() {
+  var code = document.getElementById('verifyCodeInput').value.trim();
+  if (!code) return;
+  socket.emit('activateVerify', { code });
+}
+window.submitVerifyCode = submitVerifyCode;
+
+/* ── ADD VERIFY TAB TO ADMIN PANEL ── */
+// Extend admin tabs with verify codes
+var _origLoadTab = loadTab;
+window.loadTab = function(tab) {
+  if (tab === 'verify') {
+    currentAdminTab = tab;
+    var c = document.getElementById('adminContent');
+    c.innerHTML = '<div style="padding:16px"><h3 style="margin-bottom:14px">✓ Коды верификации</h3>'
+      + '<button id="genVerifyBtn" style="padding:9px 16px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-bottom:16px;">+ Создать код</button>'
+      + '<div id="verifyCodesList">Загрузка...</div></div>';
+    document.getElementById('genVerifyBtn').addEventListener('click', function() {
+      socket.emit('adminGenerateVerifyCode');
+    });
+    socket.emit('adminGetVerifyCodes');
+  } else {
+    _origLoadTab(tab);
+  }
+};
+
+socket.on('adminVerifyCodeCreated', function(d) {
+  alert('Код верификации создан:\n' + d.code);
+  loadTab('verify');
+});
+socket.on('adminVerifyCodes', function(rows) {
+  var el = document.getElementById('verifyCodesList'); if (!el) return;
+  if (!rows.length) { el.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Кодов нет</div>'; return; }
+  el.innerHTML = rows.map(function(r) {
+    return '<div class="admin-vip-code"><span class="code-val">'+r.code+'</span>'+(r.used?'<span class="code-used">Использован: '+r.used_by+'</span>':'<span class="code-ok">Свободен</span>')+'</div>';
+  }).join('');
+});
+
+// verify tab already in HTML
+
+/* ── ADD DIALOG BG BUTTON TO CHAT HEADER ── */
+// Inject "Фон диалога" button in chat header when in PM or room
+var _origOpenPM2 = window.openPM;
+// Already patched above via _origOpenPM chain
+
+/* ── FORWARD HEADER IN MESSAGES ── */
+function buildFwdHeader(msg) {
+  if (!msg.fwd_from_nick) return '';
+  return '<div class="fwd-header">📤 Переслано от: ' + escHtml(msg.fwd_from_nick) + '</div>';
+}
+
+/* ── PATCH addMsg / addPM / addRoomMsg to show fwd_header and edited tag ── */
+var _origAddMsg = addMsg;
+// We can't easily wrap addMsg since it's a plain function; instead override via rebuild
+// The edited tag and fwd header will be added by server — handled in messageEdited event above
+
+// Patch buildMsgTime to also show read count for room messages
+var _origBuildMsgTime = buildMsgTime;
+window.buildMsgTime = function(ts, msgId, isRoom, isMine) {
+  if (!ts) return '';
+  var d = new Date(Number(ts));
+  var h = d.getHours(), m = d.getMinutes();
+  var time = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  var readerBtn = (isRoom && isMine && msgId)
+    ? '<span class="msg-checks check-single" style="cursor:pointer;" onclick="showReadersPopup(event,' + msgId + ')" title="Кто прочитал">✓</span>'
+    : '';
+  return '<div class="msg-time">' + time + readerBtn + '</div>';
+};
+
+
 </body>
 </html>
