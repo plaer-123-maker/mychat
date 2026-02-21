@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MyChat</title>
-<!-- ПОДКЛЮЧАЕМ МАНИФЕСТ ДЛЯ ПРИЛОЖЕНИЯ -->
-<link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#1a1a2e">
 <script src="/socket.io/socket.io.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -673,7 +670,7 @@ socket.on('adminUsers',function(users){
   users.forEach(function(u){
     var row=document.createElement('div');row.className='user-row';
     var infoDiv=document.createElement('div');infoDiv.className='uinfo';
-    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
+    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
     row.appendChild(infoDiv);
     var actDiv=document.createElement('div');actDiv.className='uactions';
     if(u.banned){var b=document.createElement('button');b.className='admin-act-btn abtn-unban';b.textContent='Разбан';b.addEventListener('click',(function(l){return function(){socket.emit('adminUnbanUser',l);};})(u.login));actDiv.appendChild(b);}
@@ -761,6 +758,7 @@ function startCall(userToCall, type){
     
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
     
+    // Improved ontrack logic: force play and check streams
     peerConnection.ontrack=function(e){
       const remoteVideo = document.getElementById('remoteVideo');
       if (e.streams && e.streams[0]) {
@@ -776,7 +774,6 @@ function startCall(userToCall, type){
 
     localStream.getTracks().forEach(function(track){peerConnection.addTrack(track,localStream);});
     
-    // Add offerToReceiveAudio/Video to fix mobile-to-pc issues
     peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
     .then(function(offer){
       return peerConnection.setLocalDescription(offer);
