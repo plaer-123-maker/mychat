@@ -120,15 +120,18 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 @media(max-width:600px){.sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}.main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}}
 
 /* === VIDEO NOTE STYLES === */
-.video-note-recorder{display:none;background:#16213e;padding:12px 16px;border-top:1px solid #333;align-items:center;gap:12px;flex-shrink:0;}
-.video-note-recorder.active{display:flex;}
-.vn-preview-wrap{position:relative;width:100px;height:100px;flex-shrink:0;}
-.vn-preview{width:100px;height:100px;border-radius:50%;object-fit:cover;background:#000;border:3px solid #e94560;display:block;}
-.vn-dot{width:12px;height:12px;background:#e94560;border-radius:50%;animation:pulse 1s infinite;flex-shrink:0;}
-.vn-time{font-size:14px;flex:1;}
-.vn-progress{position:absolute;top:0;left:0;width:100px;height:100px;border-radius:50%;pointer-events:none;}
-.vn-cancel{padding:8px 16px;border:none;border-radius:8px;background:#333;color:#fff;cursor:pointer;font-size:14px;}
-.vn-send{padding:8px 16px;border:none;border-radius:8px;background:#e94560;color:#fff;cursor:pointer;font-size:14px;}
+.vn-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:4000;display:none;justify-content:center;align-items:center;}
+.vn-modal-overlay.active{display:flex;}
+.vn-modal{display:flex;flex-direction:column;align-items:center;gap:24px;}
+.vn-circle-wrap{position:relative;width:260px;height:260px;}
+.vn-preview{width:260px;height:260px;border-radius:50%;object-fit:cover;background:#000;display:block;border:3px solid #e94560;}
+.vn-dot-wrap{position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.55);padding:4px 14px;border-radius:20px;}
+.vn-dot{width:10px;height:10px;background:#e94560;border-radius:50%;animation:pulse 1s infinite;}
+.vn-time{font-size:13px;color:#fff;}
+.vn-controls{display:flex;gap:20px;align-items:center;}
+.vn-cancel{width:58px;height:58px;border-radius:50%;border:none;background:rgba(255,255,255,0.15);color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.vn-send{width:74px;height:74px;border-radius:50%;border:none;background:#e94560;color:#fff;font-size:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 24px rgba(233,69,96,0.6);}
+.vn-flip{width:58px;height:58px;border-radius:50%;border:none;background:rgba(255,255,255,0.15);color:#fff;font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .video-note-wrap{position:relative;width:180px;height:180px;margin-top:6px;cursor:pointer;}
 .video-note-wrap video{width:180px;height:180px;border-radius:50%;object-fit:cover;display:block;background:#111;}
 .message.mine .video-note-wrap video{border:3px solid #e94560;}
@@ -137,7 +140,6 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .vn-play-btn:hover{background:rgba(233,69,96,0.8);}
 .vn-duration{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;font-size:11px;padding:2px 7px;border-radius:8px;pointer-events:none;}
 #videoNoteBtn{background:#0f3460;border:1px solid #333;}
-#videoNoteBtn.recording{background:#e94560;animation:pulse 1s infinite;}
 
 /* === CALL STYLES === */
 .call-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:3000;display:none;flex-direction:column;}
@@ -226,14 +228,21 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
       <div class="chat-header-btns" id="chatHeaderBtns"></div>
     </div>
     <div class="messages" id="messages"></div>
-    <div class="video-note-recorder" id="videoNoteBar">
-      <div class="vn-preview-wrap">
-        <video class="vn-preview" id="vnPreview" autoplay playsinline muted></video>
+    <div class="vn-modal-overlay" id="videoNoteModal">
+      <div class="vn-modal">
+        <div class="vn-circle-wrap">
+          <video class="vn-preview" id="vnPreview" autoplay playsinline muted></video>
+          <div class="vn-dot-wrap">
+            <div class="vn-dot"></div>
+            <span class="vn-time" id="vnTime">0:00</span>
+          </div>
+        </div>
+        <div class="vn-controls">
+          <button class="vn-cancel" id="vnCancel" title="Отмена">✕</button>
+          <button class="vn-send" id="vnSend" title="Отправить">➤</button>
+          <button class="vn-flip" id="vnFlip" title="Сменить камеру">🔄</button>
+        </div>
       </div>
-      <div class="vn-dot"></div>
-      <span class="vn-time" id="vnTime">0:00</span>
-      <button class="vn-cancel" id="vnCancel">Отмена</button>
-      <button class="vn-send" id="vnSend">Отправить ➤</button>
     </div>
     <div class="recording-bar" id="recordingBar"><div class="rec-dot"></div><span class="rec-time" id="recTime">0:00</span><button class="rec-cancel" id="recCancel">Отмена</button><button class="rec-send" id="recSend">Отправить ➤</button></div>
     <div class="input-area" id="inputArea">
@@ -961,68 +970,109 @@ async function switchCamera(){
   } catch(e) { alert('Не удалось переключить камеру'); console.error(e); }
 }
 // === VIDEO NOTE (Кружочки) ===
-var vnRecorder=null, vnChunks=[], vnInterval=null, vnSeconds=0, vnStream=null;
+var vnRecorder=null, vnChunks=[], vnInterval=null, vnSeconds=0, vnStream=null, vnFacingMode='user';
 
 document.getElementById('videoNoteBtn').addEventListener('click', async function(){
   if(vnRecorder && vnRecorder.state==='recording') return;
+  vnFacingMode='user';
+  await startVNCamera();
+});
+
+async function startVNCamera(){
   try {
+    if(vnStream) vnStream.getTracks().forEach(t=>t.stop());
     vnStream = await navigator.mediaDevices.getUserMedia({
-      video:{facingMode:'user', width:{ideal:400}, height:{ideal:400}},
-      audio:true
+      video:{facingMode: vnFacingMode, width:{ideal:400}, height:{ideal:400}},
+      audio: true
     });
     document.getElementById('vnPreview').srcObject = vnStream;
-    vnChunks = [];
+
+    vnChunks=[];
     var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
-    vnRecorder = new MediaRecorder(vnStream, {mimeType: mimeType});
+    vnRecorder = new MediaRecorder(vnStream, {mimeType});
     vnRecorder.ondataavailable = function(e){ if(e.data.size>0) vnChunks.push(e.data); };
     vnRecorder.start();
-    document.getElementById('videoNoteBtn').classList.add('recording');
+
+    document.getElementById('videoNoteModal').classList.add('active');
     document.getElementById('inputArea').style.display='none';
-    document.getElementById('videoNoteBar').classList.add('active');
     vnSeconds=0;
     document.getElementById('vnTime').textContent='0:00';
+    clearInterval(vnInterval);
     vnInterval = setInterval(function(){
       vnSeconds++;
       var m=Math.floor(vnSeconds/60), s=vnSeconds%60;
       document.getElementById('vnTime').textContent=m+':'+(s<10?'0':'')+s;
       if(vnSeconds>=60) document.getElementById('vnSend').click();
     },1000);
-  } catch(e){ alert('Нет доступа к камере: '+e.message); }
+  } catch(e){ alert('Нет доступа к камере: '+e.message); stopVN(); }
+}
+
+document.getElementById('vnFlip').addEventListener('click', async function(){
+  if(!vnRecorder) return;
+  // Сохраняем уже записанные чанки
+  var savedChunks = vnChunks.slice();
+  var wasRecording = vnRecorder.state==='recording';
+
+  // Останавливаем текущий рекордер и стрим (без сброса таймера)
+  if(wasRecording){
+    vnRecorder.onstop = function(){};
+    vnRecorder.stop();
+  }
+  if(vnStream) vnStream.getTracks().forEach(t=>t.stop());
+
+  vnFacingMode = vnFacingMode==='user' ? 'environment' : 'user';
+
+  try {
+    vnStream = await navigator.mediaDevices.getUserMedia({
+      video:{facingMode: vnFacingMode, width:{ideal:400}, height:{ideal:400}},
+      audio: true
+    });
+    document.getElementById('vnPreview').srcObject = vnStream;
+    var mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+    vnRecorder = new MediaRecorder(vnStream, {mimeType});
+    // Продолжаем накапливать чанки
+    vnChunks = savedChunks;
+    vnRecorder.ondataavailable = function(e){ if(e.data.size>0) vnChunks.push(e.data); };
+    vnRecorder.start();
+  } catch(e){ alert('Не удалось переключить камеру'); }
 });
 
 document.getElementById('vnCancel').addEventListener('click', function(){
   if(vnRecorder && vnRecorder.state==='recording'){
-    vnRecorder.onstop = function(){ if(vnStream) vnStream.getTracks().forEach(t=>t.stop()); };
+    vnRecorder.onstop=function(){};
     vnRecorder.stop();
   }
   stopVN();
 });
 
 document.getElementById('vnSend').addEventListener('click', function(){
-  if(!vnRecorder || vnRecorder.state!=='recording') return;
-  vnRecorder.onstop = function(){
-    if(vnStream) vnStream.getTracks().forEach(t=>t.stop());
-    var blob = new Blob(vnChunks, {type:'video/webm'});
-    var reader = new FileReader();
-    reader.onload = function(e){
-      var data = e.target.result;
-      if(currentView==='pm'&&currentPrivateLogin)
-        socket.emit('privateMessage',{toLogin:currentPrivateLogin, voice:data, type:'video_note'});
-      else if(currentView==='room'&&currentRoomId)
-        socket.emit('roomMessage',{roomId:currentRoomId, voice:data, type:'video_note'});
-      else if(currentView==='general')
-        socket.emit('chatMessage',{voice:data, type:'video_note'});
+  if(!vnRecorder) return;
+  if(vnRecorder.state==='recording'){
+    vnRecorder.onstop = function(){
+      if(vnStream) vnStream.getTracks().forEach(t=>t.stop());
+      var blob = new Blob(vnChunks, {type:'video/webm'});
+      var reader = new FileReader();
+      reader.onload = function(e){
+        var data = e.target.result;
+        if(currentView==='pm'&&currentPrivateLogin)
+          socket.emit('privateMessage',{toLogin:currentPrivateLogin, voice:data, type:'video_note'});
+        else if(currentView==='room'&&currentRoomId)
+          socket.emit('roomMessage',{roomId:currentRoomId, voice:data, type:'video_note'});
+        else if(currentView==='general')
+          socket.emit('chatMessage',{voice:data, type:'video_note'});
+      };
+      reader.readAsDataURL(blob);
     };
-    reader.readAsDataURL(blob);
-  };
-  vnRecorder.stop();
+    vnRecorder.stop();
+  }
   stopVN();
 });
 
 function stopVN(){
   clearInterval(vnInterval);
-  document.getElementById('videoNoteBtn').classList.remove('recording');
-  document.getElementById('videoNoteBar').classList.remove('active');
+  if(vnStream){ vnStream.getTracks().forEach(t=>t.stop()); vnStream=null; }
+  vnRecorder=null; vnChunks=[];
+  document.getElementById('videoNoteModal').classList.remove('active');
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('vnPreview').srcObject=null;
 }
@@ -1031,37 +1081,20 @@ function renderVideoNote(src, isMine){
   var wrap = document.createElement('div');
   wrap.className='video-note-wrap';
   var vid = document.createElement('video');
-  vid.src=src;
-  vid.loop=false;
-  vid.playsInline=true;
-  vid.preload='metadata';
+  vid.src=src; vid.loop=false; vid.playsInline=true; vid.preload='metadata';
   var btn = document.createElement('button');
-  btn.className='vn-play-btn';
-  btn.textContent='▶';
+  btn.className='vn-play-btn'; btn.textContent='▶';
   var dur = document.createElement('span');
-  dur.className='vn-duration';
-  dur.textContent='0:00';
-  vid.addEventListener('loadedmetadata', function(){
-    if(isFinite(vid.duration)){
-      var m=Math.floor(vid.duration/60), s=Math.floor(vid.duration%60);
-      dur.textContent=m+':'+(s<10?'0':'')+s;
-    }
+  dur.className='vn-duration'; dur.textContent='0:00';
+  vid.addEventListener('loadedmetadata',function(){
+    if(isFinite(vid.duration)){var m=Math.floor(vid.duration/60),s=Math.floor(vid.duration%60);dur.textContent=m+':'+(s<10?'0':'')+s;}
   });
-  vid.addEventListener('timeupdate', function(){
-    if(!vid.paused){
-      var rem=vid.duration-vid.currentTime;
-      var m=Math.floor(rem/60), s=Math.floor(rem%60);
-      dur.textContent=m+':'+(s<10?'0':'')+s;
-    }
+  vid.addEventListener('timeupdate',function(){
+    if(!vid.paused){var rem=vid.duration-vid.currentTime;var m=Math.floor(rem/60),s=Math.floor(rem%60);dur.textContent=m+':'+(s<10?'0':'')+s;}
   });
-  vid.addEventListener('ended', function(){ btn.textContent='▶'; if(isFinite(vid.duration)){ var m=Math.floor(vid.duration/60),s=Math.floor(vid.duration%60); dur.textContent=m+':'+(s<10?'0':'')+s; } });
-  btn.onclick=function(){
-    if(vid.paused){ vid.play(); btn.textContent='⏸'; }
-    else { vid.pause(); btn.textContent='▶'; }
-  };
-  wrap.appendChild(vid);
-  wrap.appendChild(btn);
-  wrap.appendChild(dur);
+  vid.addEventListener('ended',function(){btn.textContent='▶';if(isFinite(vid.duration)){var m=Math.floor(vid.duration/60),s=Math.floor(vid.duration%60);dur.textContent=m+':'+(s<10?'0':'')+s;}});
+  btn.onclick=function(){if(vid.paused){vid.play();btn.textContent='⏸';}else{vid.pause();btn.textContent='▶';}};
+  wrap.appendChild(vid); wrap.appendChild(btn); wrap.appendChild(dur);
   return wrap;
 }
 
