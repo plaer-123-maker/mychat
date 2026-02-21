@@ -171,6 +171,8 @@ initDB();
 
 const onlineUsers = new Map();
 const socketUsers = new Map();
+const activeCalls = new Map();   // callerLogin -> { calleeLogin, callType, answered }
+const callTimeouts = new Map();  // callerLogin -> { timeout, calleeLogin }
 
 function getIP(socket) {
   return socket.handshake.headers['x-forwarded-for'] || socket.handshake.address || 'unknown';
@@ -227,7 +229,7 @@ io.on('connection', (socket) => {
       socket.userRole = user.login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
       onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
       sendOnlineToAll();
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
@@ -267,17 +269,13 @@ io.on('connection', (socket) => {
       await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
       onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
       sendOnlineToAll();
       await addLog('login', user.nickname, 'Login', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
   // === WEBRTC CALLS ===
-  const activeCalls = new Map();
-
-  // callTimeouts: callerLogin -> { timeout, calleeLogin, callType }
-  const callTimeouts = new Map();
 
   async function saveCallLog({ callerLogin, callerNick, calleeLogin, callType, answered, duration, missed }) {
     try {
@@ -854,14 +852,22 @@ io.on('connection', (socket) => {
   socket.on('activateVip', async ({ code }) => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT * FROM vip_codes WHERE code=$1 AND used=false', [code.trim().toUpperCase()]);
+      const cleanCode = (code || '').trim().toUpperCase();
+      if (!cleanCode) { socket.emit('vipActivateResult', { ok: false, msg: 'Введи код' }); return; }
+      const res = await pool.query('SELECT * FROM vip_codes WHERE UPPER(code)=$1 AND used=false', [cleanCode]);
       if (!res.rows.length) { socket.emit('vipActivateResult', { ok: false, msg: 'Неверный или использованный код' }); return; }
       const row = res.rows[0];
-      const until = Date.now() + row.duration_days * 86400000;
+      // If user already has VIP, extend it
+      const curUser = await pool.query('SELECT vip_until FROM users WHERE login=$1', [socket.userLogin]);
+      const curUntil = curUser.rows[0]?.vip_until || 0;
+      const base = curUntil > Date.now() ? curUntil : Date.now();
+      const until = base + row.duration_days * 86400000;
       await pool.query('UPDATE vip_codes SET used=true, used_by=$1 WHERE id=$2', [socket.userLogin, row.id]);
       await pool.query('UPDATE users SET vip_until=$1 WHERE login=$2', [until, socket.userLogin]);
       socket.emit('vipActivateResult', { ok: true, until, days: row.duration_days });
-    } catch(e) { socket.emit('vipActivateResult', { ok: false, msg: 'Ошибка сервера' }); }
+      // Broadcast VIP status update
+      io.emit('userVipUpdated', { login: socket.userLogin, vip_until: until, vip_emoji: curUser.rows[0]?.vip_emoji || null });
+    } catch(e) { console.error('activateVip error:', e); socket.emit('vipActivateResult', { ok: false, msg: 'Ошибка сервера: ' + e.message }); }
   });
 
   socket.on('setVipEmoji', async ({ emoji }) => {

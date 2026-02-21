@@ -1342,6 +1342,7 @@ currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=n
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null,
 replyTo=null,myVipUntil=0,myVipEmoji=null,myVerified=false,
+editingMsgId=null,editingMsgType=null,
 pinnedChats=[],vipEmojiCache={},verifiedCache={},lastSeenCache={},hideOnlineSelf=false,
 mutedChats=[];
 
@@ -1449,6 +1450,7 @@ socket.on('authSuccess',function(d){
   myAvatar=d.avatar||null;myUsername=d.username||null;
   myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;myVerified=d.verified||false;
   if(d.verified)verifiedCache[d.login]=true;
+  if(d.vip_emoji)vipEmojiCache[d.login]=d.vip_emoji;
   if(d.avatar)avatarCache[d.login]=d.avatar;
   if(d.token)localStorage.setItem('mychat_token',d.token);
   document.getElementById('authOverlay').classList.add('hidden');
@@ -1497,14 +1499,18 @@ function updateHeaderStatus(login){
 
 /* ── VIP SOCKET HANDLERS ── */
 socket.on('vipActivateResult',function(d){
-  if(d.ok){myVipUntil=d.until;openVipSettings();}
-  else{var err=document.getElementById('vipCodeError');if(err)err.textContent=d.msg||'Ошибка';}
+  if(d.ok){
+    myVipUntil=d.until;
+    var err=document.getElementById('vipCodeError');if(err)err.textContent='';
+    openVipSettings();
+  } else {
+    var err=document.getElementById('vipCodeError');if(err)err.textContent=d.msg||'Ошибка';
+  }
 });
 socket.on('vipEmojiResult',function(d){
   if(d.ok){
     myVipEmoji=d.emoji||null;
     vipEmojiCache[myLogin]=d.emoji||null;
-    // Update display name in header etc
     document.querySelectorAll('.my-nick-display').forEach(function(el){
       el.innerHTML=getNickWithEmoji(myLogin,myNickname);
     });
@@ -1512,11 +1518,15 @@ socket.on('vipEmojiResult',function(d){
 });
 
 socket.on('userVipUpdated',function(d){
-  if(d.login)vipEmojiCache[d.login]=d.vip_emoji||null;
-  // Refresh chat list to show new emoji
+  if(!d.login) return;
+  vipEmojiCache[d.login]=d.vip_emoji||null;
+  // If it's our own update, sync local state
+  if(d.login===myLogin){
+    myVipUntil=d.vip_until||0;
+    myVipEmoji=d.vip_emoji||null;
+  }
   renderChatList();
 });
-socket.on('userVipUpdated',function(d){});
 socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
 socket.on('avatarChanged',function(av){myAvatar=av;if(av)avatarCache[myLogin]=av;else delete avatarCache[myLogin];});
@@ -1824,6 +1834,10 @@ function openPM(login,nickname){
   socket.emit('getPrivateHistory',login);
   socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
+  // Dialog background
+  currentDialogBg = null;
+  document.getElementById('dialogBgBtn').style.display='block';
+  setTimeout(function() { socket.emit('getDialogBg', { chatType: 'pm', chatId: login }); }, 200);
 }
 window.openPM=openPM;
 
@@ -1841,6 +1855,10 @@ function openRoom(roomId){
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   socket.emit('openRoom',roomId);
+  // Dialog background
+  currentDialogBg = null;
+  document.getElementById('dialogBgBtn').style.display='block';
+  setTimeout(function() { socket.emit('getDialogBg', { chatType: 'room', chatId: roomId }); }, 200);
 }
 window.openRoom=openRoom;
 
@@ -2251,6 +2269,12 @@ window.delMsg=delMsg;
 /* ── SEND ── */
 document.getElementById('sendBtn').addEventListener('click',function(){
   var text=document.getElementById('msgInput').value.trim();if(!text)return;
+  // Edit mode
+  if(editingMsgId){
+    socket.emit('editMessage',{msgType:editingMsgType,msgId:editingMsgId,newText:text});
+    cancelEdit();
+    return;
+  }
   var rd=replyTo?{reply_to_id:replyTo.id,reply_to_text:replyTo.text,reply_to_user:replyTo.user}:{};
   if(currentView==='pm'&&currentPrivateLogin){socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin,text:text,type:'text'},rd));socket.emit('privateStopTyping',currentPrivateLogin);}
   else if(currentView==='room'&&currentRoomId){socket.emit('roomMessage',Object.assign({roomId:currentRoomId,text:text,type:'text'},rd));socket.emit('roomStopTyping',currentRoomId);}
@@ -3007,7 +3031,6 @@ function unmuteChat(chatType, chatId) {
 window.unmuteChat = unmuteChat;
 
 /* ── 3. EDIT MESSAGE ── */
-var editingMsgId = null, editingMsgType = null;
 
 function startEdit(msgId, msgType, currentText) {
   editingMsgId = msgId; editingMsgType = msgType;
@@ -3026,17 +3049,8 @@ function cancelEdit() {
 }
 window.cancelEdit = cancelEdit;
 
-// Override send to handle edit mode
-var origSendClick = document.getElementById('sendBtn').onclick;
-document.getElementById('sendBtn').addEventListener('click', function(e) {
-  if (editingMsgId) {
-    var text = document.getElementById('msgInput').value.trim();
-    if (!text) return;
-    socket.emit('editMessage', { msgType: editingMsgType, msgId: editingMsgId, newText: text });
-    cancelEdit();
-    return;
-  }
-}, true);
+// Override send to handle edit mode - integrated into existing sendBtn listener above
+// (handled by checking editingMsgId in the original click handler)
 
 socket.on('messageEdited', function(d) {
   var el = document.getElementById('msg-' + d.msgId) || document.getElementById('pm-' + d.msgId) || document.getElementById('rmsg-' + d.msgId);
@@ -3222,22 +3236,7 @@ function handleDialogBgUpload(input, chatType, chatId) {
 }
 window.handleDialogBgUpload = handleDialogBgUpload;
 
-/* Fetch dialog bg when opening PM or room */
-var _origOpenPM = openPM;
-window.openPM = function(login, nickname) {
-  _origOpenPM(login, nickname);
-  currentDialogBg = null;
-  document.getElementById('dialogBgBtn').style.display = 'block';
-  setTimeout(function() { socket.emit('getDialogBg', { chatType: 'pm', chatId: login }); }, 200);
-};
-
-var _origOpenRoom = openRoom;
-window.openRoom = function(roomId) {
-  _origOpenRoom(roomId);
-  currentDialogBg = null;
-  document.getElementById('dialogBgBtn').style.display = 'block';
-  setTimeout(function() { socket.emit('getDialogBg', { chatType: 'room', chatId: roomId }); }, 200);
-};
+/* Fetch dialog bg when opening PM or room - handled directly in openPM/openRoom above */
 
 /* ── EXTEND REACTION PANEL with Edit/Forward ── */
 var _origShowReactionPanel = showReactionPanel;
@@ -3382,12 +3381,7 @@ socket.on('adminVerifyCodes', function(rows) {
 
 // verify tab already in HTML
 
-/* ── ADD DIALOG BG BUTTON TO CHAT HEADER ── */
-// Inject "Фон диалога" button in chat header when in PM or room
-var _origOpenPM2 = window.openPM;
-// Already patched above via _origOpenPM chain
-
-/* ── FORWARD HEADER IN MESSAGES ── */
+/* ── ADD DIALOG BG BUTTON TO CHAT HEADER - handled in openPM/openRoom directly ── */
 function buildFwdHeader(msg) {
   if (!msg.fwd_from_nick) return '';
   return '<div class="fwd-header">📤 Переслано от: ' + escHtml(msg.fwd_from_nick) + '</div>';
