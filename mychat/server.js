@@ -518,8 +518,16 @@ io.on('connection', (socket) => {
   socket.on('getUserProfile', async (login) => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT login, nickname, username, avatar, verified FROM users WHERE login=$1', [login]);
-      if (res.rows.length > 0) socket.emit('userProfile', res.rows[0]);
+      const res = await pool.query('SELECT login, nickname, username, avatar, verified, vip_emoji, vip_until FROM users WHERE login=$1', [login]);
+      if (res.rows.length > 0) {
+        const u = res.rows[0];
+        socket.emit('userProfile', {
+          login: u.login, nickname: u.nickname, username: u.username, avatar: u.avatar,
+          verified: u.verified || false,
+          vip_emoji: (u.vip_until > Date.now() ? u.vip_emoji : null) || null,
+          vip_until: u.vip_until || 0
+        });
+      }
     } catch(e) {}
   });
 
@@ -534,15 +542,24 @@ io.on('connection', (socket) => {
   socket.on('getMyChats', async () => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT DISTINCT CASE WHEN from_login=$1 THEN to_login ELSE from_login END as other_login FROM private_messages WHERE from_login=$1 OR to_login=$1', [socket.userLogin]);
-      var logins = res.rows.map(r => r.other_login);
+      // Exclude self-chats and get distinct conversations
+      const res = await pool.query(
+        'SELECT DISTINCT CASE WHEN from_login=$1 THEN to_login ELSE from_login END as other_login FROM private_messages WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login',
+        [socket.userLogin]
+      );
+      var logins = res.rows.map(r => r.other_login).filter(l => l !== socket.userLogin);
       if (logins.length === 0) return socket.emit('myChats', []);
-      var users = await pool.query('SELECT login, nickname, avatar, username FROM users WHERE login = ANY($1)', [logins]);
+      var users = await pool.query('SELECT login, nickname, avatar, username, vip_emoji, vip_until, verified FROM users WHERE login = ANY($1)', [logins]);
       var chats = [];
       for (var u of users.rows) {
         var last = await pool.query('SELECT text, type, timestamp FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp DESC LIMIT 1', [socket.userLogin, u.login]);
         var unread = await pool.query('SELECT COUNT(*) as c FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [u.login, socket.userLogin]);
-        chats.push({ login: u.login, nickname: u.nickname, username: u.username || null, avatar: u.avatar || null, lastMsg: last.rows[0] || null, unread: parseInt(unread.rows[0].c), vip_emoji: u.vip_emoji || null, vip_until: u.vip_until || 0 });
+        var lastMsg = last.rows[0] || null;
+        // Clean up call log JSON from preview
+        if (lastMsg && lastMsg.text && lastMsg.text.startsWith('{')) {
+          try { var parsed = JSON.parse(lastMsg.text); if (parsed.callType) lastMsg = Object.assign({}, lastMsg, {text: parsed.answered ? '📞 Звонок' : '📞 Пропущенный звонок'}); } catch(e) {}
+        }
+        chats.push({ login: u.login, nickname: u.nickname, username: u.username || null, avatar: u.avatar || null, lastMsg, unread: parseInt(unread.rows[0].c), vip_emoji: (u.vip_until > Date.now() ? u.vip_emoji : null) || null, vip_until: u.vip_until || 0, verified: u.verified || false });
       }
       chats.sort(function(a,b) { return (b.lastMsg?b.lastMsg.timestamp:0) - (a.lastMsg?a.lastMsg.timestamp:0); });
       socket.emit('myChats', chats);

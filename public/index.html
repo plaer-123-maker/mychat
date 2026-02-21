@@ -7,9 +7,7 @@
 <script src="/socket.io/socket.io.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* ════════════════════════════════
-   CSS VARIABLES — THEMES
-════════════════════════════════ */
+/* CSS VARIABLES — THEMES */
 :root {
   --bg-base:#17212b;
   --bg-sidebar:#17212b;
@@ -101,9 +99,7 @@ body.theme-sunset {
   --chat-bg:#1e1428;
 }
 
-/* ════════════════════════════════
-   RESET & BASE
-════════════════════════════════ */
+/* RESET & BASE */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;}
 body{font-family:'Inter',sans-serif;background:var(--bg-base);color:var(--text-primary);font-size:15px;line-height:1.4;transition:background 0.3s,color 0.3s;}
@@ -112,9 +108,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg-base);color:var(--text-p
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
 input,button,select,textarea{font-family:inherit;}
 
-/* ════════════════════════════════
-   AUTH
-════════════════════════════════ */
+/* AUTH */
 .auth-overlay{position:fixed;inset:0;background:var(--bg-base);display:flex;justify-content:center;align-items:center;z-index:1000;}
 .auth-overlay.hidden{display:none;}
 .auth-box{background:var(--bg-panel);padding:44px 40px;border-radius:24px;width:380px;text-align:center;box-shadow:0 32px 80px rgba(0,0,0,0.5);}
@@ -130,14 +124,10 @@ input,button,select,textarea{font-family:inherit;}
 .auth-box .error{color:#ff6b6b;font-size:13px;margin-bottom:10px;min-height:20px;}
 .nick-field{display:none;}.nick-field.show{display:block;}
 
-/* ════════════════════════════════
-   APP LAYOUT
-════════════════════════════════ */
+/* APP LAYOUT */
 .app-container{display:none;height:100vh;width:100%;}.app-container.active{display:flex;}
 
-/* ════════════════════════════════
-   SIDEBAR
-════════════════════════════════ */
+/* SIDEBAR */
 .sidebar{width:340px;background:var(--bg-sidebar);display:flex;flex-direction:column;flex-shrink:0;border-right:1px solid var(--border);transition:background 0.3s;}
 .sidebar-header{padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);min-height:60px;}
 .sidebar-header-left{display:flex;align-items:center;gap:10px;flex:1;}
@@ -169,9 +159,7 @@ input,button,select,textarea{font-family:inherit;}
 .chat-item .tag{font-size:10px;color:var(--text-muted);background:var(--bg-input);padding:2px 7px;border-radius:6px;}
 .empty-list{padding:40px 20px;text-align:center;color:var(--text-muted);font-size:13px;}
 
-/* ════════════════════════════════
-   MAIN CHAT AREA
-════════════════════════════════ */
+/* MAIN CHAT AREA */
 .main-chat{flex:1;display:none;flex-direction:column;background:var(--chat-bg);background-image:var(--chat-bg-image);background-size:cover;background-position:center;transition:background 0.3s;}
 .main-chat.show{display:flex;}
 .chat-header{background:var(--bg-panel);padding:0 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);flex-shrink:0;height:60px;backdrop-filter:blur(20px);}
@@ -184,9 +172,7 @@ input,button,select,textarea{font-family:inherit;}
 .chat-header-btns button{background:transparent;border:none;color:var(--text-secondary);width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:19px;display:flex;align-items:center;justify-content:center;transition:background 0.15s;}
 .chat-header-btns button:hover{background:var(--bg-hover);color:var(--text-primary);}
 
-/* ════════════════════════════════
-   MESSAGES
-════════════════════════════════ */
+/* MESSAGES */
 .messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:2px;}
 .date-divider{align-self:center;background:rgba(0,0,0,0.35);color:#fff;font-size:12px;font-weight:500;padding:5px 14px;border-radius:16px;margin:8px 0;pointer-events:none;}
 body.theme-light .date-divider{background:rgba(0,0,0,0.18);}
@@ -249,9 +235,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .reaction-btn.mine{background:rgba(46,169,223,0.2);border-color:var(--accent);}
 .reaction-btn .rc{font-size:11px;color:var(--text-secondary);font-weight:500;}
 
-/* ════════════════════════════════
-   REPLY BAR
-════════════════════════════════ */
+/* REPLY BAR */
 .reply-bar{display:none;background:var(--bg-panel);padding:10px 16px;border-top:1px solid var(--border);align-items:center;gap:12px;flex-shrink:0;}
 .reply-bar.active{display:flex;}
 .reply-bar .reply-info{flex:1;border-left:3px solid var(--accent);padding-left:10px;}
@@ -260,9 +244,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .reply-bar .reply-cancel{background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;padding:0;line-height:1;transition:color 0.15s;}
 .reply-bar .reply-cancel:hover{color:var(--text-primary);}
 
-/* ════════════════════════════════
-   INPUT AREA
-════════════════════════════════ */
+/* INPUT AREA */
 .input-area{background:var(--bg-panel);padding:10px 12px;display:flex;gap:6px;align-items:center;border-top:1px solid var(--border);flex-shrink:0;}
 .input-area input[type="text"]{flex:1;padding:11px 16px;border:none;border-radius:22px;background:var(--bg-input);color:var(--text-primary);font-size:15px;outline:none;transition:background 0.2s;}
 .input-area input[type="text"]::placeholder{color:var(--text-muted);}
@@ -282,22 +264,16 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .rec-cancel{background:var(--bg-input);color:var(--text-secondary);}
 .rec-send{background:var(--accent);}
 
-/* ════════════════════════════════
-   TOAST
-════════════════════════════════ */
+/* TOAST */
 .chat-error{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-8px);background:var(--bg-panel);color:var(--text-primary);padding:12px 24px;border-radius:16px;z-index:999;display:none;font-size:14px;box-shadow:0 8px 32px rgba(0,0,0,0.5);border:1px solid var(--border);opacity:0;transition:opacity 0.2s,transform 0.2s;}
 .chat-error.show{display:block;opacity:1;transform:translateX(-50%) translateY(0);}
 
-/* ════════════════════════════════
-   NO CHAT
-════════════════════════════════ */
+/* NO CHAT */
 .no-chat{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);gap:14px;background:var(--chat-bg);background-image:var(--chat-bg-image);background-size:cover;}
 .no-chat-icon{font-size:56px;opacity:0.6;}
 .no-chat-text{font-size:16px;font-weight:500;opacity:0.6;}
 
-/* ════════════════════════════════
-   MODALS
-════════════════════════════════ */
+/* MODALS */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);z-index:1500;display:none;justify-content:center;align-items:center;}
 .modal-overlay.show{display:flex;}
 .modal-box{background:var(--bg-panel);padding:28px;border-radius:22px;width:360px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,0.6);border:1px solid var(--border);}
@@ -312,9 +288,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .modal-box .modal-error{color:#ff6b6b;font-size:13px;min-height:20px;margin-bottom:8px;}
 .modal-box .modal-success{color:var(--online);font-size:13px;min-height:20px;margin-bottom:8px;}
 
-/* ════════════════════════════════
-   SETTINGS PANEL (slide-in)
-════════════════════════════════ */
+/* SETTINGS PANEL (slide-in) */
 .settings-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);backdrop-filter:blur(6px);z-index:1600;display:none;justify-content:flex-start;align-items:stretch;}
 .settings-overlay.show{display:flex;}
 .settings-panel{background:var(--bg-sidebar);width:340px;display:flex;flex-direction:column;animation:slideInLeft 0.25s cubic-bezier(0.4,0,0.2,1);}
@@ -354,9 +328,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .bg-upload-card{aspect-ratio:9/14;border-radius:12px;border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:6px;color:var(--text-muted);font-size:12px;font-weight:500;transition:border-color 0.2s;}
 .bg-upload-card:hover{border-color:var(--accent);color:var(--accent);}
 
-/* ════════════════════════════════
-   ADMIN PANEL
-════════════════════════════════ */
+/* ADMIN PANEL */
 .admin-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.65);backdrop-filter:blur(6px);z-index:2000;display:none;justify-content:center;align-items:center;}
 .admin-overlay.show{display:flex;}
 .admin-panel{background:var(--bg-panel);width:90%;max-width:720px;max-height:85vh;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 32px 80px rgba(0,0,0,0.7);border:1px solid var(--border);}
@@ -394,9 +366,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .member-row .mr-btns{display:flex;gap:4px;}
 .member-row .mr-btns button{padding:4px 8px;border:none;border-radius:8px;cursor:pointer;font-size:11px;color:#fff;font-weight:500;}
 
-/* ════════════════════════════════
-   VIDEO NOTE RECORDER
-════════════════════════════════ */
+/* VIDEO NOTE RECORDER */
 .vn-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(12px);z-index:4000;display:none;justify-content:center;align-items:center;}
 .vn-modal-overlay.active{display:flex;}
 .vn-modal{display:flex;flex-direction:column;align-items:center;gap:28px;}
@@ -410,9 +380,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .vn-send{width:72px;height:72px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 32px rgba(46,169,223,0.5);}
 .vn-flip{width:56px;height:56px;border-radius:50%;border:none;background:rgba(255,255,255,0.12);color:#fff;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 
-/* ════════════════════════════════
-   CALLS
-════════════════════════════════ */
+/* CALLS */
 /* Full-screen call overlay */
 .call-overlay{position:fixed;inset:0;background:#000;z-index:3000;display:none;flex-direction:column;}
 .call-overlay.show{display:flex;}
@@ -479,9 +447,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .pma-call{background:var(--bg-input);color:var(--text-primary);}
 .pma-vcall{background:var(--bg-input);color:var(--text-primary);}
 
-/* ════════════════════════════════
-   REACTION PANEL
-════════════════════════════════ */
+/* REACTION PANEL */
 .reaction-panel{position:fixed;background:var(--bg-panel);border:1px solid var(--border);border-radius:30px;padding:8px 14px;display:flex;gap:2px;align-items:center;z-index:600;box-shadow:0 16px 48px rgba(0,0,0,0.7);animation:popIn 0.22s cubic-bezier(0.34,1.56,0.64,1);}
 .reaction-panel button{background:none;border:none;font-size:28px;cursor:pointer;padding:4px;border-radius:10px;transition:transform 0.12s;line-height:1;}
 .reaction-panel button:hover,.reaction-panel button:active{transform:scale(1.45);}
@@ -489,23 +455,17 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .reaction-panel .rp-reply{font-size:12px;background:var(--bg-input);border:1px solid var(--border) !important;color:var(--text-primary);padding:7px 12px;border-radius:18px;white-space:nowrap;font-weight:600;}
 .reaction-panel .rp-delete{font-size:12px;background:rgba(233,69,96,0.15);border:1px solid rgba(233,69,96,0.3) !important;color:#ff6b6b;padding:7px 12px;border-radius:18px;white-space:nowrap;font-weight:600;}
 
-/* ════════════════════════════════
-   BACK BUTTON MOBILE
-════════════════════════════════ */
+/* BACK BUTTON MOBILE */
 #mobileBackBtn{background:transparent !important;border:none !important;color:var(--text-secondary) !important;font-size:20px !important;width:36px !important;height:36px !important;padding:0 !important;border-radius:50%;}
 
-/* ════════════════════════════════
-   ANIMATIONS
-════════════════════════════════ */
+/* ANIMATIONS */
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
 @keyframes popIn{from{opacity:0;transform:scale(0.6) translateY(10px);}to{opacity:1;transform:scale(1) translateY(0);}}
 @keyframes slideInLeft{from{transform:translateX(-100%);}to{transform:translateX(0);}}
 @keyframes msgIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 .msg-wrapper{animation:msgIn 0.18s ease;}
 
-/* ════════════════════════════════
-   RESPONSIVE
-════════════════════════════════ */
+/* RESPONSIVE */
 @media(max-width:640px){
   .sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}
   .main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}
@@ -918,9 +878,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 </div>
 
 <script>
-/* ════════════════════════════════════════════
-   THEME & BACKGROUND SYSTEM
-════════════════════════════════════════════ */
+/* THEME & BACKGROUND SYSTEM */
 var THEMES = {
   dark:    { name:'Тёмная', colors:['#17212b','#2ea9df'], class:'' },
   light:   { name:'Светлая', colors:['#f0f2f5','#0a84ff'], class:'theme-light' },
@@ -972,9 +930,7 @@ function applyBackground(id, customData) {
 // init on load
 applyTheme(currentThemeKey);
 
-/* ════════════════════════════════════════════
-   SETTINGS PANEL
-════════════════════════════════════════════ */
+/* SETTINGS PANEL */
 function openSettings() {
   renderSettingsMain();
   document.getElementById('settingsOverlay').classList.add('show');
@@ -1044,11 +1000,21 @@ function renderSettingsMain() {
       <div class="sr-info"><div class="sr-label" style="color:#f7c948">MyChat VIP</div><div class="sr-desc">${myVipUntil>Date.now()?'Активен до '+new Date(myVipUntil).toLocaleDateString('ru'):'Не активирован — введи код'}</div></div>
       <span class="sr-arrow">›</span>
     </div>
+    <div class="settings-row" onclick="closeSettings();openSavedMessages()">
+      <div class="sr-icon" style="background:rgba(100,180,255,0.15)">📁</div>
+      <div class="sr-info"><div class="sr-label">Избранное</div><div class="sr-desc">Сохранённые сообщения</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="openVerifySettings()">
+      <div class="sr-icon" style="background:rgba(46,169,223,0.15)">✓</div>
+      <div class="sr-info"><div class="sr-label">Верификация</div><div class="sr-desc">\${myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации'}</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
     <div class="settings-row" onclick="doLogout()" style="color:#ff6b6b">
       <div class="sr-icon" style="background:rgba(255,59,48,0.15)">🚪</div>
       <div class="sr-info"><div class="sr-label" style="color:#ff6b6b">Выйти</div></div>
     </div>
-  `;
+  \`;
 }
 
 function openSettingsNick() {
@@ -1333,9 +1299,7 @@ function doLogout() {
 }
 window.doLogout = doLogout;
 
-/* ════════════════════════════════════════════
-   SOCKET & APP
-════════════════════════════════════════════ */
+/* SOCKET & APP */
 
 var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
@@ -1482,7 +1446,12 @@ socket.on('messagesRead',function(d){
 /* ── LAST SEEN / ONLINE STATUS ── */
 socket.on('lastSeenResult',function(d){
   lastSeenCache[d.login]=d;
+  // Update green dot tracking for non-admin users
+  if(d.isOnline) onlineLogins.add(d.login);
+  else onlineLogins.delete(d.login);
   updateHeaderStatus(d.login);
+  // Refresh chat list green dot for this user
+  if(['private','pm','all'].includes(currentView)) renderChatList();
 });
 
 function updateHeaderStatus(login){
@@ -1538,11 +1507,16 @@ socket.on('userAvatarUpdated',function(d){if(d.avatar)avatarCache[d.login]=d.ava
 socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
 socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
 socket.on('onlineUsers',function(d){
-  // Track online logins for green dots
-  onlineLogins.clear();
-  (d.users||[]).forEach(function(u){ onlineLogins.add(u.login); });
-  // Refresh chat list to update green dots
-  if(['private','pm','all'].includes(currentView)) renderChatList();if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):'';} });
+  // Track online logins for green dots (server sends count for all, users list for admins)
+  // We use lastSeenResult for individual online status, but also track count
+  if(d.isAdmin) {
+    onlineLogins.clear();
+    (d.users||[]).forEach(function(u){ onlineLogins.add(u.login); });
+    if(['private','pm','all'].includes(currentView)) renderChatList();
+  }
+  // Always update online count
+  if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):(d.count>1?d.count+' онлайн'):''; }
+});
 
 /* ── TYPING ── */
 var typingSet=new Set();
@@ -1640,12 +1614,19 @@ var latestChats=[], latestRooms=[];
 function buildChatItem(c, isPinned, chatType) {
   if(c.avatar) avatarCache[c.login||''] = c.avatar;
   if(c.vip_emoji && c.login) vipEmojiCache[c.login] = c.vip_emoji;
+  if(c.verified && c.login) verifiedCache[c.login] = true;
   var lastText='';
   if(c.lastMsg){
     if(c.lastMsg.type==='image') lastText='📷 Фото';
     else if(c.lastMsg.type==='voice') lastText='🎤 Голосовое';
     else if(c.lastMsg.type==='video_note') lastText='⏺ Кружочек';
-    else lastText=c.lastMsg.text||'';
+    else if(c.lastMsg.type==='call') lastText='📞 Звонок';
+    else {
+      var t = c.lastMsg.text||'';
+      // Hide raw call JSON from preview
+      if(t.startsWith('{') && t.includes('callType')) { try { var p=JSON.parse(t); lastText=p.answered?'📞 Звонок':'📞 Пропущенный звонок'; } catch(e) { lastText='📞 Звонок'; } }
+      else lastText=t;
+    }
   }
   var isOnline = c.login && onlineLogins.has(c.login);
   var avHtml;
@@ -1667,7 +1648,7 @@ function buildChatItem(c, isPinned, chatType) {
     ? 'openRoom('+c.id+')'
     : 'openPM(\''+c.login+'\',\''+c.nickname+'\')'; 
   var isActive = chatType==='room' ? currentRoomId==c.id : currentPrivateLogin===c.login;
-  return '<div class="chat-item'+(isActive?' active':'')+pinClass+'" onclick="'+onclickFn+'" oncontextmenu="showChatCtxMenu(event,\''+chatType+'\','+(chatType==='room'?c.id:'\''+c.login+'\'')+')" data-chattype="'+chatType+'" data-chatid="'+(chatType==='room'?c.id:c.login)+'">'
+  return '<div class="chat-item'+(isActive?' active':'')+pinClass+'" onclick="'+onclickFn+'" oncontextmenu="showMuteMenu(event,\''+chatType+'\','+(chatType==='room'?c.id:'\''+c.login+'\'')+')" data-chattype="'+chatType+'" data-chatid="'+(chatType==='room'?c.id:c.login)+'">'
     + avHtml
     + '<div class="info"><div class="name">'+nameHtml+pinIcon+typeBadge+'</div><div class="last">'+lastText+'</div></div>'
     + (metaHtml?'<div class="meta">'+metaHtml+'</div>':'')
@@ -1712,6 +1693,7 @@ function renderChatList() {
 
 socket.on('myChats',function(chats){
   latestChats=chats;
+  window._myChatsCache = chats; // cache for forward modal
   if(currentView!=='private'&&currentView!=='pm'&&currentView!=='all')return;
   if(document.getElementById('searchInput').value.trim())return;
   renderChatList();
@@ -1811,9 +1793,16 @@ window.closeProfileModal=closeProfileModal;
 
 socket.on('userProfile', function(p){
   if(p.avatar) avatarCache[p.login]=p.avatar;
+  if(p.verified) verifiedCache[p.login]=true;
+  if(p.vip_emoji && p.vip_until > Date.now()) vipEmojiCache[p.login]=p.vip_emoji;
   currentPMProfile=p;
   // Update header if this is current PM
   if(currentView==='pm'&&currentPrivateLogin===p.login) updateHeaderAvatar(p.login, p.nickname);
+  // Refresh chat name with badges
+  if(currentView==='pm'&&currentPrivateLogin===p.login) {
+    var titleEl = document.getElementById('chatTitle');
+    if(titleEl) titleEl.innerHTML = getNickWithEmoji(p.login, p.nickname);
+  }
 });
 
 function openPM(login,nickname){
@@ -2956,9 +2945,9 @@ document.getElementById('photoViewer').addEventListener('click',function(e){
   if(e.target===this){closePV();}
 });
 
-/* ══════════════════════════════════════════
+/* ================================══════════
    NEW FEATURES
-══════════════════════════════════════════ */
+================================══════════ */
 
 /* ── 1. VERIFICATION ── */
 socket.on('userVerified', function(d) {
@@ -3126,11 +3115,15 @@ window.closeForwardModal = closeForwardModal;
 socket.on('forwardDone', function(d) { /* handled in doForward */ });
 
 /* Cache chats/rooms for forward modal */
-socket.on('myChats', function(chats) { window._myChatsCache = chats; });
+// _myChatsCache now updated in myChats handler above
 socket.on('myRooms', function(rooms) { window._myRoomsCache = rooms; });
 
 /* ── 5. SAVED MESSAGES ── */
 function openSavedMessages() {
+  // Close settings if open
+  var settingsPanel = document.getElementById('settingsPanel');
+  if(settingsPanel && settingsPanel.classList.contains('open')) closeSettings();
+  switchToPrivate();
   openPM(myLogin, '📁 Избранное');
 }
 window.openSavedMessages = openSavedMessages;
@@ -3297,34 +3290,7 @@ window.showReactionPanel = function(msgId, msgType, anchorEl, replyUser, replyTe
   setTimeout(function() { document.addEventListener('click', closeReactionPanel, { once: true }); document.addEventListener('touchstart', closeReactionPanel, { once: true, passive: true }); }, 50);
 };
 
-/* ── ADD SAVED MESSAGES TO SETTINGS ── */
-var _origRenderSettingsMain = renderSettingsMain;
-window.renderSettingsMain = function() {
-  _origRenderSettingsMain();
-  // Inject "Saved messages" and "Verification" after VIP section
-  var body = document.getElementById('settingsBody');
-  if (!body) return;
-  // Find VIP section and add after it
-  var vipSection = body.querySelector('[onclick*="openVipSettings"]');
-  if (vipSection) {
-    var parent = vipSection.closest('.settings-section') || vipSection.parentElement;
-    if (parent) {
-      // Add saved messages item
-      var savedItem = document.createElement('div');
-      savedItem.className = 'settings-item';
-      savedItem.innerHTML = '<div class="si-icon">📁</div><div class="si-info"><div class="si-title">Избранное</div><div class="si-sub">Сохранённые сообщения</div></div><div class="si-arrow">›</div>';
-      savedItem.onclick = function() { closeSettings(); openSavedMessages(); };
-      parent.parentNode.insertBefore(savedItem, parent.nextSibling);
-
-      // Add verification item
-      var verifyItem = document.createElement('div');
-      verifyItem.className = 'settings-item';
-      verifyItem.innerHTML = '<div class="si-icon">✓</div><div class="si-info"><div class="si-title">Верификация</div><div class="si-sub">'+(myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации')+'</div></div><div class="si-arrow">›</div>';
-      verifyItem.onclick = openVerifySettings;
-      parent.parentNode.insertBefore(verifyItem, savedItem.nextSibling);
-    }
-  }
-};
+/* ── SAVED MESSAGES + VERIFICATION items integrated directly into renderSettingsMain above ── */
 
 function openVerifySettings() {
   var body = document.getElementById('settingsBody');
