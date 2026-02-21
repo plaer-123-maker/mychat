@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MyChat</title>
+<!-- ПОДКЛЮЧАЕМ МАНИФЕСТ ДЛЯ ПРИЛОЖЕНИЯ -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a1a2e">
 <script src="/socket.io/socket.io.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -56,6 +59,8 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 .message .text{line-height:1.4;}
 .message img{max-width:250px;border-radius:8px;cursor:pointer;display:block;margin-top:4px;}
 .message audio{max-width:250px;margin-top:4px;}
+.message .file-msg{background:rgba(0,0,0,0.2);padding:8px;border-radius:8px;display:flex;align-items:center;gap:8px;margin-top:4px;text-decoration:none;color:#fff;font-size:13px;}
+.message .file-msg:hover{background:rgba(0,0,0,0.4);}
 .message .del-btn{font-size:11px;color:#ff6b6b;cursor:pointer;margin-top:6px;display:block;text-align:right;opacity:0.7;}
 .input-area{background:#16213e;padding:12px 16px;display:flex;gap:8px;align-items:center;border-top:1px solid #333;flex-shrink:0;}
 .input-area input[type="text"]{flex:1;padding:12px;border:1px solid #333;border-radius:10px;background:#0f3460;color:#fff;font-size:14px;outline:none;}
@@ -210,6 +215,8 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
     <div class="input-area" id="inputArea">
       <label class="icon-btn" for="photoInput">📷</label>
       <input type="file" id="photoInput" accept="image/*">
+      <label class="icon-btn" for="fileInput">📎</label>
+      <input type="file" id="fileInput">
       <input type="text" id="msgInput" placeholder="Сообщение...">
       <button class="mic-btn" id="micBtn">🎤</button>
       <button class="send-btn" id="sendBtn">➤</button>
@@ -219,7 +226,9 @@ body{font-family:Arial,sans-serif;background:#1a1a2e;color:#fff;height:100vh;ove
 </div>
 <div class="admin-overlay" id="adminOverlay"><div class="admin-panel"><span class="admin-close" id="adminClose">✕</span><div class="admin-tabs" id="adminTabs"><button class="active" data-tab="stats">📊 Стат</button><button data-tab="users">👥 Юзеры</button><button data-tab="logs">📋 Логи</button><button data-tab="announce">📢 Объявл</button><button data-tab="danger">⚠️ Опасно</button></div><div class="admin-content" id="adminContent"></div></div></div>
 <script>
-var socket=io('https://mychat-production-4ec8.up.railway.app', {transports: ['websocket', 'polling']}),isLoginMode=true,myNickname='',myRole='user',myLogin='',
+// ЗАМЕНИ НА СВОЮ ССЫЛКУ С RAILWAY!
+var socket=io('https://mychat-production-4ec8.up.railway.app', {transports: ['websocket', 'polling']}),
+isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
@@ -228,7 +237,7 @@ currentAdminTab='stats',typingTimeout=null,searchTimeout=null;
 var localStream, remoteStream, peerConnection, incomingCallData=null;
 var currentFacingMode = 'user';
 var pendingIce = []; 
-var earlyCandidates = []; // Queue for ICE candidates before answer
+var earlyCandidates = [];
 
 const rtcConfig = { 
   iceServers: [
@@ -474,6 +483,7 @@ function addRoomMsg(msg){
   var html='<div class="name">'+msg.username+'</div>';
   if(msg.type==='image'&&msg.image)html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
+  else if(msg.type==='file'&&msg.file_data)html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
   if(isMine||(currentRoomData&&currentRoomData.myRole==='admin'))html+='<span class="del-btn" onclick="delRoomMsg('+msg.id+')">Удалить</span>';
   div.innerHTML=html;document.getElementById('messages').appendChild(div);
@@ -540,6 +550,7 @@ function addPM(msg){
   var html='<div class="name">'+msg.from_nickname+'</div>';
   if(msg.type==='image'&&msg.image)html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
+  else if(msg.type==='file'&&msg.file_data)html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
   if(isMine||myRole==='admin')html+='<span class="del-btn" onclick="delPM('+msg.id+')">Удалить</span>';
   div.innerHTML=html;document.getElementById('messages').appendChild(div);
@@ -566,6 +577,7 @@ function addMsg(msg){
   var html='<div class="name">'+msg.username+'</div>';
   if(msg.type==='image'&&msg.image)html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
+  else if(msg.type==='file'&&msg.file_data)html+='<div class="file-msg"><a href="'+msg.file_data+'" download="'+(msg.file_name||'file')+'">📄 '+(msg.file_name||'Скачать')+'</a></div>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
   if(isM||myRole==='admin'||myRole==='moderator')html+='<span class="del-btn" onclick="delMsg('+msg.id+')">Удалить</span>';
   div.innerHTML=html;document.getElementById('messages').appendChild(div);
@@ -599,6 +611,16 @@ document.getElementById('photoInput').addEventListener('change',function(){
     if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',{toLogin:currentPrivateLogin,image:e.target.result,type:'image'});
     else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',{roomId:currentRoomId,image:e.target.result,type:'image'});
     else if(currentView==='general')socket.emit('chatMessage',{image:e.target.result,type:'image'});
+  };reader.readAsDataURL(file);this.value='';
+});
+
+// FILE UPLOAD HANDLER
+document.getElementById('fileInput').addEventListener('change',function(){
+  var file=this.files[0];if(!file)return;if(file.size>2*1024*1024*1024){alert('Макс 2GB');return;}
+  var reader=new FileReader();reader.onload=function(e){
+    if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',{toLogin:currentPrivateLogin,file_data:e.target.result,file_name:file.name,type:'file'});
+    else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',{roomId:currentRoomId,file_data:e.target.result,file_name:file.name,type:'file'});
+    else if(currentView==='general')socket.emit('chatMessage',{file_data:e.target.result,file_name:file.name,type:'file'});
   };reader.readAsDataURL(file);this.value='';
 });
 
@@ -670,7 +692,7 @@ socket.on('adminUsers',function(users){
   users.forEach(function(u){
     var row=document.createElement('div');row.className='user-row';
     var infoDiv=document.createElement('div');infoDiv.className='uinfo';
-    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
+    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
     row.appendChild(infoDiv);
     var actDiv=document.createElement('div');actDiv.className='uactions';
     if(u.banned){var b=document.createElement('button');b.className='admin-act-btn abtn-unban';b.textContent='Разбан';b.addEventListener('click',(function(l){return function(){socket.emit('adminUnbanUser',l);};})(u.login));actDiv.appendChild(b);}
@@ -693,7 +715,7 @@ function loadTab(tab){
   else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');});}
 }
 
-// === IMPROVED CALL LOGIC ===
+// === CALL LOGIC ... (оставляем старую)
 const dragVideo = document.getElementById('localVideo');
 let isDragging = false;
 let startX, startY, initialLeft, initialTop;
@@ -754,11 +776,10 @@ function startCall(userToCall, type){
 
     peerConnection=new RTCPeerConnection(rtcConfig);
     pendingIce = [];
-    earlyCandidates = []; // Reset early candidates
+    earlyCandidates = [];
     
     peerConnection.onicecandidate=function(e){if(e.candidate)socket.emit('iceCandidate',{candidate:e.candidate,to:userToCall});};
     
-    // Improved ontrack logic: force play and check streams
     peerConnection.ontrack=function(e){
       const remoteVideo = document.getElementById('remoteVideo');
       if (e.streams && e.streams[0]) {
@@ -789,7 +810,7 @@ socket.on('incomingCall',function(d){
   let typeText = d.callType === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
   document.getElementById('incomingCallerName').textContent = typeText + ' от: ' + d.fromNickname;
   document.getElementById('incomingCallModal').classList.add('show');
-  earlyCandidates = []; // Clear old candidates from previous calls
+  earlyCandidates = [];
 });
 
 function acceptCall(){
@@ -811,7 +832,6 @@ function acceptCall(){
 
     peerConnection=new RTCPeerConnection(rtcConfig);
     
-    // Transfer early candidates to pending queue now that we have a connection
     pendingIce = [...earlyCandidates];
     earlyCandidates = [];
 
@@ -869,7 +889,6 @@ socket.on('iceCandidate',function(candidate){
       pendingIce.push(candidate);
     }
   } else {
-    // If no peerConnection yet (waiting to accept), save for later
     earlyCandidates.push(candidate);
   }
 });

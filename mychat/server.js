@@ -7,7 +7,9 @@ const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 15e6 });
+
+// ЛИМИТ 2 ГБ (2 * 1024 * 1024 * 1024)
+const io = new Server(server, { maxHttpBufferSize: 2e9 });
 
 app.use(express.static('public'));
 
@@ -26,18 +28,23 @@ async function initDB() {
     role VARCHAR(20) DEFAULT 'user',
     token VARCHAR(200) DEFAULT NULL
   )`);
+  
   await pool.query(`CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY, username VARCHAR(100) NOT NULL,
     text TEXT, image TEXT, voice TEXT,
+    file_data TEXT, file_name TEXT,
     type VARCHAR(20) DEFAULT 'text', timestamp BIGINT NOT NULL
   )`);
+  
   await pool.query(`CREATE TABLE IF NOT EXISTS private_messages (
     id SERIAL PRIMARY KEY, from_login VARCHAR(50) NOT NULL,
     to_login VARCHAR(50) NOT NULL, from_nickname VARCHAR(100),
     text TEXT, image TEXT, voice TEXT,
+    file_data TEXT, file_name TEXT,
     type VARCHAR(20) DEFAULT 'text', timestamp BIGINT NOT NULL,
     read BOOLEAN DEFAULT false
   )`);
+
   await pool.query(`CREATE TABLE IF NOT EXISTS rooms (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -46,6 +53,7 @@ async function initDB() {
     comments_enabled BOOLEAN DEFAULT true,
     timestamp BIGINT NOT NULL
   )`);
+  
   await pool.query(`CREATE TABLE IF NOT EXISTS room_members (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
@@ -53,25 +61,36 @@ async function initDB() {
     role VARCHAR(20) DEFAULT 'member',
     UNIQUE(room_id, user_login)
   )`);
+  
   await pool.query(`CREATE TABLE IF NOT EXISTS room_messages (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
     user_login VARCHAR(50) NOT NULL,
     username VARCHAR(100) NOT NULL,
     text TEXT, image TEXT, voice TEXT,
+    file_data TEXT, file_name TEXT,
     type VARCHAR(20) DEFAULT 'text',
     timestamp BIGINT NOT NULL
   )`);
+  
   await pool.query(`CREATE TABLE IF NOT EXISTS logs (
     id SERIAL PRIMARY KEY, action VARCHAR(50) NOT NULL,
     username VARCHAR(100), detail TEXT, ip VARCHAR(50),
     timestamp BIGINT NOT NULL
   )`);
+
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT false'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_data TEXT'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_data TEXT'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_name TEXT'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_data TEXT'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_name TEXT'); } catch(e) {}
+
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
   console.log('Database ready');
 }
@@ -181,46 +200,31 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
-  // === WEBRTC CALLS ===
-  // Обновлен для передачи callType
+  // WEBRTC
   socket.on('callUser', ({ userToCall, signalData, callType }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(userToCall);
     if (targetSocket) {
-      targetSocket.emit('incomingCall', { 
-        signal: signalData, 
-        from: socket.userLogin, 
-        fromNickname: socket.username,
-        callType: callType || 'video' 
-      });
+      targetSocket.emit('incomingCall', { signal: signalData, from: socket.userLogin, fromNickname: socket.username, callType: callType || 'video' });
     }
   });
-
   socket.on('answerCall', ({ signal, to }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
-    if (targetSocket) {
-      targetSocket.emit('callAccepted', signal);
-    }
+    if (targetSocket) targetSocket.emit('callAccepted', signal);
   });
-
   socket.on('hangUp', ({ to }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
-    if (targetSocket) {
-      targetSocket.emit('callEnded');
-    }
+    if (targetSocket) targetSocket.emit('callEnded');
   });
-
   socket.on('iceCandidate', ({ candidate, to }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
-    if (targetSocket) {
-      targetSocket.emit('iceCandidate', candidate);
-    }
+    if (targetSocket) targetSocket.emit('iceCandidate', candidate);
   });
 
-  // === GENERAL CHAT ===
+  // GENERAL
   socket.on('getGeneralHistory', async () => {
     if (!socket.userLogin) return;
     try {
@@ -235,10 +239,17 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
+    
+    const msg = { 
+      username: socket.username, 
+      text: data.text||'', image: data.image||null, voice: data.voice||null, 
+      file_data: data.file_data||null, file_name: data.file_name||null,
+      type: data.type||'text', timestamp: Date.now() 
+    };
+
     try {
-      const res = await pool.query('INSERT INTO messages (username,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-        [msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      const res = await pool.query('INSERT INTO messages (username,text,image,voice,file_data,file_name,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+        [msg.username, msg.text, msg.image, msg.voice, msg.file_data, msg.file_name, msg.type, msg.timestamp]);
       msg.id = res.rows[0].id;
       io.emit('chatMessage', msg);
     } catch (e) { console.error(e); }
@@ -335,10 +346,15 @@ io.on('connection', (socket) => {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
       if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
     } catch(e) {}
-    const msg = { from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
+    const msg = { 
+      from_login: socket.userLogin, to_login: data.toLogin, from_nickname: socket.username, 
+      text: data.text||'', image: data.image||null, voice: data.voice||null, 
+      file_data: data.file_data||null, file_name: data.file_name||null,
+      type: data.type||'text', timestamp: Date.now() 
+    };
     try {
-      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,file_data,file_name,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
+        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.file_data, msg.file_name, msg.type, msg.timestamp]);
       msg.id = res.rows[0].id;
       socket.emit('newPrivateMessage', msg);
       var target = findSocketByLogin(data.toLogin);
@@ -440,9 +456,14 @@ io.on('connection', (socket) => {
       var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return;
       if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
-      var msg = { room_id: roomId, user_login: socket.userLogin, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now() };
-      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp]);
+      const msg = { 
+        room_id: roomId, user_login: socket.userLogin, username: socket.username, 
+        text: data.text||'', image: data.image||null, voice: data.voice||null, 
+        file_data: data.file_data||null, file_name: data.file_name||null,
+        type: data.type||'text', timestamp: Date.now() 
+      };
+      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, file_data, file_name, type, timestamp) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
+        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.file_data, msg.file_name, msg.type, msg.timestamp]);
       msg.id = res.rows[0].id;
       io.to('room_' + roomId).emit('roomNewMessage', msg);
     } catch(e) { console.error(e); }
