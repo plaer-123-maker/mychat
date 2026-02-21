@@ -558,6 +558,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
     <div class="incoming-call-avatar" id="incomingCallAvatar"><span id="incomingCallInitial">?</span></div>
     <h3 id="incomingCallerName">Входящий звонок...</h3>
     <p id="incomingCallType">Аудиозвонок</p>
+    <p id="incomingCallTimer" style="font-size:13px;color:var(--text-muted);margin-top:-8px;"></p>
     <div class="incoming-call-btns">
       <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
         <button class="reject-btn" onclick="rejectCall()">📵</button>
@@ -1490,23 +1491,47 @@ socket.on('privateMessageDeleted',function(d){var el=document.getElementById('pm
 function buildCallLogHtml(msg) {
   try {
     var d=JSON.parse(msg.text||'{}');
-    var isMine=msg.from_login===myLogin;
     var isOutgoing=d.callerLogin===myLogin;
-    var icon=d.callType==='video'?'📹':'📞';
-    var title='';
-    var sub='';
-    if(!d.answered) {
-      title=(isOutgoing?'Исходящий звонок':'Входящий звонок')+' · Пропущен';
-      icon=isOutgoing?'📵':'📵';
+    var callTypeLabel=d.callType==='video'?'видеозвонок':'аудиозвонок';
+    var icon, title, sub='', iconColor;
+
+    // Время звонка
+    var timeStr=formatTime(msg.timestamp);
+
+    if(d.missed || !d.answered) {
+      // Пропущен — только когда собеседник сбросил или 20 сек истекло
+      if(isOutgoing) {
+        // Мы звонили — не взяли трубку
+        icon='📵'; iconColor='#ff6b6b';
+        title='Нет ответа';
+      } else {
+        // Нам звонили — мы не ответили / сбросили
+        icon='📵'; iconColor='#ff6b6b';
+        title='Пропущенный '+callTypeLabel;
+      }
+      sub=timeStr;
     } else {
-      title=(isOutgoing?'Исходящий ':'Входящий ')+(d.callType==='video'?'видеозвонок':'аудиозвонок');
-      if(d.duration>0){var m=Math.floor(d.duration/60),s=d.duration%60;sub=(m>0?m+'м ':'')+s+'с';}
+      // Звонок состоялся
+      icon=d.callType==='video'?'📹':'📞';
+      iconColor=isOutgoing?'var(--accent)':'var(--online)';
+      title=(isOutgoing?'Исходящий ':'Входящий ')+callTypeLabel;
+      // Длительность
+      if(d.duration>0){
+        var m=Math.floor(d.duration/60),s=d.duration%60;
+        sub=(m>0?m+' мин ':'')+s+' с';
+      } else {
+        sub=timeStr;
+      }
     }
-    return '<div class="call-log-msg" onclick="startCall(\''+
-      (isOutgoing?d.calleeLogin:d.callerLogin)+'\',\''+d.callType+'\')">'
-      +'<span class="cl-icon">'+icon+'</span>'
-      +'<div class="cl-info"><div class="cl-title">'+title+'</div>'+(sub?'<div class="cl-sub">'+sub+'</div>':'')+'</div>'
-      +'<span style="color:var(--accent);font-size:13px;font-weight:600;">Позвонить снова</span>'
+
+    var otherLogin=isOutgoing?d.calleeLogin:d.callerLogin;
+    return '<div class="call-log-msg" onclick="startCall(\''+otherLogin+'\',\''+d.callType+'\')">'
+      +'<span class="cl-icon" style="color:'+iconColor+'">'+icon+'</span>'
+      +'<div class="cl-info">'
+        +'<div class="cl-title">'+title+'</div>'
+        +(sub?'<div class="cl-sub">'+sub+'</div>':'')
+      +'</div>'
+      +'<span style="color:var(--accent);font-size:13px;font-weight:600;">↩</span>'
       +'</div>';
   } catch(e){ return '<div class="call-log-msg"><span class="cl-icon">📞</span><div class="cl-info"><div class="cl-title">Звонок</div></div></div>'; }
 }
@@ -1877,6 +1902,12 @@ function startCallTimer(){
 
 function stopCallTimer(){clearInterval(callTimerInterval);callTimerInterval=null;}
 
+function formatTime(ts){
+  if(!ts)return "";
+  var d=new Date(Number(ts)),h=d.getHours(),m=d.getMinutes();
+  return (h<10?"0":"")+h+":"+(m<10?"0":"")+m;
+}
+
 function getDuration(){
   if(!callStartTime)return 0;
   return Math.floor((Date.now()-callStartTime)/1000);
@@ -1963,6 +1994,7 @@ function startCall(userToCall,type){
 }
 window.startCall=startCall;
 
+var incomingCallCountdown=null;
 socket.on('incomingCall',function(d){
   incomingCallData=d;earlyCandidates=[];
   activeCallType=d.callType;callPartnerLogin=d.from;callPartnerNick=d.fromNickname;
@@ -1974,9 +2006,20 @@ socket.on('incomingCall',function(d){
   if(av)avEl.innerHTML='<img src="'+av+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
   else{avEl.innerHTML='<span>'+d.fromNickname[0].toUpperCase()+'</span>';avEl.style.fontSize='36px';avEl.style.background='var(--accent)';}
   document.getElementById('incomingCallModal').classList.add('show');
+  // Countdown timer — server will auto-reject at 20s
+  clearInterval(incomingCallCountdown);
+  var sec=20;
+  var timerEl=document.getElementById('incomingCallTimer');
+  timerEl.textContent='Автосброс через '+sec+' с';
+  incomingCallCountdown=setInterval(function(){
+    sec--;
+    if(sec<=0){clearInterval(incomingCallCountdown);timerEl.textContent='';}
+    else timerEl.textContent='Автосброс через '+sec+' с';
+  },1000);
 });
 
 function acceptCall(){
+  clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
   document.getElementById('incomingCallModal').classList.remove('show');
   showCallOverlay();
   setCallAudioUI(callPartnerNick, avatarCache[callPartnerLogin]||null, incomingCallData.callType);
@@ -1999,7 +2042,9 @@ function acceptCall(){
 window.acceptCall=acceptCall;
 
 function rejectCall(){
-  socket.emit('hangUp',{to:incomingCallData.from,duration:0});
+  clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
+  // Callee explicitly rejects — send hangUp so server logs it as missed
+  if(incomingCallData) socket.emit('hangUp',{to:incomingCallData.from,duration:0,rejected:true});
   document.getElementById('incomingCallModal').classList.remove('show');
   incomingCallData=null;
 }
@@ -2023,10 +2068,20 @@ socket.on('iceCandidate',function(candidate){
 });
 
 socket.on('callEnded',function(data){
-  cleanupCall();
-  // Refresh PM if we were in a call with this person
-  if(currentView==='pm'&&currentPrivateLogin&&callPartnerLogin===currentPrivateLogin){
-    setTimeout(function(){socket.emit('getPrivateHistory',currentPrivateLogin);},800);
+  // Hide incoming call modal if we didn't answer yet (timeout or caller hung up)
+  clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
+  document.getElementById('incomingCallModal').classList.remove('show');
+  var partner=callPartnerLogin||(incomingCallData?incomingCallData.from:null);
+  if(data&&data.reason==='timeout'&&!peerConnection){
+    // We were ringing — just close the modal, server already saved log
+    incomingCallData=null;
+  } else {
+    cleanupCall();
+  }
+  incomingCallData=null;
+  // Refresh PM chat to show new call log entry
+  if(currentView==='pm'&&currentPrivateLogin&&partner===currentPrivateLogin){
+    setTimeout(function(){socket.emit('getPrivateHistory',currentPrivateLogin);},600);
   }
 });
 
@@ -2060,24 +2115,38 @@ window.toggleVideo=toggleVideo;
 
 async function switchCamera(){
   if(!localStream)return;
-  currentFacingMode=currentFacingMode==='user'?'environment':'user';
+  var nextFacing=currentFacingMode==='user'?'environment':'user';
   try{
-    // Get new video stream
-    var ns=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:currentFacingMode,width:{ideal:640},height:{ideal:480}}});
-    var nvt=ns.getVideoTracks()[0];
-    // Replace in peer connection
-    if(peerConnection){
-      var sender=peerConnection.getSenders().find(function(s){return s.track&&s.track.kind==='video';});
-      if(sender)await sender.replaceTrack(nvt);
-    }
-    // Replace in local stream
+    // IMPORTANT: Stop old video track FIRST before requesting new camera
+    // Otherwise mobile browsers throw "Could not start video source"
     var oldVT=localStream.getVideoTracks()[0];
     if(oldVT){localStream.removeTrack(oldVT);oldVT.stop();}
+
+    // Now request the new camera
+    var ns=await navigator.mediaDevices.getUserMedia({
+      audio:false,
+      video:{facingMode:{exact:nextFacing},width:{ideal:640},height:{ideal:480}}
+    }).catch(function(){
+      // exact may not be supported on all devices — fallback without exact
+      return navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:nextFacing,width:{ideal:640},height:{ideal:480}}});
+    });
+
+    currentFacingMode=nextFacing;
+    var nvt=ns.getVideoTracks()[0];
+
+    // Replace track in peer connection sender
+    if(peerConnection){
+      var sender=peerConnection.getSenders().find(function(s){return s.track&&s.track.kind==='video';});
+      if(sender) await sender.replaceTrack(nvt);
+    }
+
     localStream.addTrack(nvt);
-    // Rebuild srcObject so preview updates
     var lv=document.getElementById('localVideo');
     lv.srcObject=null;lv.srcObject=localStream;lv.play().catch(function(){});
-  }catch(e){alert('Не удалось переключить камеру: '+e.message);}
+  }catch(e){
+    // Revert facing mode if failed
+    alert('Не удалось переключить камеру: '+e.message);
+  }
 }
 window.switchCamera=switchCamera;
 

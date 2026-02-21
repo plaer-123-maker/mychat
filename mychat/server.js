@@ -203,20 +203,73 @@ io.on('connection', (socket) => {
   // === WEBRTC CALLS ===
   const activeCalls = new Map();
 
+  // callTimeouts: callerLogin -> { timeout, calleeLogin, callType }
+  const callTimeouts = new Map();
+
+  async function saveCallLog({ callerLogin, callerNick, calleeLogin, callType, answered, duration, missed }) {
+    try {
+      const calleeRes = await pool.query('SELECT nickname FROM users WHERE login=$1', [calleeLogin]);
+      const calleeNick = calleeRes.rows[0]?.nickname || calleeLogin;
+      const ts = Date.now();
+      const textVal = JSON.stringify({ callType, answered, duration: duration || 0, missed: !!missed, callerLogin, callerNick, calleeLogin, calleeNick });
+      const r1 = await pool.query(
+        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp,read) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+        [callerLogin, calleeLogin, callerNick, textVal, 'call_log', ts, true]
+      );
+      const r2 = await pool.query(
+        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp,read) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+        [calleeLogin, callerLogin, calleeNick, textVal, 'call_log', ts, false]
+      );
+      const msg1 = { id: r1.rows[0].id, from_login: callerLogin, to_login: calleeLogin, from_nickname: callerNick, text: textVal, type: 'call_log', timestamp: ts, read: true };
+      const msg2 = { id: r2.rows[0].id, from_login: calleeLogin, to_login: callerLogin, from_nickname: calleeNick, text: textVal, type: 'call_log', timestamp: ts, read: false };
+      const callerSocket = findSocketByLogin(callerLogin);
+      const calleeSocket = findSocketByLogin(calleeLogin);
+      if (callerSocket) callerSocket.emit('newPrivateMessage', msg1);
+      if (calleeSocket) calleeSocket.emit('newPrivateMessage', msg2);
+    } catch(e) { console.error('saveCallLog error', e); }
+  }
+
   socket.on('callUser', ({ userToCall, signalData, callType }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(userToCall);
-    if (targetSocket) {
-      activeCalls.set(socket.userLogin, { calleeLogin: userToCall, callType: callType||'video', startTime: Date.now(), answered: false });
-      targetSocket.emit('incomingCall', {
-        signal: signalData,
-        from: socket.userLogin,
-        fromNickname: socket.username,
-        callType: callType || 'video'
-      });
-    } else {
+    if (!targetSocket) {
       socket.emit('callEnded', { reason: 'offline' });
+      return;
     }
+
+    activeCalls.set(socket.userLogin, { calleeLogin: userToCall, callType: callType || 'video', answered: false });
+
+    targetSocket.emit('incomingCall', {
+      signal: signalData,
+      from: socket.userLogin,
+      fromNickname: socket.username,
+      callType: callType || 'video'
+    });
+
+    // Auto-reject after 20 seconds if not answered
+    const timeout = setTimeout(async () => {
+      const info = activeCalls.get(socket.userLogin);
+      if (!info || info.answered) return; // already answered or cleaned up
+      activeCalls.delete(socket.userLogin);
+      callTimeouts.delete(socket.userLogin);
+
+      // Notify both sides
+      socket.emit('callEnded', { reason: 'timeout' });
+      targetSocket.emit('callEnded', { reason: 'timeout' });
+
+      // Save as missed call log
+      await saveCallLog({
+        callerLogin: socket.userLogin,
+        callerNick: socket.username,
+        calleeLogin: userToCall,
+        callType: callType || 'video',
+        answered: false,
+        duration: 0,
+        missed: true,
+      });
+    }, 20000);
+
+    callTimeouts.set(socket.userLogin, { timeout, calleeLogin: userToCall });
   });
 
   socket.on('answerCall', ({ signal, to }) => {
@@ -224,41 +277,55 @@ io.on('connection', (socket) => {
     const targetSocket = findSocketByLogin(to);
     if (targetSocket) {
       targetSocket.emit('callAccepted', signal);
+      // Mark as answered so auto-reject doesn't fire
       if (activeCalls.has(to)) activeCalls.get(to).answered = true;
+      // Clear the 20s timeout
+      const t = callTimeouts.get(to);
+      if (t) { clearTimeout(t.timeout); callTimeouts.delete(to); }
     }
   });
 
-  socket.on('hangUp', async ({ to, duration }) => {
+  socket.on('hangUp', async ({ to, duration, rejected }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
     if (targetSocket) targetSocket.emit('callEnded', { reason: 'hangup' });
 
+    // Clear auto-reject timeout if caller hangs up manually
+    const t = callTimeouts.get(socket.userLogin);
+    if (t) { clearTimeout(t.timeout); callTimeouts.delete(socket.userLogin); }
+
     const callInfo = activeCalls.get(socket.userLogin) || activeCalls.get(to);
     const callType = callInfo ? callInfo.callType : 'audio';
     const answered = callInfo ? callInfo.answered : false;
-    const dur = duration || 0;
+    const dur = answered ? (duration || 0) : 0;
+
+    // missed = callee rejected (duration=0, not answered) OR caller hung up before answer
+    const missed = !answered;
+
     activeCalls.delete(socket.userLogin);
     activeCalls.delete(to);
 
-    try {
-      const callerNick = socket.username;
-      const calleeRes = await pool.query('SELECT nickname FROM users WHERE login=$1', [to]);
-      const calleeNick = calleeRes.rows[0]?.nickname || to;
-      const ts = Date.now();
-      const textVal = JSON.stringify({ callType, answered, duration: dur, callerLogin: socket.userLogin, callerNick, calleeLogin: to, calleeNick });
-      const r1 = await pool.query(
-        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp,read) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
-        [socket.userLogin, to, callerNick, textVal, 'call_log', ts, true]
-      );
-      const r2 = await pool.query(
-        'INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp,read) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
-        [to, socket.userLogin, calleeNick, textVal, 'call_log', ts, false]
-      );
-      const callMsg1 = { id: r1.rows[0].id, from_login: socket.userLogin, to_login: to, from_nickname: callerNick, text: textVal, type: 'call_log', timestamp: ts, read: true };
-      const callMsg2 = { id: r2.rows[0].id, from_login: to, to_login: socket.userLogin, from_nickname: calleeNick, text: textVal, type: 'call_log', timestamp: ts, read: false };
-      socket.emit('newPrivateMessage', callMsg1);
-      if (targetSocket) targetSocket.emit('newPrivateMessage', callMsg2);
-    } catch(e) { console.error('call log error', e); }
+    // Determine who is caller: if we have activeCalls entry for socket.userLogin, we are caller
+    // If callee rejects, callInfo will be under the caller's login (to)
+    let callerLogin, calleeLogin, callerNick;
+    if (callInfo && callInfo.calleeLogin === to) {
+      // socket is the caller
+      callerLogin = socket.userLogin;
+      calleeLogin = to;
+      callerNick = socket.username;
+    } else {
+      // socket is the callee rejecting
+      callerLogin = to;
+      calleeLogin = socket.userLogin;
+      callerNick = null; // will be fetched in saveCallLog
+      // fetch caller nick
+      try {
+        const cr = await pool.query('SELECT nickname FROM users WHERE login=$1', [to]);
+        callerNick = cr.rows[0]?.nickname || to;
+      } catch(e) { callerNick = to; }
+    }
+
+    await saveCallLog({ callerLogin, callerNick, calleeLogin, callType, answered, duration: dur, missed });
   });
 
   socket.on('iceCandidate', ({ candidate, to }) => {
