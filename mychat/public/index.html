@@ -779,6 +779,16 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
         <button onclick="dismissNotifBar()">✕</button>
       </div>
     </div>
+    <!-- Stories bar -->
+    <div id="storiesBar" style="padding:8px 12px;border-bottom:1px solid var(--border);">
+      <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;align-items:flex-start;" id="storiesRow">
+        <div onclick="openAddStory()" style="display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;">
+          <div style="width:52px;height:52px;border-radius:50%;background:var(--bg-input);border:2px dashed var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;">+</div>
+          <span style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">Моя</span>
+        </div>
+      </div>
+    </div>
+
     <div class="sidebar-tabs">
       <button id="tabAll">🗂 Все</button>
       <button class="active" id="tabGeneral">💬 Общий</button>
@@ -845,8 +855,11 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <button onclick="cancelEdit()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
     </div>
     <div class="input-area" id="inputArea">
-      <label class="ia-btn" for="photoInput" title="Фото">📎</label>
-      <input type="file" id="photoInput" accept="image/*" multiple>
+      <label class="ia-btn" for="photoInput" title="Фото/Видео">📎</label>
+      <input type="file" id="photoInput" accept="image/*,video/*" multiple>
+      <input type="file" id="fileInput" accept="*/*" multiple style="display:none;">
+      <label class="ia-btn" for="fileInput" title="Файл">📁</label>
+      <button class="ia-btn" id="emojiPanelBtn" title="Эмодзи/Стикеры">😊</button>
       <input type="text" id="msgInput" placeholder="Написать сообщение...">
       <button class="ia-btn" id="videoNoteBtn" title="Видео-кружочек">⏺</button>
       <button class="ia-btn" id="micBtn" title="Голосовое">🎤</button>
@@ -1618,6 +1631,9 @@ function buildChatItem(c, isPinned, chatType) {
   var lastText='';
   if(c.lastMsg){
     if(c.lastMsg.type==='image') lastText='📷 Фото';
+    else if(c.lastMsg.type==='video') lastText='📹 Видео';
+    else if(c.lastMsg.type==='file') lastText='📄 Файл: '+(c.lastMsg.text||'');
+    else if(c.lastMsg.type==='sticker') lastText='🎭 Стикер '+c.lastMsg.text;
     else if(c.lastMsg.type==='voice') lastText='🎤 Голосовое';
     else if(c.lastMsg.type==='video_note') lastText='⏺ Кружочек';
     else if(c.lastMsg.type==='call') lastText='📞 Звонок';
@@ -1697,6 +1713,12 @@ socket.on('myChats',function(chats){
   if(currentView!=='private'&&currentView!=='pm'&&currentView!=='all')return;
   if(document.getElementById('searchInput').value.trim())return;
   renderChatList();
+});
+
+socket.on('clearUnreadBadge',function(d){
+  // Immediately zero out the unread badge for opened chat
+  var chat = latestChats.find(function(c){return c.login===d.login;});
+  if(chat){ chat.unread=0; renderChatList(); }
 });
 var onlineLogins = new Set();
 
@@ -1909,6 +1931,9 @@ function addRoomMsg(msg){
   }
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
+  else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
+  else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
+  else if(msg.type==='file'&&msg.file_url){var fsz=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz+'</div></div></a>';}
   else html+='<div class="text">'+(msg.text||'')+'</div>';
   if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html.replace('<div class="name','<div class="name');
   html+=buildMsgTime(msg.timestamp);
@@ -2060,6 +2085,9 @@ function addPM(msg){
   }
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
+  else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
+  else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
+  else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
   else html+='<div class="text">'+(msg.text||'')+'</div>';
   if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html;
   html+=buildMsgTime(msg.timestamp);
@@ -2245,6 +2273,9 @@ function addMsg(msg){
   }
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
+  else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
+  else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
+  else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
   else html+='<div class="text">'+(msg.text||'')+'</div>';
   if(!isS)html+=buildMsgTime(msg.timestamp);
   div.innerHTML=html;
@@ -2407,12 +2438,22 @@ socket.on('adminUsers',function(users){
   users.forEach(function(u){
     var row=document.createElement('div');row.className='user-row';
     var infoDiv=document.createElement('div');infoDiv.className='uinfo';
-    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'');
+    infoDiv.innerHTML='<b>'+u.nickname+'</b> ('+u.login+') <span class="role '+u.role+'">'+u.role+'</span>'+(u.banned?' 🚫':'')+(u.muted_until>Date.now()?' 🔇':'')+(u.vip_until>Date.now()?' 👑':'')+(u.verified?' ✓':'');
     row.appendChild(infoDiv);
     var actDiv=document.createElement('div');actDiv.className='uactions';
     if(u.banned){var b=document.createElement('button');b.className='admin-act-btn abtn-unban';b.textContent='Разбан';b.addEventListener('click',(function(l){return function(){socket.emit('adminUnbanUser',l);};})(u.login));actDiv.appendChild(b);}
     else{var b=document.createElement('button');b.className='admin-act-btn abtn-ban';b.textContent='Бан';b.addEventListener('click',(function(l){return function(){if(confirm('Забанить?'))socket.emit('adminBanUser',l);};})(u.login));actDiv.appendChild(b);}
-    var bm=document.createElement('button');bm.className='admin-act-btn abtn-mute';bm.textContent='Мут';bm.addEventListener('click',(function(l){return function(){var m=prompt('Минут?','10');if(m)socket.emit('adminMuteUser',{login:l,minutes:parseInt(m)});};})(u.login));actDiv.appendChild(bm);
+    if(u.muted_until>Date.now()){
+      var bum=document.createElement('button');bum.className='admin-act-btn abtn-unban';bum.textContent='Снять мут';bum.addEventListener('click',(function(l){return function(){socket.emit('adminUnmuteUser',l);};})(u.login));actDiv.appendChild(bum);
+    } else {
+      var bm=document.createElement('button');bm.className='admin-act-btn abtn-mute';bm.textContent='Мут';bm.addEventListener('click',(function(l){return function(){var m=prompt('Минут?','10');if(m)socket.emit('adminMuteUser',{login:l,minutes:parseInt(m)});};})(u.login));actDiv.appendChild(bm);
+    }
+    if(u.vip_until>Date.now()){
+      var bvip=document.createElement('button');bvip.className='admin-act-btn abtn-mute';bvip.textContent='❌ VIP';bvip.addEventListener('click',(function(l){return function(){if(confirm('Снять VIP?'))socket.emit('adminRemoveVip',l);};})(u.login));actDiv.appendChild(bvip);
+    }
+    if(u.verified){
+      var bver=document.createElement('button');bver.className='admin-act-btn abtn-mute';bver.textContent='❌ Верификация';bver.addEventListener('click',(function(l){return function(){if(confirm('Снять верификацию?'))socket.emit('adminRemoveVerify',l);};})(u.login));actDiv.appendChild(bver);
+    }
     var bn=document.createElement('button');bn.className='admin-act-btn abtn-nick';bn.textContent='Ник';bn.addEventListener('click',(function(l){return function(){var n=prompt('Новый ник:');if(n)socket.emit('adminChangeNickname',{login:l,newNickname:n});};})(u.login));actDiv.appendChild(bn);
     var br=document.createElement('button');br.className='admin-act-btn abtn-role';br.textContent='Роль';br.addEventListener('click',(function(l){return function(){var r=prompt('Роль:','user');if(r)socket.emit('adminSetRole',{login:l,role:r});};})(u.login));actDiv.appendChild(br);
     var bd=document.createElement('button');bd.className='admin-act-btn abtn-del';bd.textContent='Удалить';bd.addEventListener('click',(function(l){return function(){if(confirm('Удалить?'))socket.emit('adminDeleteUser',l);};})(u.login));actDiv.appendChild(bd);
@@ -2951,8 +2992,8 @@ document.getElementById('photoViewer').addEventListener('click',function(e){
 
 /* ── 1. VERIFICATION ── */
 socket.on('userVerified', function(d) {
-  verifiedCache[d.login] = true;
-  if (d.login === myLogin) myVerified = true;
+  verifiedCache[d.login] = (d.verified !== false);
+  if (d.login === myLogin) myVerified = (d.verified !== false);
   // Refresh visible messages
   document.querySelectorAll('.msg-nick, .name').forEach(function(el) {
     // lightweight: just trigger re-render by reloading chat list
@@ -3371,7 +3412,430 @@ window.buildMsgTime = function(ts, msgId, isRoom, isMine) {
   return '<div class="msg-time">' + time + readerBtn + '</div>';
 };
 
+// ============================================================
+// EMOJI & STICKER PANEL
+// ============================================================
+var emojiPanelOpen = false;
+var currentEmojiTab = 'emoji';
+
+var EMOJI_LIST = [
+  '😀','😂','😍','🥰','😊','😎','🤔','😅','😭','😱','🥺','😤','🤣','❤️','🔥','👍','👏','🙏','💪','🎉',
+  '✨','🌟','💯','🤩','😏','😒','😔','🤗','😜','🤪','😋','🤤','😴','🤯','🥳','😇','🤠','🤑','😈','👀',
+  '💀','👋','🖐','✌️','🤞','👊','🤜','🤙','💅','🤦','🤷','💁','🙋','🙅','🙆','🧐','🥴','😶','😬','🫠',
+  '🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐸','🐧','🐦','🦆','🦅','🦋','🐝','🦄','🐉',
+  '🍕','🍔','🌮','🍜','🍣','🍩','🎂','🍎','🍓','🍒','🥑','🥦','🌽','🧁','🍦','🍫','☕','🧃','🥤','🍺',
+  '⚽','🏀','🏈','⚾','🎾','🏐','🎮','🎯','♟️','🎲','🎸','🎹','🎨','📸','🎬','🎤','🎧','📚','💻','📱',
+  '🚀','✈️','🚗','🚢','🏠','🌍','🌈','⛄','🌊','🌴','🌸','🌺','🍀','⭐','🌙','☀️','⚡','❄️','🌪️','🎃',
+  '💎','👑','🏆','🎁','🎀','💌','🔑','🔮','💡','📌','❤️‍🔥','💔','💕','💞','💗','💓','💘','💝','🖤','🤍'
+];
+
+var STICKER_PACKS = {
+  'Базовые': ['👍','👎','😂','😭','🔥','💯','🤣','😱','🤦','🎉','💪','🙏','❤️','💀','✨','🥺','🤔','😎','🤡','👻'],
+  'Животные': ['🐶','🐱','🐸','🦊','🐼','🐨','🦁','🐯','🐻','🦄','🐉','🦋','🦆','🐧','🦅','🦀','🦑','🐙','🦭','🐬'],
+  'Еда': ['🍕','🍔','🌮','🍜','🍣','🎂','🍩','🍦','🍫','☕','🥑','🍕','🥤','🍺','🍰','🧁','🍪','🥞','🌯','🥗']
+};
+
+function toggleEmojiPanel() {
+  var panel = document.getElementById('emojiPanel');
+  emojiPanelOpen = !emojiPanelOpen;
+  panel.style.display = emojiPanelOpen ? 'block' : 'none';
+  if (emojiPanelOpen) {
+    showEmojiTab('emoji');
+    // position panel above input area
+    var inputArea = document.getElementById('inputArea');
+    var rect = inputArea.getBoundingClientRect();
+    panel.style.bottom = (window.innerHeight - rect.top) + 'px';
+  }
+}
+
+function showEmojiTab(tab) {
+  currentEmojiTab = tab;
+  document.getElementById('tabEmoji').style.color = tab==='emoji' ? 'var(--accent)' : 'var(--text-muted)';
+  document.getElementById('tabEmoji').style.borderBottomColor = tab==='emoji' ? 'var(--accent)' : 'transparent';
+  document.getElementById('tabSticker').style.color = tab==='sticker' ? 'var(--accent)' : 'var(--text-muted)';
+  document.getElementById('tabSticker').style.borderBottomColor = tab==='sticker' ? 'var(--accent)' : 'transparent';
+  
+  var grid = document.getElementById('emojiGrid');
+  if (tab === 'emoji') {
+    grid.innerHTML = EMOJI_LIST.map(function(e) {
+      return '<span onclick="insertEmoji(\'' + e + '\')" style="font-size:24px;cursor:pointer;padding:4px;display:inline-block;border-radius:6px;" onmouseover="this.style.background=\'var(--bg-active)\'" onmouseout="this.style.background=\'transparent\'">' + e + '</span>';
+    }).join('');
+  } else {
+    var html = '';
+    Object.keys(STICKER_PACKS).forEach(function(pack) {
+      html += '<div style="font-size:11px;color:var(--text-muted);font-weight:600;margin:6px 0 4px;">' + pack + '</div>';
+      html += STICKER_PACKS[pack].map(function(s) {
+        return '<span onclick="sendSticker(\'' + s + '\')" style="font-size:32px;cursor:pointer;padding:4px;display:inline-block;border-radius:8px;" onmouseover="this.style.background=\'var(--bg-active)\'" onmouseout="this.style.background=\'transparent\'">' + s + '</span>';
+      }).join('');
+    });
+    grid.innerHTML = html;
+  }
+}
+
+function insertEmoji(emoji) {
+  var inp = document.getElementById('msgInput');
+  var pos = inp.selectionStart || inp.value.length;
+  inp.value = inp.value.slice(0, pos) + emoji + inp.value.slice(pos);
+  inp.focus();
+  inp.selectionStart = inp.selectionEnd = pos + emoji.length;
+  // Close panel
+  document.getElementById('emojiPanel').style.display = 'none';
+  emojiPanelOpen = false;
+}
+
+function sendSticker(emoji) {
+  // Send sticker as a message
+  var msgObj = { type: 'sticker', text: emoji, timestamp: Date.now() };
+  if (currentView === 'pm' && currentPrivateLogin) {
+    socket.emit('privateMessage', { toLogin: currentPrivateLogin, text: emoji, type: 'sticker' });
+  } else if (currentView === 'room' && currentRoomId) {
+    socket.emit('roomMessage', { roomId: currentRoomId, text: emoji, type: 'sticker' });
+  } else if (currentView === 'general') {
+    socket.emit('chatMessage', { text: emoji, type: 'sticker' });
+  }
+  document.getElementById('emojiPanel').style.display = 'none';
+  emojiPanelOpen = false;
+}
+
+// Close emoji panel when clicking outside
+document.addEventListener('click', function(e) {
+  var panel = document.getElementById('emojiPanel');
+  var btn = document.getElementById('emojiPanelBtn');
+  if (emojiPanelOpen && !panel.contains(e.target) && e.target !== btn) {
+    panel.style.display = 'none';
+    emojiPanelOpen = false;
+  }
+});
+
+document.getElementById('emojiPanelBtn').addEventListener('click', function(e) {
+  e.stopPropagation();
+  toggleEmojiPanel();
+});
+
+// ============================================================
+// FILE/VIDEO UPLOAD
+// ============================================================
+document.getElementById('fileInput').addEventListener('change', function() {
+  var files = Array.from(this.files);
+  if (!files.length) return;
+  files.forEach(function(file) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var dataUrl = ev.target.result;
+      var isVideo = file.type.startsWith('video/');
+      var msgType = isVideo ? 'video' : 'file';
+      var payload = {
+        type: msgType,
+        text: file.name,
+        file_url: dataUrl,
+        file_name: file.name,
+        file_size: file.size,
+        timestamp: Date.now()
+      };
+      if (currentView === 'pm' && currentPrivateLogin) {
+        Object.assign(payload, { toLogin: currentPrivateLogin });
+        socket.emit('privateMessage', payload);
+      } else if (currentView === 'room' && currentRoomId) {
+        Object.assign(payload, { roomId: currentRoomId });
+        socket.emit('roomMessage', payload);
+      } else if (currentView === 'general') {
+        socket.emit('chatMessage', payload);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  this.value = '';
+});
+
+// Handle video in photoInput
+(function() {
+  var origPhotoHandler = document.getElementById('photoInput').onchange;
+  document.getElementById('photoInput').addEventListener('change', function() {
+    // video files - send as video type
+    var files = Array.from(this.files);
+    var videos = files.filter(function(f) { return f.type.startsWith('video/'); });
+    var images = files.filter(function(f) { return f.type.startsWith('image/'); });
+    
+    videos.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var payload = { type: 'video', text: file.name, file_url: ev.target.result, file_name: file.name, file_size: file.size };
+        if (currentView === 'pm' && currentPrivateLogin) { socket.emit('privateMessage', Object.assign({toLogin:currentPrivateLogin}, payload)); }
+        else if (currentView === 'room' && currentRoomId) { socket.emit('roomMessage', Object.assign({roomId:currentRoomId}, payload)); }
+        else if (currentView === 'general') { socket.emit('chatMessage', payload); }
+      };
+      reader.readAsDataURL(file);
+    });
+  }, true); // capture to run before existing handler
+})();
+
+// Render video/file messages - patch addMsg
+(function() {
+  var _buildContent = window.buildMsgContent;
+  
+  function buildFileHtml(msg) {
+    if (msg.type === 'video' && (msg.file_url || msg.image)) {
+      return '<video src="' + (msg.file_url || msg.image) + '" controls style="max-width:280px;max-height:220px;border-radius:10px;display:block;margin-top:4px;"></video>' + (msg.file_name ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 ' + msg.file_name + '</div>' : '');
+    }
+    if (msg.type === 'file' && msg.file_url) {
+      var size = msg.file_size ? ' (' + Math.round(msg.file_size/1024) + ' KB)' : '';
+      return '<a href="' + msg.file_url + '" download="' + (msg.file_name||'file') + '" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:280px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">' + (msg.file_name||'Файл') + '</div><div style="font-size:11px;color:var(--text-muted);">' + size + '</div></div></a>';
+    }
+    if (msg.type === 'sticker') {
+      return '<span style="font-size:52px;line-height:1.2;display:block;">' + (msg.text||'') + '</span>';
+    }
+    return null;
+  }
+  
+  window._buildFileHtml = buildFileHtml;
+})();
+
+// ============================================================
+// STORIES
+// ============================================================
+var allStories = [];
+var currentStoryIdx = 0;
+var storyTimer = null;
+var storyFileData = null;
+var storyFileType = 'image';
+
+function loadStories() {
+  socket.emit('getStories');
+}
+
+socket.on('storiesData', function(stories) {
+  allStories = stories;
+  renderStoriesBar(stories);
+});
+
+socket.on('newStory', function(story) {
+  // Add to top if not already there
+  var existing = allStories.findIndex(function(s){ return s.id === story.id; });
+  if (existing === -1) {
+    allStories.unshift(story);
+    renderStoriesBar(allStories);
+  }
+});
+
+socket.on('storyDeleted', function(d) {
+  allStories = allStories.filter(function(s){ return s.id !== d.storyId; });
+  renderStoriesBar(allStories);
+});
+
+socket.on('storyResult', function(d) {
+  if (d.ok) { closeAddStory(); loadStories(); }
+  else alert('Ошибка: ' + (d.msg||'неизвестно'));
+});
+
+function renderStoriesBar(stories) {
+  var row = document.getElementById('storiesRow');
+  if (!row) return;
+  // Keep the "Add" button
+  var addBtn = row.firstElementChild;
+  row.innerHTML = '';
+  row.appendChild(addBtn);
+  
+  // Group by user
+  var byUser = {};
+  stories.forEach(function(s) {
+    if (!byUser[s.user_login]) byUser[s.user_login] = [];
+    byUser[s.user_login].push(s);
+  });
+  
+  Object.keys(byUser).forEach(function(login) {
+    var userStories = byUser[login];
+    var first = userStories[0];
+    var allViewed = userStories.every(function(s){ return parseInt(s.viewed) > 0; });
+    var nick = first.user_nickname || login;
+    var initials = nick[0].toUpperCase();
+    var isMe = (login === myLogin);
+    
+    var div = document.createElement('div');
+    div.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0;';
+    var ring = allViewed ? '#555' : 'var(--accent)';
+    div.innerHTML = '<div style="width:52px;height:52px;border-radius:50%;border:2px solid ' + ring + ';display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;background:var(--bg-input);">' + initials + '</div>' +
+      '<span style="font-size:10px;color:var(--text-secondary);white-space:nowrap;max-width:56px;overflow:hidden;text-overflow:ellipsis;">' + (isMe ? 'Я' : nick) + '</span>';
+    
+    var idx = allStories.findIndex(function(s){ return s.user_login === login; });
+    div.onclick = function() { openStoryViewer(idx); };
+    if (isMe && userStories.length > 0) {
+      // Long-press to delete own story
+      div.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        if (confirm('Удалить историю?')) {
+          socket.emit('deleteStory', { storyId: userStories[0].id });
+        }
+      });
+    }
+    row.appendChild(div);
+  });
+}
+
+function openAddStory() {
+  storyFileData = null;
+  document.getElementById('storyPreview').textContent = '📷 Нажми для выбора фото или видео';
+  document.getElementById('storyTextInput').value = '';
+  document.getElementById('addStoryModal').style.display = 'flex';
+}
+
+function closeAddStory() {
+  document.getElementById('addStoryModal').style.display = 'none';
+  storyFileData = null;
+}
+
+document.getElementById('storyFileInput').addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file) return;
+  storyFileType = file.type.startsWith('video/') ? 'video' : 'image';
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    storyFileData = ev.target.result;
+    var prev = document.getElementById('storyPreview');
+    if (storyFileType === 'video') {
+      prev.innerHTML = '<video src="' + storyFileData + '" style="max-width:100%;max-height:120px;border-radius:8px;" controls></video>';
+    } else {
+      prev.innerHTML = '<img src="' + storyFileData + '" style="max-width:100%;max-height:120px;border-radius:8px;object-fit:cover;">';
+    }
+  };
+  reader.readAsDataURL(file);
+});
+
+function submitStory() {
+  if (!storyFileData) { alert('Выбери фото или видео'); return; }
+  var text = document.getElementById('storyTextInput').value.trim();
+  socket.emit('addStory', { mediaUrl: storyFileData, mediaType: storyFileType, text: text || null });
+}
+
+function openStoryViewer(idx) {
+  currentStoryIdx = idx;
+  showStory(idx);
+  document.getElementById('storyViewerModal').style.display = 'block';
+}
+
+function showStory(idx) {
+  if (idx < 0 || idx >= allStories.length) { closeStoryViewer(); return; }
+  currentStoryIdx = idx;
+  var s = allStories[idx];
+  
+  // Mark as viewed
+  socket.emit('viewStory', { storyId: s.id });
+  
+  // Render
+  var content = document.getElementById('storyViewerContent');
+  if (s.media_type === 'video') {
+    content.innerHTML = '<video src="' + s.media_url + '" autoplay controls style="max-width:100vw;max-height:80vh;border-radius:8px;"></video>';
+  } else {
+    content.innerHTML = '<img src="' + s.media_url + '" style="max-width:100vw;max-height:80vh;object-fit:contain;border-radius:8px;">';
+  }
+  
+  var ts = new Date(Number(s.timestamp));
+  document.getElementById('storyViewerMeta').textContent = (s.user_nickname||s.user_login) + ' • ' + ts.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  document.getElementById('storyViewerText').textContent = s.text || '';
+  
+  // Progress bar
+  clearTimeout(storyTimer);
+  var prog = document.getElementById('storyProgress');
+  prog.style.transition = 'none';
+  prog.style.width = '0%';
+  setTimeout(function() {
+    prog.style.transition = 'width 7s linear';
+    prog.style.width = '100%';
+  }, 50);
+  storyTimer = setTimeout(function() { nextStory(); }, 7000);
+}
+
+function nextStory() {
+  clearTimeout(storyTimer);
+  showStory(currentStoryIdx + 1);
+}
+
+function prevStory() {
+  clearTimeout(storyTimer);
+  showStory(currentStoryIdx - 1);
+}
+
+function closeStoryViewer() {
+  clearTimeout(storyTimer);
+  document.getElementById('storyViewerModal').style.display = 'none';
+  document.getElementById('storyViewerContent').innerHTML = '';
+}
+
+// Load stories on auth
+socket.on('authSuccess', function() { /* stories loaded after authSuccess */ });
+
+// ============================================================
+// RENDER STICKERS/VIDEO/FILE in messages - patch addMsg, addPM, addRoomMsg
+// ============================================================
+(function() {
+  function patchMsgText(msg, htmlText) {
+    if (msg.type === 'sticker') {
+      return '<span style="font-size:52px;line-height:1.2;display:block;">' + (msg.text||'') + '</span>';
+    }
+    if (msg.type === 'video' && (msg.file_url || msg.image)) {
+      var html = htmlText;
+      html += '<video src="' + (msg.file_url || msg.image) + '" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>';
+      if (msg.file_name) html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 ' + msg.file_name + '</div>';
+      return html;
+    }
+    if (msg.type === 'file' && msg.file_url) {
+      var sz = msg.file_size ? ' (' + Math.round(msg.file_size/1024) + ' KB)' : '';
+      return htmlText + '<a href="' + msg.file_url + '" download="' + (msg.file_name||'file') + '" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">' + (msg.file_name||'Файл') + '</div><div style="font-size:11px;color:var(--text-muted);">' + sz + '</div></div></a>';
+    }
+    return null; // no override
+  }
+  window._patchMsgText = patchMsgText;
+})();
+
+// ============================================================
+// FINALIZE: load stories after login
+// ============================================================
+var _origAuthSuccess = socket.listeners ? null : null;
+// We add a separate handler just to load stories + show stories bar
+var _authSuccessOnce = false;
+socket.on('authSuccess', function() {
+  if (!_authSuccessOnce) { 
+    _authSuccessOnce = true;
+    setTimeout(loadStories, 1000);
+  }
+});
 
 </script>
+<!-- Add Story Modal -->
+<div id="addStoryModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9000;align-items:center;justify-content:center;">
+  <div style="background:var(--bg-sidebar);border-radius:16px;padding:24px;width:320px;max-width:90vw;">
+    <h3 style="margin:0 0 16px;font-size:16px;">📸 Добавить историю</h3>
+    <label style="display:block;width:100%;padding:30px 0;text-align:center;border:2px dashed var(--border);border-radius:12px;cursor:pointer;margin-bottom:12px;color:var(--text-secondary);" for="storyFileInput">
+      <div id="storyPreview" style="pointer-events:none;">📷 Нажми для выбора фото или видео</div>
+    </label>
+    <input type="file" id="storyFileInput" accept="image/*,video/*" style="display:none;">
+    <input type="text" id="storyTextInput" placeholder="Подпись (необязательно)" style="width:100%;padding:10px 12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:10px;font-size:14px;box-sizing:border-box;margin-bottom:12px;">
+    <div style="display:flex;gap:8px;">
+      <button onclick="closeAddStory()" style="flex:1;padding:12px;border:1px solid var(--border);background:transparent;color:var(--text-secondary);border-radius:10px;cursor:pointer;">Отмена</button>
+      <button onclick="submitStory()" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:700;">Опубликовать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Story Viewer Modal -->
+<div id="storyViewerModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#000;z-index:9500;">
+  <div style="position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,0.2);"><div id="storyProgress" style="height:100%;background:#fff;width:0%;transition:width 5s linear;"></div></div>
+    <button onclick="closeStoryViewer()" style="position:absolute;top:16px;right:16px;background:rgba(0,0,0,0.5);border:none;color:#fff;font-size:22px;border-radius:50%;width:40px;height:40px;cursor:pointer;z-index:10;">✕</button>
+    <div id="storyViewerContent" style="max-width:100%;max-height:85vh;display:flex;flex-direction:column;align-items:center;"></div>
+    <div style="position:absolute;bottom:30px;left:0;right:0;text-align:center;"><div id="storyViewerMeta" style="color:rgba(255,255,255,0.7);font-size:13px;"></div><div id="storyViewerText" style="color:#fff;font-size:16px;font-weight:600;margin-top:8px;padding:0 20px;"></div></div>
+    <button onclick="prevStory()" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);border:none;color:#fff;font-size:28px;border-radius:50%;width:48px;height:48px;cursor:pointer;">‹</button>
+    <button onclick="nextStory()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.4);border:none;color:#fff;font-size:28px;border-radius:50%;width:48px;height:48px;cursor:pointer;">›</button>
+  </div>
+</div>
+
+<!-- Emoji Panel -->
+<div id="emojiPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg-sidebar);border-top:1px solid var(--border);z-index:200;max-height:280px;overflow:hidden;display:none;">
+  <div style="display:flex;gap:0;border-bottom:1px solid var(--border);">
+    <button onclick="showEmojiTab('emoji')" id="tabEmoji" style="flex:1;padding:10px;border:none;background:transparent;color:var(--accent);font-size:13px;cursor:pointer;border-bottom:2px solid var(--accent);">😊 Эмодзи</button>
+    <button onclick="showEmojiTab('sticker')" id="tabSticker" style="flex:1;padding:10px;border:none;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;">🎭 Стикеры</button>
+  </div>
+  <div id="emojiGrid" style="padding:10px;overflow-y:auto;max-height:220px;"></div>
+</div>
+
 </body>
 </html>

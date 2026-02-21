@@ -165,6 +165,35 @@ async function initDB() {
     UNIQUE(user_login, chat_type, chat_id)
   )`);
 
+  // Stories
+  await pool.query(`CREATE TABLE IF NOT EXISTS stories (
+    id SERIAL PRIMARY KEY,
+    user_login VARCHAR(50) NOT NULL,
+    user_nickname VARCHAR(100) NOT NULL,
+    media_url TEXT NOT NULL,
+    media_type VARCHAR(20) DEFAULT 'image',
+    text TEXT DEFAULT NULL,
+    timestamp BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS story_views (
+    id SERIAL PRIMARY KEY,
+    story_id INT NOT NULL,
+    viewer_login VARCHAR(50) NOT NULL,
+    viewed_at BIGINT NOT NULL,
+    UNIQUE(story_id, viewer_login)
+  )`);
+  // File/video attachments
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_url TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_size BIGINT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_url TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_size BIGINT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_url TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_size BIGINT DEFAULT NULL'); } catch(e) {}
+
   console.log('Database ready');
 }
 initDB();
@@ -574,6 +603,8 @@ io.on('connection', (socket) => {
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
       await pool.query('UPDATE private_messages SET read=true, read_at=$1 WHERE from_login=$2 AND to_login=$3 AND read=false', [now, otherLogin, socket.userLogin]);
       socket.emit('privateHistory', { otherLogin, messages: res.rows });
+      // Fix: immediately notify client to clear unread badge
+      socket.emit('clearUnreadBadge', { login: otherLogin });
       if (unreadRes.rows.length > 0) {
         const readIds = unreadRes.rows.map(r => r.id);
         const sender = findSocketByLogin(otherLogin);
@@ -791,7 +822,7 @@ io.on('connection', (socket) => {
 
   socket.on('adminGetUsers', async () => {
     if (!isAdmin(socket)) return;
-    try { const res = await pool.query('SELECT id,login,nickname,banned,muted_until,role FROM users ORDER BY id'); socket.emit('adminUsers', res.rows); } catch(e) {}
+    try { const res = await pool.query('SELECT id,login,nickname,banned,muted_until,role,vip_until,vip_emoji,verified FROM users ORDER BY id'); socket.emit('adminUsers', res.rows); } catch(e) {}
   });
   socket.on('adminGetStats', async () => {
     if (!isAdmin(socket)) return;
@@ -818,6 +849,29 @@ io.on('connection', (socket) => {
   socket.on('adminMuteUser', async ({ login, minutes }) => {
     if (!isAdmin(socket)) return;
     try { await pool.query('UPDATE users SET muted_until=$1 WHERE login=$2', [Date.now() + minutes * 60000, login]); socket.emit('adminDone', 'Замучен: ' + login); } catch(e) {}
+  });
+
+  socket.on('adminUnmuteUser', async (login) => {
+    if (!isAdmin(socket)) return;
+    try { await pool.query('UPDATE users SET muted_until=0 WHERE login=$1', [login]); socket.emit('adminDone', 'Мут снят: ' + login); } catch(e) {}
+  });
+
+  socket.on('adminRemoveVip', async (login) => {
+    if (!isAdmin(socket)) return;
+    try {
+      await pool.query('UPDATE users SET vip_until=0, vip_emoji=NULL WHERE login=$1', [login]);
+      socket.emit('adminDone', 'VIP снят: ' + login);
+      io.emit('userVipUpdated', { login, vip_until: 0, vip_emoji: null });
+    } catch(e) {}
+  });
+
+  socket.on('adminRemoveVerify', async (login) => {
+    if (!isAdmin(socket)) return;
+    try {
+      await pool.query('UPDATE users SET verified=false WHERE login=$1', [login]);
+      socket.emit('adminDone', 'Верификация снята: ' + login);
+      io.emit('userVerified', { login, verified: false });
+    } catch(e) {}
   });
   socket.on('adminDeleteUser', async (login) => {
     if (!isSuperAdmin(socket)) return;
@@ -1131,6 +1185,60 @@ io.on('connection', (socket) => {
     try {
       const res = await pool.query('SELECT r.user_login, u.nickname FROM room_message_reads r JOIN users u ON r.user_login=u.login WHERE r.msg_id=$1', [msgId]);
       socket.emit('roomMsgReaders', { msgId, readers: res.rows });
+    } catch(e) {}
+  });
+
+  // === STORIES ===
+  socket.on('addStory', async ({ mediaUrl, mediaType, text }) => {
+    if (!socket.userLogin) return;
+    if (!mediaUrl) return socket.emit('storyResult', { ok: false, msg: 'Нет медиа' });
+    const ts = Date.now();
+    const expires = ts + 86400000; // 24h
+    try {
+      const res = await pool.query('INSERT INTO stories (user_login,user_nickname,media_url,media_type,text,timestamp,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+        [socket.userLogin, socket.username, mediaUrl, mediaType||'image', text||null, ts, expires]);
+      const story = { id: res.rows[0].id, user_login: socket.userLogin, user_nickname: socket.username, media_url: mediaUrl, media_type: mediaType||'image', text: text||null, timestamp: ts, expires_at: expires, views: 0 };
+      io.emit('newStory', story);
+      socket.emit('storyResult', { ok: true, story });
+    } catch(e) { socket.emit('storyResult', { ok: false, msg: e.message }); }
+  });
+
+  socket.on('getStories', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT s.*, (SELECT COUNT(*) FROM story_views WHERE story_id=s.id) as views, (SELECT COUNT(*) FROM story_views WHERE story_id=s.id AND viewer_login=$1) as viewed FROM stories s WHERE s.expires_at>$2 ORDER BY s.timestamp DESC',
+        [socket.userLogin, Date.now()]);
+      socket.emit('storiesData', res.rows);
+    } catch(e) { socket.emit('storiesData', []); }
+  });
+
+  socket.on('viewStory', async ({ storyId }) => {
+    if (!socket.userLogin) return;
+    try {
+      await pool.query('INSERT INTO story_views (story_id,viewer_login,viewed_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [storyId, socket.userLogin, Date.now()]);
+      // Get story owner
+      const s = await pool.query('SELECT user_login FROM stories WHERE id=$1', [storyId]);
+      if (s.rows.length) {
+        const owner = findSocketByLogin(s.rows[0].user_login);
+        if (owner) owner.emit('storyViewed', { storyId, viewerLogin: socket.userLogin, viewerNick: socket.username });
+      }
+    } catch(e) {}
+  });
+
+  socket.on('deleteStory', async ({ storyId }) => {
+    if (!socket.userLogin) return;
+    const res = await pool.query('SELECT user_login FROM stories WHERE id=$1', [storyId]);
+    if (!res.rows.length) return;
+    if (res.rows[0].user_login !== socket.userLogin && !isAdmin(socket)) return;
+    await pool.query('DELETE FROM stories WHERE id=$1', [storyId]);
+    io.emit('storyDeleted', { storyId });
+  });
+
+  socket.on('getStoryViewers', async ({ storyId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT sv.viewer_login, u.nickname FROM story_views sv JOIN users u ON sv.viewer_login=u.login WHERE sv.story_id=$1 ORDER BY sv.viewed_at DESC', [storyId]);
+      socket.emit('storyViewers', { storyId, viewers: res.rows });
     } catch(e) {}
   });
 
