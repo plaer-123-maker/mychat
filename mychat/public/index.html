@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>MyChat</title>
-<!-- ПОДКЛЮЧАЕМ МАНИФЕСТ ДЛЯ ПРИЛОЖЕНИЯ -->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#1a1a2e">
 <script src="/socket.io/socket.io.js"></script>
@@ -616,7 +615,9 @@ document.getElementById('photoInput').addEventListener('change',function(){
 
 // FILE UPLOAD HANDLER
 document.getElementById('fileInput').addEventListener('change',function(){
-  var file=this.files[0];if(!file)return;if(file.size>2*1024*1024*1024){alert('Макс 2GB');return;}
+  var file=this.files[0];if(!file)return;
+  // 50 MB limit - safely below what would crash the browser via Base64
+  if(file.size>50*1024*1024){alert('Макс 50MB');return;}
   var reader=new FileReader();reader.onload=function(e){
     if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',{toLogin:currentPrivateLogin,file_data:e.target.result,file_name:file.name,type:'file'});
     else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',{roomId:currentRoomId,file_data:e.target.result,file_name:file.name,type:'file'});
@@ -715,7 +716,7 @@ function loadTab(tab){
   else if(tab==='danger'){c.innerHTML='<div class="danger-zone"><h4>⚠️ Опасная зона</h4><button id="clearBtn">🗑 Очистить чат</button><button id="delAllBtn">💀 Удалить все аккаунты</button></div>';document.getElementById('clearBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ?'))socket.emit('adminClearChat');});document.getElementById('delAllBtn').addEventListener('click',function(){if(confirm('Удалить ВСЕ аккаунты?'))if(confirm('Точно?'))socket.emit('adminDeleteAllUsers');});}
 }
 
-// === CALL LOGIC ... (оставляем старую)
+// === IMPROVED CALL LOGIC ===
 const dragVideo = document.getElementById('localVideo');
 let isDragging = false;
 let startX, startY, initialLeft, initialTop;
@@ -810,7 +811,7 @@ socket.on('incomingCall',function(d){
   let typeText = d.callType === 'video' ? '📹 Видеозвонок' : '📞 Аудиозвонок';
   document.getElementById('incomingCallerName').textContent = typeText + ' от: ' + d.fromNickname;
   document.getElementById('incomingCallModal').classList.add('show');
-  earlyCandidates = [];
+  earlyCandidates = []; 
 });
 
 function acceptCall(){

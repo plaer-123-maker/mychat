@@ -8,8 +8,8 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// ЛИМИТ 2 ГБ (2 * 1024 * 1024 * 1024)
-const io = new Server(server, { maxHttpBufferSize: 2e9 });
+// ЛИМИТ 50 МБ (Безопасно для сервера)
+const io = new Server(server, { maxHttpBufferSize: 5e7 });
 
 app.use(express.static('public'));
 
@@ -21,6 +21,7 @@ const pool = new Pool({
 const ADMIN_LOGIN = 'pekka';
 
 async function initDB() {
+  // Создаем таблицы
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY, login VARCHAR(50) UNIQUE NOT NULL,
     password VARCHAR(200) NOT NULL, nickname VARCHAR(50) NOT NULL,
@@ -79,15 +80,19 @@ async function initDB() {
     timestamp BIGINT NOT NULL
   )`);
 
+  // Обновление колонок для старых баз
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT false'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
+  
   try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_data TEXT'); } catch(e) {}
   try { await pool.query('ALTER TABLE messages ADD COLUMN IF NOT EXISTS file_name TEXT'); } catch(e) {}
+  
   try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_data TEXT'); } catch(e) {}
   try { await pool.query('ALTER TABLE private_messages ADD COLUMN IF NOT EXISTS file_name TEXT'); } catch(e) {}
+  
   try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_data TEXT'); } catch(e) {}
   try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_name TEXT'); } catch(e) {}
 
@@ -200,7 +205,6 @@ io.on('connection', (socket) => {
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
   });
 
-  // WEBRTC
   socket.on('callUser', ({ userToCall, signalData, callType }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(userToCall);
@@ -224,7 +228,6 @@ io.on('connection', (socket) => {
     if (targetSocket) targetSocket.emit('iceCandidate', candidate);
   });
 
-  // GENERAL
   socket.on('getGeneralHistory', async () => {
     if (!socket.userLogin) return;
     try {
@@ -553,6 +556,7 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
+  // === ADMIN ===
   socket.on('adminGetUsers', async () => {
     if (!isAdmin(socket)) return;
     try { const res = await pool.query('SELECT id,login,nickname,banned,muted_until,role FROM users ORDER BY id'); socket.emit('adminUsers', res.rows); } catch(e) {}
