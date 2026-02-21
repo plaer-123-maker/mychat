@@ -1014,7 +1014,7 @@ function renderSettingsMain() {
       <div class="sr-icon" style="background:rgba(255,59,48,0.15)">🚪</div>
       <div class="sr-info"><div class="sr-label" style="color:#ff6b6b">Выйти</div></div>
     </div>
-  \`;
+  `;
 }
 
 function openSettingsNick() {
@@ -1515,7 +1515,7 @@ socket.on('onlineUsers',function(d){
     if(['private','pm','all'].includes(currentView)) renderChatList();
   }
   // Always update online count
-  if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):(d.count>1?d.count+' онлайн'):''; }
+  if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):(d.count>1?d.count+' онлайн':''); }
 });
 
 /* ── TYPING ── */
