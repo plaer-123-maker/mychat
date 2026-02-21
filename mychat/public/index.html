@@ -207,6 +207,17 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .message .name{font-size:11px;font-weight:600;color:var(--accent2);margin-bottom:3px;}
 .message.mine .name{color:rgba(255,255,255,0.7);}
 .message .text{line-height:1.45;font-size:14px;}
+/* Photo message - no border, fills bubble edge to edge */
+.message.has-photo{padding:3px 3px 6px;}
+.message.has-photo .photo-img-wrap{border-radius:calc(var(--radius-msg) - 3px);overflow:hidden;margin-bottom:2px;}
+.message.mine.has-photo .photo-img-wrap{border-bottom-right-radius:2px;}
+.message.other.has-photo .photo-img-wrap{border-bottom-left-radius:2px;}
+.message img.chat-photo{width:100%;max-width:320px;min-width:160px;display:block;cursor:pointer;object-fit:cover;}
+.photo-grid{display:grid;gap:2px;}
+.photo-grid.count-2{grid-template-columns:1fr 1fr;}
+.photo-grid.count-3{grid-template-columns:1fr 1fr 1fr;}
+.photo-grid.count-4{grid-template-columns:1fr 1fr;}
+.photo-grid img.chat-photo{width:100%;height:120px;object-fit:cover;border-radius:0;}
 .message img{max-width:280px;border-radius:12px;cursor:pointer;display:block;margin-top:4px;}
 .message audio{max-width:240px;margin-top:4px;border-radius:8px;}
 .msg-time{font-size:10px;color:rgba(255,255,255,0.55);display:flex;justify-content:flex-end;margin-top:3px;gap:3px;}
@@ -501,6 +512,24 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
   .message{max-width:85%;}
   .settings-panel{width:100%;}
 }
+/* ── PHOTO VIEWER ── */
+#photoViewer{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.97);display:none;flex-direction:column;align-items:center;justify-content:center;}
+#photoViewer.active{display:flex;}
+#pvImg{max-width:100%;max-height:calc(100vh - 140px);object-fit:contain;user-select:none;border-radius:0;}
+.pv-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:linear-gradient(180deg,rgba(0,0,0,0.7) 0%,transparent 100%);z-index:2;}
+.pv-top-title{color:#fff;font-size:14px;font-weight:500;opacity:0.85;}
+.pv-close{background:none;border:none;color:#fff;font-size:24px;cursor:pointer;width:40px;height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background 0.15s;}
+.pv-close:hover{background:rgba(255,255,255,0.1);}
+.pv-menu{position:absolute;bottom:0;left:0;right:0;background:rgba(20,20,20,0.97);backdrop-filter:blur(20px);border-radius:20px 20px 0 0;padding:8px 0 env(safe-area-inset-bottom,12px);z-index:3;}
+.pv-menu-item{display:flex;align-items:center;gap:16px;padding:14px 22px;color:#fff;font-size:15px;cursor:pointer;transition:background 0.12s;}
+.pv-menu-item:hover{background:rgba(255,255,255,0.07);}
+.pv-menu-item .pv-icon{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.pv-menu-sep{height:1px;background:rgba(255,255,255,0.1);margin:4px 0;}
+.pv-menu-item.danger{color:#ff4757;}
+.pv-nav{position:absolute;top:50%;transform:translateY(-50%);display:flex;justify-content:space-between;width:100%;padding:0 10px;pointer-events:none;}
+.pv-nav-btn{pointer-events:all;background:rgba(255,255,255,0.15);border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:background 0.15s;}
+.pv-nav-btn:hover{background:rgba(255,255,255,0.25);}
+
 </style>
 </head>
 <body>
@@ -550,6 +579,38 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
   <span class="call-mini-time" id="callMiniTime">0:00</span>
   <button class="call-mini-expand" onclick="event.stopPropagation();expandCall()">⬆️</button>
   <button class="call-mini-end" onclick="event.stopPropagation();endCall()">📞</button>
+</div>
+
+
+<!-- Photo Viewer -->
+<div id="photoViewer">
+  <div class="pv-top">
+    <span class="pv-top-title" id="pvTitle">Фото</span>
+    <button class="pv-close" onclick="closePV()">✕</button>
+  </div>
+  <div class="pv-nav">
+    <button class="pv-nav-btn" id="pvPrev" onclick="pvNav(-1)">‹</button>
+    <button class="pv-nav-btn" id="pvNext" onclick="pvNav(1)">›</button>
+  </div>
+  <img id="pvImg" src="" alt="">
+  <div class="pv-menu" id="pvMenu">
+    <div class="pv-menu-item" onclick="pvSave()">
+      <div class="pv-icon">⬇️</div>Сохранить в галерею
+    </div>
+    <div class="pv-menu-item" onclick="pvShowInChat()">
+      <div class="pv-icon">👁️</div>Показать в чате
+    </div>
+    <div class="pv-menu-item" onclick="pvReply()">
+      <div class="pv-icon">↩️</div>Ответить
+    </div>
+    <div class="pv-menu-item" onclick="pvShare()">
+      <div class="pv-icon">🔗</div>Поделиться
+    </div>
+    <div class="pv-menu-sep"></div>
+    <div class="pv-menu-item danger" onclick="pvDelete()">
+      <div class="pv-icon" style="background:rgba(255,71,87,0.15)">🗑️</div>Удалить
+    </div>
+  </div>
 </div>
 
 <!-- Incoming call modal - Telegram style bottom sheet -->
@@ -704,7 +765,7 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
     </div>
     <div class="input-area" id="inputArea">
       <label class="ia-btn" for="photoInput" title="Фото">📎</label>
-      <input type="file" id="photoInput" accept="image/*">
+      <input type="file" id="photoInput" accept="image/*" multiple>
       <input type="text" id="msgInput" placeholder="Написать сообщение...">
       <button class="ia-btn" id="videoNoteBtn" title="Видео-кружочек">⏺</button>
       <button class="ia-btn" id="micBtn" title="Голосовое">🎤</button>
@@ -1421,10 +1482,21 @@ socket.on('roomSettingsUpdated',function(d){if(currentRoomId==d.roomId&&currentR
 
 function addRoomMsg(msg){
   var div=document.createElement('div');var isMine=msg.user_login===myLogin;
-  div.className='message '+(isMine?'mine':'other');div.id='rmsg-'+msg.id;
+  div.className='message '+(isMine?'mine':'other');div.id='rmsg-'+msg.id;div.setAttribute('data-msg-id',msg.id||'');
   var html='<div class="name">'+msg.username+'</div>';
   html+=buildReplyQuote(msg);
-  if(msg.type==='image'&&msg.image)html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
+  if(msg.type==='image'&&msg.image){
+    var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
+    var msgId=msg.id||msg._id||'';
+    if(imgs.length===1){
+      html+='<div class="photo-img-wrap" onclick="openPV('+JSON.stringify(imgs)+',0,event,''+msgId+'')"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
+    } else {
+      var cnt=Math.min(imgs.length,4);
+      html+='<div class="photo-grid count-'+cnt+'">';
+      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" onclick="openPV('+JSON.stringify(imgs)+','+pi+',event,''+msgId+'')">'; }
+      html+='</div>';
+    }
+  }
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
@@ -1557,11 +1629,22 @@ function addPM(msg){
     return;
   }
   var div=document.createElement('div');var isMine=msg.from_login===myLogin;
-  div.className='message '+(isMine?'mine':'other');div.id='pm-'+msg.id;
+  div.className='message '+(isMine?'mine':'other');div.id='pm-'+msg.id;div.setAttribute('data-msg-id',msg.id||'');
   var html='';
   if(!isMine)html+='<div class="name">'+msg.from_nickname+'</div>';
   html+=buildReplyQuote(msg);
-  if(msg.type==='image'&&msg.image)html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
+  if(msg.type==='image'&&msg.image){
+    var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
+    var msgId=msg.id||msg._id||'';
+    if(imgs.length===1){
+      html+='<div class="photo-img-wrap" onclick="openPV('+JSON.stringify(imgs)+',0,event,''+msgId+'')"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
+    } else {
+      var cnt=Math.min(imgs.length,4);
+      html+='<div class="photo-grid count-'+cnt+'">';
+      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" onclick="openPV('+JSON.stringify(imgs)+','+pi+',event,''+msgId+'')">'; }
+      html+='</div>';
+    }
+  }
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
@@ -1733,7 +1816,18 @@ function addMsg(msg){
   var html='';
   if(!isM&&!isS)html+='<div class="name">'+msg.username+'</div>';
   html+=buildReplyQuote(msg);
-  if(msg.type==='image'&&msg.image)html+='<img src="'+msg.image+'" onclick="window.open(this.src)">';
+  if(msg.type==='image'&&msg.image){
+    var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
+    var msgId=msg.id||msg._id||'';
+    if(imgs.length===1){
+      html+='<div class="photo-img-wrap" onclick="openPV('+JSON.stringify(imgs)+',0,event,''+msgId+'')"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
+    } else {
+      var cnt=Math.min(imgs.length,4);
+      html+='<div class="photo-grid count-'+cnt+'">';
+      for(var pi=0;pi<cnt;pi++){html+='<img src="'+imgs[pi]+'" class="chat-photo" alt="фото" onclick="openPV('+JSON.stringify(imgs)+','+pi+',event,''+msgId+'')">'; }
+      html+='</div>';
+    }
+  }
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else html+='<div class="text">'+(msg.text||'')+'</div>';
@@ -1770,14 +1864,25 @@ document.getElementById('msgInput').addEventListener('input',function(){
 
 /* ── PHOTO ── */
 document.getElementById('photoInput').addEventListener('change',function(){
-  var file=this.files[0];if(!file)return;if(file.size>10*1024*1024){alert('Макс 10MB');return;}
-  var reader=new FileReader();reader.onload=function(e){
-    var rd=replyTo?{reply_to_id:replyTo.id,reply_to_text:replyTo.text,reply_to_user:replyTo.user}:{};
-    if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin,image:e.target.result,type:'image'},rd));
-    else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId,image:e.target.result,type:'image'},rd));
-    else if(currentView==='general')socket.emit('chatMessage',Object.assign({image:e.target.result,type:'image'},rd));
-    clearReply();
-  };reader.readAsDataURL(file);this.value='';
+  var files=Array.from(this.files);if(!files.length)return;
+  var oversized=files.filter(function(f){return f.size>10*1024*1024;});
+  if(oversized.length){alert('Макс 10MB на файл. Слишком большие файлы пропущены.');files=files.filter(function(f){return f.size<=10*1024*1024;});}
+  if(!files.length){this.value='';return;}
+  var rd=replyTo?{reply_to_id:replyTo.id,reply_to_text:replyTo.text,reply_to_user:replyTo.user}:{};
+  function readAll(list,cb){
+    var results=[];var done=0;
+    list.forEach(function(f,i){
+      var r=new FileReader();r.onload=function(e){results[i]=e.target.result;done++;if(done===list.length)cb(results);};r.readAsDataURL(f);
+    });
+  }
+  var self=this;
+  readAll(files,function(images){
+    var payload=Object.assign({image:images.length===1?images[0]:images,type:'image'},rd);
+    if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
+    else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId},payload));
+    else if(currentView==='general')socket.emit('chatMessage',payload);
+    clearReply();self.value='';
+  });
 });
 
 /* ── VOICE ── */
@@ -2200,6 +2305,99 @@ function renderVideoNote(src,isMine){
   wrap.appendChild(vid);wrap.appendChild(btn);wrap.appendChild(dur);
   return wrap;
 }
+
+/* ── PHOTO VIEWER JS ── */
+var pvImages=[], pvIndex=0, pvMsgId=null, pvSourceEl=null;
+
+function openPV(images, idx, e, msgId){
+  if(e){e.stopPropagation();}
+  pvImages = Array.isArray(images)?images:[images];
+  pvIndex = idx||0;
+  pvMsgId = msgId||null;
+  pvSourceEl = e&&e.target?e.target:null;
+  _pvShow();
+  document.getElementById('photoViewer').classList.add('active');
+  document.addEventListener('keydown', pvKeyHandler);
+}
+
+function _pvShow(){
+  var img=document.getElementById('pvImg');
+  img.src=pvImages[pvIndex];
+  document.getElementById('pvTitle').textContent='Фото '+(pvIndex+1)+' из '+pvImages.length;
+  document.getElementById('pvPrev').style.display=pvImages.length>1&&pvIndex>0?'flex':'none';
+  document.getElementById('pvNext').style.display=pvImages.length>1&&pvIndex<pvImages.length-1?'flex':'none';
+}
+
+function closePV(){
+  document.getElementById('photoViewer').classList.remove('active');
+  document.removeEventListener('keydown',pvKeyHandler);
+  pvImages=[];pvIndex=0;pvMsgId=null;
+}
+
+function pvNav(dir){
+  pvIndex=Math.max(0,Math.min(pvImages.length-1,pvIndex+dir));
+  _pvShow();
+}
+
+function pvKeyHandler(e){
+  if(e.key==='Escape')closePV();
+  else if(e.key==='ArrowLeft')pvNav(-1);
+  else if(e.key==='ArrowRight')pvNav(1);
+}
+
+function pvSave(){
+  var a=document.createElement('a');
+  a.href=pvImages[pvIndex];
+  a.download='photo_'+Date.now()+'.jpg';
+  a.click();
+}
+
+function pvShowInChat(){
+  closePV();
+  // scroll to message
+  if(pvMsgId){
+    var el=document.querySelector('[data-msg-id="'+pvMsgId+'"]');
+    if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.transition='background 0.5s';el.style.background='rgba(46,169,223,0.25)';setTimeout(function(){el.style.background='';},1500);}
+  }
+}
+
+function pvReply(){
+  closePV();
+  if(pvMsgId){
+    var el=document.querySelector('[data-msg-id="'+pvMsgId+'"]');
+    if(el)el.dispatchEvent(new CustomEvent('startReply',{bubbles:true}));
+  }
+}
+
+function pvShare(){
+  var src=pvImages[pvIndex];
+  if(navigator.share){
+    fetch(src).then(function(r){return r.blob();}).then(function(blob){
+      var file=new File([blob],'photo.jpg',{type:'image/jpeg'});
+      navigator.share({files:[file]}).catch(function(){});
+    });
+  } else {
+    navigator.clipboard&&navigator.clipboard.writeText(src).then(function(){showError('Ссылка скопирована');});
+  }
+}
+
+function pvDelete(){
+  if(!pvMsgId){closePV();return;}
+  if(!confirm('Удалить фото?')){return;}
+  // Emit delete for the message
+  socket.emit('deleteMessage',{msgId:pvMsgId});
+  closePV();
+}
+
+// Close on backdrop click (not on image or menu)
+document.getElementById('photoViewer').addEventListener('click',function(e){
+  if(e.target===this||e.target===document.getElementById('pvImg')){
+    // toggle menu
+    var menu=document.getElementById('pvMenu');
+    menu.style.display=menu.style.display==='none'?'':'none';
+  }
+});
+
 </script>
 </body>
 </html>
