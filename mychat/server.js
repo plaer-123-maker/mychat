@@ -275,6 +275,31 @@ const socketUsers = new Map();
 const activeCalls = new Map();   // callerLogin -> { calleeLogin, callType, answered }
 const callTimeouts = new Map();  // callerLogin -> { timeout, calleeLogin }
 
+// ── IMAGE SERIALIZATION HELPERS ──────────────────────────
+// Images can be a single base64 string or array of base64 strings
+// We always store as JSON string in DB to handle both cases consistently
+function serializeImage(img) {
+  if (!img) return null;
+  if (Array.isArray(img)) {
+    return JSON.stringify(img); // store array as JSON string
+  }
+  return img; // single image stored as-is (still valid JSON string if needed)
+}
+
+function deserializeImage(imgStr) {
+  if (!imgStr) return null;
+  if (imgStr.startsWith('[')) {
+    try { return JSON.parse(imgStr); } catch(e) { return imgStr; }
+  }
+  return imgStr; // single image
+}
+
+// Apply deserialize to a message row (mutates in place)
+function fixMsgImages(msg) {
+  if (msg && msg.image) msg.image = deserializeImage(msg.image);
+  return msg;
+}
+
 function getIP(socket) {
   return socket.handshake.headers['x-forwarded-for'] || socket.handshake.address || 'unknown';
 }
@@ -718,7 +743,7 @@ io.on('connection', (socket) => {
     if (!socket.userLogin) return;
     try {
       const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
-      socket.emit('messageHistory', msgs.rows);
+      socket.emit('messageHistory', msgs.rows.map(fixMsgImages));
     } catch(e) { console.error(e); }
   });
 
@@ -731,12 +756,12 @@ io.on('connection', (socket) => {
     // Get vip_emoji for sender
     let vipEmoji = null;
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmoji = ve.rows[0].vip_emoji || null; } catch(e) {}
-    const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
+    const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
       const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
         [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
-      io.emit('chatMessage', msg);
+      io.emit('chatMessage', fixMsgImages({...msg}));
     } catch (e) { console.error(e); }
   });
 
@@ -883,7 +908,7 @@ io.on('connection', (socket) => {
       const now = Date.now();
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
       await pool.query('UPDATE private_messages SET read=true, read_at=$1 WHERE from_login=$2 AND to_login=$3 AND read=false', [now, otherLogin, socket.userLogin]);
-      socket.emit('privateHistory', { otherLogin, messages: res.rows, token });
+      socket.emit('privateHistory', { otherLogin, messages: res.rows.map(fixMsgImages), token });
       // Fix: immediately notify client to clear unread badge
       socket.emit('clearUnreadBadge', { login: otherLogin });
       if (unreadRes.rows.length > 0) {
@@ -902,14 +927,15 @@ io.on('connection', (socket) => {
     } catch(e) {}
     let vipEmojiPM = null;
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiPM = ve.rows[0].vip_emoji || null; } catch(e) {}
-    const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
+    const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
       const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
         [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
-      socket.emit('newPrivateMessage', msg);
+      const msgToSend = fixMsgImages({...msg});
+      socket.emit('newPrivateMessage', msgToSend);
       var target = findSocketByLogin(data.toLogin);
-      if (target) { target.emit('newPrivateMessage', msg); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+      if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
     } catch(e) { console.error(e); }
   });
 
@@ -983,9 +1009,10 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  socket.on('openRoom', async (roomId) => {
+  socket.on('openRoom', async (data) => {
     if (!socket.userLogin) return;
-    roomId = Number(roomId);
+    var roomId = typeof data === 'object' ? Number(data.roomId) : Number(data);
+    var token = typeof data === 'object' ? (data.token || null) : null;
     try {
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник этой комнаты');
@@ -994,7 +1021,7 @@ io.on('connection', (socket) => {
       var msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY timestamp ASC LIMIT 200', [roomId]);
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
       socket.join('room_' + roomId);
-      socket.emit('roomData', { room: room.rows[0], myRole: member.rows[0].role, messages: msgs.rows, members: members.rows });
+      socket.emit('roomData', { room: room.rows[0], myRole: member.rows[0].role, messages: msgs.rows.map(fixMsgImages), members: members.rows, token });
     } catch(e) { console.error('openRoom error:', e); }
   });
 
@@ -1009,11 +1036,11 @@ io.on('connection', (socket) => {
       if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
       let vipEmojiR = null;
       try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiR = ve.rows[0].vip_emoji || null; } catch(e) {}
-      var msg = { room_id: roomId, user_login: socket.userLogin, vip_emoji: vipEmojiR, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
+      var msg = { room_id: roomId, user_login: socket.userLogin, vip_emoji: vipEmojiR, username: socket.username, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
       var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp, reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
         [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
-      io.to('room_' + roomId).emit('roomNewMessage', msg);
+      io.to('room_' + roomId).emit('roomNewMessage', fixMsgImages({...msg}));
     } catch(e) { console.error(e); }
   });
 
@@ -1427,13 +1454,14 @@ io.on('connection', (socket) => {
         const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,fwd_from_nick) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
           [socket.username, socket.userLogin, origText, origImage, origVoice, origMsgType, Date.now(), fwdNick]);
         const msg = { id: res.rows[0].id, username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
-        io.emit('chatMessage', msg);
+        io.emit('chatMessage', fixMsgImages({...msg}));
       } else if (toType === 'pm') {
         const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,fwd_from_nick) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
           [socket.userLogin, toId, socket.username, origText, origImage, origVoice, origMsgType, Date.now(), fwdNick]);
         const msg = { id: res.rows[0].id, from_login: socket.userLogin, to_login: toId, from_nickname: socket.username, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
-        socket.emit('newPrivateMessage', msg);
-        const t = findSocketByLogin(toId); if (t) { t.emit('newPrivateMessage', msg); t.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+        const msgToSend = fixMsgImages({...msg});
+        socket.emit('newPrivateMessage', msgToSend);
+        const t = findSocketByLogin(toId); if (t) { t.emit('newPrivateMessage', msgToSend); t.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
       } else if (toType === 'room') {
         const roomId = Number(toId);
         const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
@@ -1441,7 +1469,7 @@ io.on('connection', (socket) => {
         const res = await pool.query('INSERT INTO room_messages (room_id,user_login,username,text,image,voice,type,timestamp,fwd_from_nick) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
           [roomId, socket.userLogin, socket.username, origText, origImage, origVoice, origMsgType, Date.now(), fwdNick]);
         const msg = { id: res.rows[0].id, room_id: roomId, user_login: socket.userLogin, username: socket.username, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
-        io.to('room_' + roomId).emit('roomNewMessage', msg);
+        io.to('room_' + roomId).emit('roomNewMessage', fixMsgImages({...msg}));
       }
       socket.emit('forwardDone', { ok: true });
     } catch(e) { console.error(e); socket.emit('forwardDone', { ok: false }); }

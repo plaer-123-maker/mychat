@@ -2088,7 +2088,8 @@ function openRoom(roomId){
   document.getElementById('chatHeaderBtns').innerHTML='';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  socket.emit('openRoom',roomId);
+  _roomToken++; var _myRoomToken=_roomToken;
+  socket.emit('openRoom',{roomId:roomId,token:_myRoomToken});
   // Dialog background
   currentDialogBg = null;
   document.getElementById('dialogBgBtn').style.display='block';
@@ -2108,6 +2109,7 @@ socket.on('roomData',function(data){
   // Guard: ignore if user switched away to a different room or PM
   if(currentView==='pm'||currentView==='general'||currentView==='all'||currentView==='private')return;
   if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
+  if(data.token && data.token !== _roomToken)return; // stale response
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2144,7 +2146,7 @@ function addRoomMsg(msg){
   var html='<div class="name msg-nick">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
-    var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
+    var imgs=(function(){var p=parseImgField(msg.image);return Array.isArray(p)?p:[p];})();
     var msgId=msg.id||msg._id||'';
     if(imgs.length===1){
       html+='<div class="photo-img-wrap" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'" data-idx="0" onclick="pvClickHandler(this,event)"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
@@ -2299,7 +2301,7 @@ function addPM(msg){
   if(!isMine)html+='<div class="name msg-nick">'+getNickWithEmoji(msg.from_login||'',msg.from_nickname,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
-    var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
+    var imgs=(function(){var p=parseImgField(msg.image);return Array.isArray(p)?p:[p];})();
     var msgId=msg.id||msg._id||'';
     if(imgs.length===1){
       html+='<div class="photo-img-wrap" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'" data-idx="0" onclick="pvClickHandler(this,event)"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
@@ -2357,6 +2359,16 @@ function renderAvatarInEl(el, login, nickname) {
   else{el.style.background='';el.style.padding='';el.innerHTML=(nickname?nickname[0].toUpperCase():'?');}
 }
 function escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
+
+// Client-side image parsing: handles both string URLs and JSON arrays from DB
+function parseImgField(img){
+  if(!img)return null;
+  if(Array.isArray(img))return img;
+  if(typeof img==='string'&&img.startsWith('[')){
+    try{return JSON.parse(img);}catch(e){}
+  }
+  return img;
+}
 
 function buildMsgTime(ts) {
   if(!ts)return '';
@@ -2489,7 +2501,7 @@ function addMsg(msg){
   if(!isM&&!isS)html+='<div class="name msg-nick">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
-    var imgs=Array.isArray(msg.image)?msg.image:[msg.image];
+    var imgs=(function(){var p=parseImgField(msg.image);return Array.isArray(p)?p:[p];})();
     var msgId=msg.id||msg._id||'';
     if(imgs.length===1){
       html+='<div class="photo-img-wrap" data-msgs="'+encodeURIComponent(JSON.stringify(imgs))+'" data-msgid="'+msgId+'" data-idx="0" onclick="pvClickHandler(this,event)"><img src="'+imgs[0]+'" class="chat-photo" alt="фото"></div>';
