@@ -585,6 +585,8 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
 .btn-outline { background:transparent;color:var(--text-primary);border:1.5px solid var(--border); }
 .btn-google { display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;background:#fff;color:#3c4043;border:1px solid #ddd;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;transition:box-shadow 0.15s; }
 .btn-google:hover { box-shadow:0 2px 8px rgba(0,0,0,0.15); }
+.btn-telegram { display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px;background:#2AABEE;color:#fff;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;transition:opacity 0.15s; }
+.btn-telegram:hover { opacity:0.88; }
 .auth-box .error { color:#e74c3c;font-size:13px;min-height:18px;margin-bottom:8px;text-align:center; }
 /* Code input boxes */
 .code-inputs { display:flex;gap:8px;justify-content:center;margin:10px 0; }
@@ -608,15 +610,22 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <p class="auth-sub">Войди или создай аккаунт</p>
       <div class="error" id="authError"></div>
 
-      <!-- Google button (shown if GOOGLE_CLIENT_ID is set on page) -->
-      <div id="googleBtnWrap" style="display:none;margin-bottom:12px;">
-        <button class="btn-google" id="googleSignInBtn">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
-          Войти через Google
-        </button>
+      <!-- OAuth buttons -->
+      <div id="oauthBtns" style="display:none;margin-bottom:4px;">
+        <div id="googleBtnWrap" style="display:none;margin-bottom:8px;">
+          <button class="btn-google" id="googleSignInBtn">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+            Войти через Google
+          </button>
+        </div>
+        <div id="telegramBtnWrap" style="display:none;margin-bottom:8px;">
+          <button class="btn-telegram" id="telegramSignInBtn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-2.012 9.478c-.148.658-.537.818-1.088.508l-3-2.21-1.447 1.393c-.16.16-.295.295-.605.295l.215-3.053 5.56-5.023c.242-.215-.052-.334-.375-.12L7.04 14.73l-2.95-.92c-.642-.2-.655-.642.134-.95l11.527-4.446c.535-.194 1.003.13.81.834z" fill="#2AABEE"/></svg>
+            Войти через Telegram
+          </button>
+        </div>
+        <div id="oauthDivider" style="display:flex;align-items:center;gap:10px;margin:4px 0 12px;color:var(--text-muted);font-size:12px;"><div style="flex:1;height:1px;background:var(--border)"></div>или<div style="flex:1;height:1px;background:var(--border)"></div></div>
       </div>
-
-      <div id="googleDivider" style="display:none;display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--text-muted);font-size:12px;"><div style="flex:1;height:1px;background:var(--border)"></div>или<div style="flex:1;height:1px;background:var(--border)"></div></div>
 
       <button class="btn" onclick="showAuthStep('login')" style="margin-bottom:8px;">🔑 Войти с паролем</button>
       <button class="btn btn-outline" onclick="showAuthStep('register')">✨ Создать аккаунт</button>
@@ -677,6 +686,17 @@ body.theme-light .message.other{box-shadow:0 1px 3px rgba(0,0,0,0.1);}
       <input type="text" id="googleSetupLogin" placeholder="Логин (a-z, 0-9, _)">
       <input type="text" id="googleSetupNickname" placeholder="Отображаемое имя">
       <button class="btn" id="googleSetupBtn">Войти в MyChat →</button>
+    </div>
+
+    <!-- STEP: Telegram setup (choose login/nickname) -->
+    <div id="authStepTelegramSetup" style="display:none;">
+      <div class="auth-logo">✈️</div>
+      <h2 class="auth-title">Почти готово!</h2>
+      <p class="auth-sub">Выбери логин и ник для MyChat</p>
+      <div class="error" id="telegramSetupError"></div>
+      <input type="text" id="telegramSetupLogin" placeholder="Логин (a-z, 0-9, _)">
+      <input type="text" id="telegramSetupNickname" placeholder="Отображаемое имя">
+      <button class="btn" id="telegramSetupBtn">Войти в MyChat →</button>
     </div>
 
   </div>
@@ -986,6 +1006,11 @@ fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
   if (cfg.googleClientId) {
     window.GOOGLE_CLIENT_ID_PUB = cfg.googleClientId;
     if (typeof initGoogleAuth === 'function') initGoogleAuth();
+  }
+  if (cfg.telegramBotName) {
+    window.TELEGRAM_BOT_NAME_PUB = cfg.telegramBotName;
+    window.TELEGRAM_BOT_ID_PUB = cfg.telegramBotId || '';
+    if (typeof initTelegramAuth === 'function') initTelegramAuth();
   }
 }).catch(function(){});
 </script>
@@ -1506,13 +1531,13 @@ var _pendingRegLogin = null;
 var _googleSetupData = null;
 
 function showAuthStep(step) {
-  ['authStepMain','authStepLogin','authStepRegister','authStepEmailCode','authStepGoogleSetup'].forEach(function(id){
+  ['authStepMain','authStepLogin','authStepRegister','authStepEmailCode','authStepGoogleSetup','authStepTelegramSetup'].forEach(function(id){
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  var map = {'main':'authStepMain','login':'authStepLogin','register':'authStepRegister','emailcode':'authStepEmailCode','googlesetup':'authStepGoogleSetup'};
+  var map = {'main':'authStepMain','login':'authStepLogin','register':'authStepRegister','emailcode':'authStepEmailCode','googlesetup':'authStepGoogleSetup','telegramsetup':'authStepTelegramSetup'};
   if (map[step]) document.getElementById(map[step]).style.display = 'block';
-  ['authError','loginError','registerError','emailCodeError','googleSetupError'].forEach(function(id){
+  ['authError','loginError','registerError','emailCodeError','googleSetupError','telegramSetupError'].forEach(function(id){
     var el = document.getElementById(id); if (el) el.textContent = '';
   });
 }
@@ -1612,10 +1637,73 @@ document.getElementById('googleSetupBtn').addEventListener('click', function() {
   socket.emit('googleRegisterSetup', { googleId: _googleSetupData.googleId, email: _googleSetupData.email, login: l, nickname: n });
 });
 
+// ── GOOGLE SETUP ──
+document.getElementById('googleSetupBtn').addEventListener('click', function() {
+  if (!_googleSetupData) return;
+  var l = document.getElementById('googleSetupLogin').value.trim();
+  var n = document.getElementById('googleSetupNickname').value.trim();
+  document.getElementById('googleSetupError').textContent = '';
+  if (!l || !n) { document.getElementById('googleSetupError').textContent = 'Заполни все поля'; return; }
+  socket.emit('googleRegisterSetup', { googleId: _googleSetupData.googleId, email: _googleSetupData.email, login: l, nickname: n });
+});
+
+// ── TELEGRAM SETUP ──
+var _telegramSetupData = null;
+
+socket.on('telegramNeedSetup', function(d) {
+  _telegramSetupData = d;
+  document.getElementById('telegramSetupLogin').value = (d.tgUsername || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+  document.getElementById('telegramSetupNickname').value = d.suggestedName || '';
+  showAuthStep('telegramsetup');
+});
+
+document.getElementById('telegramSetupBtn').addEventListener('click', function() {
+  if (!_telegramSetupData) return;
+  var l = document.getElementById('telegramSetupLogin').value.trim();
+  var n = document.getElementById('telegramSetupNickname').value.trim();
+  document.getElementById('telegramSetupError').textContent = '';
+  if (!l || !n) { document.getElementById('telegramSetupError').textContent = 'Заполни все поля'; return; }
+  socket.emit('telegramRegisterSetup', { tgId: _telegramSetupData.tgId, login: l, nickname: n });
+});
+
+// ── TELEGRAM WIDGET INIT ──
+function initTelegramAuth() {
+  var botName = window.TELEGRAM_BOT_NAME_PUB;
+  if (!botName) return;
+  document.getElementById('telegramBtnWrap').style.display = 'block';
+  document.getElementById('oauthBtns').style.display = 'block';
+  document.getElementById('oauthDivider').style.display = 'flex';
+
+  document.getElementById('telegramSignInBtn').addEventListener('click', function() {
+    // Open Telegram Login Widget in popup
+    var w = 550, h = 450;
+    var left = (window.screen.width - w) / 2;
+    var top = (window.screen.height - h) / 2;
+    var authUrl = 'https://oauth.telegram.org/auth?bot_id=' + window.TELEGRAM_BOT_ID_PUB +
+      '&origin=' + encodeURIComponent(window.location.origin) +
+      '&request_access=write&return_to=' + encodeURIComponent(window.location.origin + '/tg-callback');
+    var popup = window.open(authUrl, 'TelegramAuth', 'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+    window._tgAuthPopup = popup;
+  });
+}
+
+// Telegram sends data via postMessage from widget
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'telegram_auth') return;
+  socket.emit('telegramAuth', e.data.data);
+});
+
+// Also handle Telegram widget callback (widget calls window.onTelegramAuth)
+window.onTelegramAuth = function(user) {
+  socket.emit('telegramAuth', user);
+};
+
+// ── GOOGLE AUTH INIT ──
 function initGoogleAuth() {
   if (typeof google !== 'undefined' && google.accounts && window.GOOGLE_CLIENT_ID_PUB) {
     document.getElementById('googleBtnWrap').style.display = 'block';
-    document.getElementById('googleDivider').style.display = 'flex';
+    document.getElementById('oauthBtns').style.display = 'block';
+    document.getElementById('oauthDivider').style.display = 'flex';
     google.accounts.id.initialize({
       client_id: window.GOOGLE_CLIENT_ID_PUB,
       callback: function(response) { socket.emit('googleAuth', { idToken: response.credential }); }
@@ -4029,12 +4117,11 @@ socket.on('authSuccess', function() {
 <div id="addStoryModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:var(--bg-sidebar);border-radius:16px;padding:24px;width:320px;max-width:92vw;max-height:90vh;overflow-y:auto;">
     <h3 style="margin:0 0 16px;font-size:16px;color:var(--text-primary);">📸 Добавить историю</h3>
-    <!-- Click area triggers file input directly via JS -->
-    <div id="storyPickArea" onclick="document.getElementById('storyFileInput').click()" style="display:block;width:100%;padding:30px 0;text-align:center;border:2px dashed var(--border);border-radius:12px;cursor:pointer;margin-bottom:12px;box-sizing:border-box;">
-      <div id="storyPreview" style="color:var(--text-muted);pointer-events:none;">📷 Нажми для выбора фото или видео</div>
+    <!-- File pick area: input covers the whole area directly so user clicks it -->
+    <div style="position:relative;width:100%;min-height:90px;border:2px dashed var(--border);border-radius:12px;cursor:pointer;margin-bottom:12px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:hidden;">
+      <div id="storyPreview" style="color:var(--text-muted);text-align:center;padding:16px;pointer-events:none;font-size:14px;">📷 Нажми для выбора фото или видео</div>
+      <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:2;">
     </div>
-    <!-- File input hidden far off-screen so label/z-index don't interfere -->
-    <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:fixed;left:-9999px;top:-9999px;opacity:0;width:1px;height:1px;">
     <div style="margin-bottom:12px;">
       <input type="text" id="storyTextInput" placeholder="Подпись (необязательно)" style="display:block;width:100%;padding:10px 12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;font-family:inherit;">
     </div>

@@ -20,8 +20,21 @@ app.use(express.json());
 app.get('/config', (req, res) => {
   res.json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
-    emailEnabled: EMAIL_ENABLED
+    emailEnabled: EMAIL_ENABLED,
+    telegramBotName: process.env.TELEGRAM_BOT_NAME || null,
+    telegramBotId: process.env.TELEGRAM_BOT_ID || null
   });
+});
+
+// Telegram widget callback page
+app.get('/tg-callback', (req, res) => {
+  res.send(`<!DOCTYPE html><html><body><script>
+    var data = \${JSON.stringify(req.query)};
+    if (window.opener) {
+      window.opener.postMessage({ type: 'telegram_auth', data: data }, '*');
+      window.close();
+    }
+  <\/script></body></html>`);
 });
 
 const pool = new Pool({
@@ -30,6 +43,7 @@ const pool = new Pool({
 });
 
 const ADMIN_LOGIN = 'pekka';
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 
 // ── EMAIL CONFIG ──────────────────────────────────────────
 // Set these env vars in Railway: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM
@@ -221,6 +235,7 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(200) DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id VARCHAR(100) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_method VARCHAR(20) DEFAULT \'password\''); } catch(e) {}
   // Stories
   await pool.query(`CREATE TABLE IF NOT EXISTS stories (
@@ -422,6 +437,67 @@ io.on('connection', (socket) => {
       if (sent) socket.emit('emailCodeResent', { ok: true });
       else socket.emit('emailCodeError', 'Не удалось отправить письмо');
     } catch(e) { socket.emit('emailCodeError', 'Ошибка'); }
+  });
+
+  // ── TELEGRAM OAUTH ──────────────────────────────────────
+  socket.on('telegramAuth', async (tgData) => {
+    if (!TELEGRAM_BOT_TOKEN) return socket.emit('authError', 'Telegram авторизация не настроена');
+    try {
+      // Verify Telegram hash
+      const { hash, ...dataWithout } = tgData;
+      const checkArr = Object.keys(dataWithout).sort().map(k => k + '=' + dataWithout[k]);
+      const checkStr = checkArr.join('\n');
+      const secretKey = crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN).digest();
+      const hmac = crypto.createHmac('sha256', secretKey).update(checkStr).digest('hex');
+      if (hmac !== hash) return socket.emit('authError', 'Неверная подпись Telegram');
+      if (Date.now() / 1000 - tgData.auth_date > 86400) return socket.emit('authError', 'Данные Telegram устарели');
+
+      const tgId = String(tgData.id);
+      const tgName = [tgData.first_name, tgData.last_name].filter(Boolean).join(' ') || tgData.username || 'User';
+
+      // Find existing user by telegram_id
+      let user = await pool.query('SELECT * FROM users WHERE telegram_id=$1', [tgId]);
+      if (user.rows.length > 0) {
+        const u = user.rows[0];
+        if (u.banned) return socket.emit('authError', 'Аккаунт заблокирован');
+        const token = generateToken();
+        await pool.query('UPDATE users SET token=$1 WHERE id=$2', [token, u.id]);
+        socket.username = u.nickname; socket.userLogin = u.login;
+        socket.userRole = u.login === ADMIN_LOGIN ? 'admin' : (u.role || 'user');
+        onlineUsers.set(socket.id, { nickname: u.nickname, login: u.login, ip });
+        socketUsers.set(socket.id, socket);
+        socket.emit('authSuccess', { nickname: u.nickname, role: socket.userRole, login: u.login, token, avatar: u.avatar || null, username: u.username || null, verified: u.verified || false, vip_until: u.vip_until || 0, vip_emoji: u.vip_emoji || null });
+        sendOnlineToAll();
+        await addLog('login', u.nickname, 'Login via Telegram', ip);
+      } else {
+        // New user — need to pick login/nickname
+        socket.emit('telegramNeedSetup', { tgId, suggestedName: tgName, tgUsername: tgData.username || null });
+      }
+    } catch(e) { console.error('Telegram auth error:', e); socket.emit('authError', 'Ошибка Telegram авторизации'); }
+  });
+
+  socket.on('telegramRegisterSetup', async ({ tgId, login, nickname }) => {
+    try {
+      login = (login || '').trim().toLowerCase();
+      nickname = (nickname || '').trim();
+      if (!/^[a-z0-9_]{3,30}$/.test(login)) return socket.emit('authError', 'Логин: 3-30 символов, только a-z, 0-9, _');
+      if (nickname.length < 2 || nickname.length > 30) return socket.emit('authError', 'Ник 2-30 символов');
+      const exists = await pool.query('SELECT id FROM users WHERE login=$1', [login]);
+      if (exists.rows.length > 0) return socket.emit('authError', 'Логин уже занят');
+      const nickExists = await pool.query('SELECT id FROM users WHERE LOWER(nickname)=LOWER($1)', [nickname]);
+      if (nickExists.rows.length > 0) return socket.emit('authError', 'Ник уже занят');
+      const fakeHash = await bcrypt.hash(tgId + Date.now(), 8);
+      const role = login === ADMIN_LOGIN ? 'admin' : 'user';
+      const token = generateToken();
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,telegram_id,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,$7,$8)',
+        [login, fakeHash, nickname, role, token, tgId, 'telegram']);
+      socket.username = nickname; socket.userLogin = login; socket.userRole = role;
+      onlineUsers.set(socket.id, { nickname, login, ip });
+      socketUsers.set(socket.id, socket);
+      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
+      sendOnlineToAll();
+      await addLog('register', nickname, 'Registered via Telegram', ip);
+    } catch(e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
   });
 
   // ── GOOGLE OAUTH LOGIN/REGISTER ─────────────────────────
