@@ -1501,6 +1501,8 @@ io.on('connection', (socket) => {
   socket.on('addStory', async ({ mediaUrl, mediaType, text }) => {
     if (!socket.userLogin) return;
     if (!mediaUrl) return socket.emit('storyResult', { ok: false, msg: 'Нет медиа' });
+    // Limit story media size (~40MB base64 = ~30MB file)
+    if (mediaUrl.length > 42 * 1024 * 1024) return socket.emit('storyResult', { ok: false, msg: 'Файл слишком большой (макс. 30 МБ)' });
     const ts = Date.now();
     const expires = ts + 86400000; // 24h
     try {

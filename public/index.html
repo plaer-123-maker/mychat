@@ -1565,14 +1565,6 @@ document.getElementById('googleSetupBtn').addEventListener('click', function() {
 });
 
 // ── GOOGLE SETUP ──
-document.getElementById('googleSetupBtn').addEventListener('click', function() {
-  if (!_googleSetupData) return;
-  var l = document.getElementById('googleSetupLogin').value.trim();
-  var n = document.getElementById('googleSetupNickname').value.trim();
-  document.getElementById('googleSetupError').textContent = '';
-  if (!l || !n) { document.getElementById('googleSetupError').textContent = 'Заполни все поля'; return; }
-  socket.emit('googleRegisterSetup', { googleId: _googleSetupData.googleId, email: _googleSetupData.email, login: l, nickname: n });
-});
 
 // ── TELEGRAM SETUP ──
 var _telegramSetupData = null;
@@ -1810,7 +1802,8 @@ function switchToPrivate(){
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';_msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';
+  var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';
+  _msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';_msgDiv.dataset.loading='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyChats');
 }
@@ -2078,14 +2071,14 @@ function openPM(login,nickname){
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
-  // IMPORTANT: increment token FIRST, then clear messages, then request
-  // This ensures any pending stale response is rejected
+  // Increment token and clear messages - both must match when history arrives
   _pmToken++;
   var _myPmToken=_pmToken;
+  var _targetLogin=login;
   var _md=document.getElementById('messages');
   _md.innerHTML='<div class="empty-list">Загрузка...</div>';
   _md.dataset.loading='pm';
-  _md.dataset.forLogin=login; // Mark who this messages div is waiting for
+  _md.dataset.forLogin=login;
   _md.dataset.forToken=String(_myPmToken);
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
@@ -2234,16 +2227,16 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // TRIPLE guard: global state + div data attributes + token
+  // Guard: must be in PM view for the correct login and matching token
   if(currentView!=='pm')return;
   if(currentPrivateLogin!==d.otherLogin)return;
   if(d.token!==_pmToken)return;
   var md=document.getElementById('messages');
-  // Extra check: the div itself must be waiting for this exact login+token
   if(md.dataset.forLogin!==d.otherLogin)return;
   if(md.dataset.forToken && String(d.token)!==md.dataset.forToken)return;
   md.innerHTML='';
-  if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
+  md.dataset.loading='';
+  if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог \uD83D\uDC4B</div>';
   else d.messages.forEach(function(m){addPM(m);});
   md.scrollTop=md.scrollHeight;
 });
@@ -3859,6 +3852,7 @@ var currentStoryIdx = 0;
 var storyTimer = null;
 var storyFileData = null;
 var storyFileType = 'image';
+var storyFileLoading = false;
 
 function loadStories() {
   socket.emit('getStories');
@@ -3934,19 +3928,25 @@ function renderStoriesBar(stories) {
 function openAddStory() {
   storyFileData = null;
   storyFileType = 'image';
+  storyFileLoading = false;
   var inp = document.getElementById('storyFileInput');
   if (inp) inp.value = '';
   var zone = document.getElementById('storyPickZone');
   if (zone) zone.style.borderColor = '';
   var prev = document.getElementById('storyPreview');
-  if (prev) prev.innerHTML = '📷<br><span style="font-size:13px;">Нажми чтобы выбрать фото или видео</span>';
+  if (prev) prev.innerHTML = '\uD83D\uDCF7<br><span style="font-size:13px;">Нажми чтобы выбрать фото или видео</span>';
   document.getElementById('storyTextInput').value = '';
+  // Reset publish button
+  var btns = document.querySelectorAll('#addStoryModal button');
+  var pubBtn = btns[btns.length - 1];
+  if (pubBtn) { pubBtn.textContent = 'Опубликовать'; pubBtn.disabled = false; }
   document.getElementById('addStoryModal').style.display = 'flex';
 }
 
 function closeAddStory() {
   document.getElementById('addStoryModal').style.display = 'none';
   storyFileData = null;
+  storyFileLoading = false;
 }
 
 document.getElementById('storyFileInput').addEventListener('change', function() {
@@ -3956,33 +3956,42 @@ document.getElementById('storyFileInput').addEventListener('change', function() 
   storyFileType = file.type.startsWith('video/') ? 'video' : 'image';
   var zone = document.getElementById('storyPickZone');
   if (zone) zone.style.borderColor = 'var(--accent)';
-  
-  // FIX: ИНДИКАТОР ЗАГРУЗКИ В ИСТОРИИ
   var prev = document.getElementById('storyPreview');
-  if (prev) prev.innerHTML = '⏳<br><span style="font-size:13px;">Обработка файла... Подождите пару секунд</span>';
-  
+  if (prev) prev.innerHTML = '\u23F3<br><span style="font-size:13px;">Загрузка файла...</span>';
+  storyFileLoading = true;
+  storyFileData = null;
+  var btns = document.querySelectorAll('#addStoryModal button');
+  var pubBtn = btns[btns.length - 1];
+  if (pubBtn) { pubBtn.disabled = true; pubBtn.textContent = 'Загрузка...'; }
+  var fileRef = file;
+  this.value = '';
   var reader = new FileReader();
   reader.onload = function(ev) {
     storyFileData = ev.target.result;
+    storyFileLoading = false;
+    if (pubBtn) { pubBtn.disabled = false; pubBtn.textContent = 'Опубликовать'; }
     if (storyFileType === 'video') {
-      prev.innerHTML = '<video src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;display:block;" controls></video><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">✓ Видео выбрано</div>';
+      prev.innerHTML = '<video src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;display:block;" controls></video><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">\u2713 Видео выбрано</div>';
     } else {
-      prev.innerHTML = '<img src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;object-fit:contain;display:block;"><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">✓ Фото выбрано</div>';
+      prev.innerHTML = '<img src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;object-fit:contain;display:block;"><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">\u2713 Фото выбрано</div>';
     }
   };
-  reader.readAsDataURL(file);
-  this.value = '';
+  reader.onerror = function() {
+    storyFileLoading = false;
+    storyFileData = null;
+    if (pubBtn) { pubBtn.disabled = false; pubBtn.textContent = 'Опубликовать'; }
+    if (prev) prev.innerHTML = '\u274C<br><span style="font-size:13px;">Ошибка чтения файла</span>';
+  };
+  reader.readAsDataURL(fileRef);
 });
 
 function submitStory() {
+  if (storyFileLoading) { alert('Файл ещё загружается, подожди...'); return; }
   if (!storyFileData) { alert('Выбери фото или видео'); return; }
   var text = document.getElementById('storyTextInput').value.trim();
-  
-  // FIX: БЛОКИРОВКА КНОПКИ
   var btns = document.querySelectorAll('#addStoryModal button');
   var pubBtn = btns[btns.length - 1];
   if(pubBtn) { pubBtn.textContent = 'Отправка...'; pubBtn.disabled = true; }
-  
   socket.emit('addStory', { mediaUrl: storyFileData, mediaType: storyFileType, text: text || null });
 }
 
