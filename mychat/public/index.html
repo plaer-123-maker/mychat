@@ -1774,10 +1774,10 @@ function switchToAll(){
   currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabAll');
   document.getElementById('searchInput').value='';
-  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  document.getElementById('mobileBackBtn').style.display='none';
   renderAllChats();
 }
 
@@ -1799,11 +1799,11 @@ function switchToPrivate(){
   currentView='private';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabPrivate');
   document.getElementById('searchInput').value='';
-  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
+  document.getElementById('mobileBackBtn').style.display='none';
   var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';
   _msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';_msgDiv.dataset.loading='';
-  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   if(latestChats&&latestChats.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
   socket.emit('getMyChats');
   // Fallback: if no response in 3s, show empty state
@@ -1813,10 +1813,10 @@ function switchToRooms(){
   currentView='rooms';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
-  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
-  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  document.getElementById('mobileBackBtn').style.display='none';
   if(latestRooms&&latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
   socket.emit('getMyRooms');
 }
