@@ -2123,10 +2123,10 @@ socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('В�
 socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
-  // Guard: ignore if user switched away to a different room or PM
-  if(currentView==='pm'||currentView==='general'||currentView==='all'||currentView==='private')return;
-  if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
+  // Guard: ignore if user switched away to a different view
+  if(currentView==='pm'||currentView==='general'||currentView==='private')return;
   if(data.token!==_roomToken)return; // strict token check - always required
+  if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -3949,41 +3949,7 @@ function closeAddStory() {
   storyFileLoading = false;
 }
 
-document.getElementById('storyFileInput').addEventListener('change', function() {
-  var file = this.files[0];
-  if (!file) return;
-  if (file.size > 30 * 1024 * 1024) { alert('Файл слишком большой. Максимум 30 МБ.'); this.value = ''; return; }
-  storyFileType = file.type.startsWith('video/') ? 'video' : 'image';
-  var zone = document.getElementById('storyPickZone');
-  if (zone) zone.style.borderColor = 'var(--accent)';
-  var prev = document.getElementById('storyPreview');
-  if (prev) prev.innerHTML = '\u23F3<br><span style="font-size:13px;">Загрузка файла...</span>';
-  storyFileLoading = true;
-  storyFileData = null;
-  var btns = document.querySelectorAll('#addStoryModal button');
-  var pubBtn = btns[btns.length - 1];
-  if (pubBtn) { pubBtn.disabled = true; pubBtn.textContent = 'Загрузка...'; }
-  var fileRef = file;
-  this.value = '';
-  var reader = new FileReader();
-  reader.onload = function(ev) {
-    storyFileData = ev.target.result;
-    storyFileLoading = false;
-    if (pubBtn) { pubBtn.disabled = false; pubBtn.textContent = 'Опубликовать'; }
-    if (storyFileType === 'video') {
-      prev.innerHTML = '<video src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;display:block;" controls></video><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">\u2713 Видео выбрано</div>';
-    } else {
-      prev.innerHTML = '<img src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;object-fit:contain;display:block;"><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">\u2713 Фото выбрано</div>';
-    }
-  };
-  reader.onerror = function() {
-    storyFileLoading = false;
-    storyFileData = null;
-    if (pubBtn) { pubBtn.disabled = false; pubBtn.textContent = 'Опубликовать'; }
-    if (prev) prev.innerHTML = '\u274C<br><span style="font-size:13px;">Ошибка чтения файла</span>';
-  };
-  reader.readAsDataURL(fileRef);
-});
+// storyFileInput listener is attached below after modal HTML
 
 function submitStory() {
   if (storyFileLoading) { alert('Файл ещё загружается, подожди...'); return; }
@@ -4114,6 +4080,49 @@ socket.on('authSuccess', function() {
   </div>
   <div id="emojiGrid" style="padding:10px;overflow-y:auto;max-height:220px;"></div>
 </div>
+
+<script>
+// storyFileInput listener — must be after modal HTML in DOM
+(function() {
+  var inp = document.getElementById('storyFileInput');
+  if (!inp) return; // safety guard
+  inp.addEventListener('change', function() {
+  var file = this.files[0];
+  if (!file) return;
+  if (file.size > 30 * 1024 * 1024) { alert('Файл слишком большой. Максимум 30 МБ.'); this.value = ''; return; }
+  storyFileType = file.type.startsWith('video/') ? 'video' : 'image';
+  var zone = document.getElementById('storyPickZone');
+  if (zone) zone.style.borderColor = 'var(--accent)';
+  var prev = document.getElementById('storyPreview');
+  if (prev) prev.innerHTML = '&#9203;<br><span style="font-size:13px;">Загрузка файла...</span>';
+  storyFileLoading = true;
+  storyFileData = null;
+  var btns = document.querySelectorAll('#addStoryModal button');
+  var pubBtn = btns[btns.length - 1];
+  if (pubBtn) { pubBtn.disabled = true; pubBtn.textContent = 'Загрузка...'; }
+  var fileRef = file;
+  this.value = '';
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    storyFileData = ev.target.result;
+    storyFileLoading = false;
+    if (pubBtn) { pubBtn.disabled = false; pubBtn.textContent = 'Опубликовать'; }
+    if (storyFileType === 'video') {
+      prev.innerHTML = '<video src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;display:block;" controls></video><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">&#10003; Видео выбрано</div>';
+    } else {
+      prev.innerHTML = '<img src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;object-fit:contain;display:block;"><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">&#10003; Фото выбрано</div>';
+    }
+  };
+  reader.onerror = function() {
+    storyFileLoading = false;
+    storyFileData = null;
+    if (pubBtn) { pubBtn.disabled = false; pubBtn.textContent = 'Опубликовать'; }
+    if (prev) prev.innerHTML = '&#10060;<br><span style="font-size:13px;">Ошибка чтения файла</span>';
+  };
+  reader.readAsDataURL(fileRef);
+  });
+})();
+</script>
 
 </body>
 </html>
