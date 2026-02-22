@@ -1804,7 +1804,7 @@ function switchToPrivate(){
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';_msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';
+  document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyChats');
 }
@@ -2063,16 +2063,11 @@ function openPM(login,nickname){
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
-  // IMPORTANT: increment token FIRST, then clear messages, then request
-  // This ensures any pending stale response is rejected
-  _pmToken++;
-  var _myPmToken=_pmToken;
-  var _md=document.getElementById('messages');
-  _md.innerHTML='<div class="empty-list">Загрузка...</div>';
-  _md.dataset.loading='pm';
-  _md.dataset.forLogin=login; // Mark who this messages div is waiting for
-  _md.dataset.forToken=String(_myPmToken);
+  var _md=document.getElementById('messages');_md.innerHTML='<div class="empty-list">Загрузка...</div>';_md.dataset.loading='pm';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
+  _pmToken++; var _myPmToken=_pmToken;
+  // Store session key in messages div - this is the ground truth for which chat is expected
+  document.getElementById('messages').setAttribute('data-pm-session', login + ':' + _myPmToken);
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
@@ -2117,7 +2112,7 @@ socket.on('roomData',function(data){
   // Guard: ignore if user switched away to a different room or PM
   if(currentView==='pm'||currentView==='general'||currentView==='all'||currentView==='private')return;
   if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
-  if(data.token!==_roomToken)return; // strict token check - always required
+  if(data.token && data.token !== _roomToken)return; // stale response
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2218,14 +2213,12 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // TRIPLE guard: global state + div data attributes + token
   if(currentView!=='pm')return;
-  if(currentPrivateLogin!==d.otherLogin)return;
-  if(d.token!==_pmToken)return;
+  // Check the session key stored in the messages div - most reliable guard
   var md=document.getElementById('messages');
-  // Extra check: the div itself must be waiting for this exact login+token
-  if(md.dataset.forLogin!==d.otherLogin)return;
-  if(md.dataset.forToken && String(d.token)!==md.dataset.forToken)return;
+  var expectedSession = md.getAttribute('data-pm-session');
+  var actualSession = d.otherLogin + ':' + d.token;
+  if(expectedSession !== actualSession)return; // wrong chat or stale response
   md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
@@ -2580,8 +2573,8 @@ document.getElementById('photoInput').addEventListener('change',function(){
   var imageFiles=allFiles.filter(function(f){return f.type.startsWith('image/');});
   
   // Check image size limits
-  var oversized=imageFiles.filter(function(f){return f.size>10*1024*1024;});
-  if(oversized.length){alert('Макс 10MB на фото. Большие файлы пропущены.');imageFiles=imageFiles.filter(function(f){return f.size<=10*1024*1024;});}
+  var oversized=imageFiles.filter(function(f){return f.size>25*1024*1024;});
+  if(oversized.length){alert('Макс 25MB на фото. Большие файлы пропущены.');imageFiles=imageFiles.filter(function(f){return f.size<=25*1024*1024;});}
   
   // Send videos one by one
   videoFiles.forEach(function(file){
@@ -2596,33 +2589,33 @@ document.getElementById('photoInput').addEventListener('change',function(){
     reader.readAsDataURL(file);
   });
   
-  // Send images - compress via Canvas first to keep size manageable
+  // Send images - resize via Canvas to max 1600px before sending
   if(imageFiles.length>0){
-    function compressImage(file,cb){
-      var reader=new FileReader();
-      reader.onload=function(e){
-        var img=new Image();
-        img.onload=function(){
-          var canvas=document.createElement('canvas');
-          var MAX=1280;var w=img.width,h=img.height;
-          if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
-          canvas.width=w;canvas.height=h;
-          canvas.getContext('2d').drawImage(img,0,0,w,h);
-          cb(canvas.toDataURL('image/jpeg',file.size>2*1024*1024?0.7:0.85));
+    function resizeAndSend(files, done_cb){
+      var results=[];var count=0;
+      files.forEach(function(file,i){
+        var reader=new FileReader();
+        reader.onload=function(e){
+          var img=new Image();
+          img.onload=function(){
+            var MAX=1600;
+            var w=img.width,h=img.height;
+            if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+            var canvas=document.createElement('canvas');
+            canvas.width=w;canvas.height=h;
+            canvas.getContext('2d').drawImage(img,0,0,w,h);
+            results[i]=canvas.toDataURL('image/jpeg',0.82);
+            count++;if(count===files.length)done_cb(results);
+          };
+          img.onerror=function(){results[i]=e.target.result;count++;if(count===files.length)done_cb(results);};
+          img.src=e.target.result;
         };
-        img.onerror=function(){cb(e.target.result);};
-        img.src=e.target.result;
-      };
-      reader.onerror=function(){cb(null);};
-      reader.readAsDataURL(file);
+        reader.onerror=function(){count++;if(count===files.length)done_cb(results.filter(Boolean));};
+        reader.readAsDataURL(file);
+      });
     }
-    function compressAll(list,cb){
-      var results=[];var done=0;
-      if(!list.length){cb([]);return;}
-      list.forEach(function(f,i){compressImage(f,function(d){if(d)results[i]=d;done++;if(done===list.length)cb(results.filter(Boolean));});});
-    }
-    compressAll(imageFiles,function(images){
-      if(!images.length)return;
+    resizeAndSend(imageFiles,function(images){
+      if(!images||!images.length)return;
       var payload=Object.assign({image:images.length===1?images[0]:images,type:'image'},rd);
       if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
       else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId},payload));
@@ -2992,7 +2985,7 @@ socket.on('callEnded',function(data){
   incomingCallData=null;
   // Refresh PM chat to show new call log entry
   if(currentView==='pm'&&currentPrivateLogin&&partner===currentPrivateLogin){
-    setTimeout(function(){_pmToken++;var tk=_pmToken;socket.emit('getPrivateHistory',{login:currentPrivateLogin,token:tk});},600);
+    (function(savedLogin,savedToken){setTimeout(function(){if(currentView==='pm'&&currentPrivateLogin===savedLogin){socket.emit('getPrivateHistory',{login:savedLogin,token:savedToken});}},600);})(currentPrivateLogin,_pmToken);
   }
 });
 
@@ -3831,27 +3824,7 @@ document.getElementById('fileInput').addEventListener('change', function() {
   self.value = '';
 });
 
-// Handle video in photoInput
-(function() {
-  var origPhotoHandler = document.getElementById('photoInput').onchange;
-  document.getElementById('photoInput').addEventListener('change', function() {
-    // video files - send as video type
-    var files = Array.from(this.files);
-    var videos = files.filter(function(f) { return f.type.startsWith('video/'); });
-    var images = files.filter(function(f) { return f.type.startsWith('image/'); });
-    
-    videos.forEach(function(file) {
-      var reader = new FileReader();
-      reader.onload = function(ev) {
-        var payload = { type: 'video', text: file.name, file_url: ev.target.result, file_name: file.name, file_size: file.size };
-        if (currentView === 'pm' && currentPrivateLogin) { socket.emit('privateMessage', Object.assign({toLogin:currentPrivateLogin}, payload)); }
-        else if (currentView === 'room' && currentRoomId) { socket.emit('roomMessage', Object.assign({roomId:currentRoomId}, payload)); }
-        else if (currentView === 'general') { socket.emit('chatMessage', payload); }
-      };
-      reader.readAsDataURL(file);
-    });
-  }, true); // capture to run before existing handler
-})();
+/* duplicate video handler removed */
 
 // Render video/file messages - patch addMsg
 (function() {
