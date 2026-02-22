@@ -2063,9 +2063,15 @@ function openPM(login,nickname){
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
-  var _md=document.getElementById('messages');_md.innerHTML='<div class="empty-list">Загрузка...</div>';_md.dataset.loading='pm';
+  // IMPORTANT: increment token FIRST, then clear messages, then request
+  // This ensures any pending stale response is rejected
+  _pmToken++;
+  var _myPmToken=_pmToken;
+  var _md=document.getElementById('messages');
+  _md.innerHTML='<div class="empty-list">Загрузка...</div>';
+  _md.dataset.loading='pm';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  _pmToken++; var _myPmToken=_pmToken; socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
+  socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
   // Dialog background
@@ -2109,7 +2115,7 @@ socket.on('roomData',function(data){
   // Guard: ignore if user switched away to a different room or PM
   if(currentView==='pm'||currentView==='general'||currentView==='all'||currentView==='private')return;
   if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
-  if(data.token && data.token !== _roomToken)return; // stale response
+  if(data.token!==_roomToken)return; // strict token check - always required
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2210,8 +2216,10 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  if(currentView!=='pm'||currentPrivateLogin!==d.otherLogin)return;
-  if(d.token && d.token !== _pmToken)return; // stale response
+  // STRICT guard: must be in PM mode, correct chat, AND token must match exactly
+  if(currentView!=='pm')return;
+  if(currentPrivateLogin!==d.otherLogin)return;
+  if(d.token!==_pmToken)return; // always check token - 0 means mismatch too
   var md=document.getElementById('messages');md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
@@ -2582,15 +2590,33 @@ document.getElementById('photoInput').addEventListener('change',function(){
     reader.readAsDataURL(file);
   });
   
-  // Send images as grid (existing logic)
+  // Send images - compress via Canvas first to keep size manageable
   if(imageFiles.length>0){
-    function readAll(list,cb){
-      var results=[];var done=0;
-      list.forEach(function(f,i){
-        var r=new FileReader();r.onload=function(e){results[i]=e.target.result;done++;if(done===list.length)cb(results);};r.readAsDataURL(f);
-      });
+    function compressImage(file,cb){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        var img=new Image();
+        img.onload=function(){
+          var canvas=document.createElement('canvas');
+          var MAX=1280;var w=img.width,h=img.height;
+          if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+          canvas.width=w;canvas.height=h;
+          canvas.getContext('2d').drawImage(img,0,0,w,h);
+          cb(canvas.toDataURL('image/jpeg',file.size>2*1024*1024?0.7:0.85));
+        };
+        img.onerror=function(){cb(e.target.result);};
+        img.src=e.target.result;
+      };
+      reader.onerror=function(){cb(null);};
+      reader.readAsDataURL(file);
     }
-    readAll(imageFiles,function(images){
+    function compressAll(list,cb){
+      var results=[];var done=0;
+      if(!list.length){cb([]);return;}
+      list.forEach(function(f,i){compressImage(f,function(d){if(d)results[i]=d;done++;if(done===list.length)cb(results.filter(Boolean));});});
+    }
+    compressAll(imageFiles,function(images){
+      if(!images.length)return;
       var payload=Object.assign({image:images.length===1?images[0]:images,type:'image'},rd);
       if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
       else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId},payload));
@@ -2960,7 +2986,7 @@ socket.on('callEnded',function(data){
   incomingCallData=null;
   // Refresh PM chat to show new call log entry
   if(currentView==='pm'&&currentPrivateLogin&&partner===currentPrivateLogin){
-    setTimeout(function(){socket.emit('getPrivateHistory',currentPrivateLogin);},600);
+    setTimeout(function(){_pmToken++;var tk=_pmToken;socket.emit('getPrivateHistory',{login:currentPrivateLogin,token:tk});},600);
   }
 });
 

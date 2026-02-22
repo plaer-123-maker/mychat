@@ -11,7 +11,7 @@ try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { c
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 25e6 });
+const io = new Server(server, { maxHttpBufferSize: 100e6 });
 
 app.use(express.static('public'));
 app.use(express.json());
@@ -901,7 +901,8 @@ io.on('connection', (socket) => {
 
   socket.on('getPrivateHistory', async (data) => {
     var otherLogin = typeof data === 'string' ? data : data.login;
-    var token = typeof data === 'object' ? data.token : null;
+    // Token is always required now - if missing (old call style), use 0 which won't match any valid token
+    var token = (typeof data === 'object' && data.token !== undefined) ? data.token : 0;
     if (!socket.userLogin) return;
     try {
       const res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 200', [socket.userLogin, otherLogin]);
