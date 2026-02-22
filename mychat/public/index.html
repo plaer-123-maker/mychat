@@ -12,39 +12,39 @@
 :root{
   --bg-base:#0e1621;
   --bg-sidebar:#17212b;
-  --bg-panel:#1e2c3a;
-  --bg-input:#253443;
-  --bg-hover:#1c2f41;
+  --bg-panel:#242f3d;
+  --bg-input:#17212b;
+  --bg-hover:#202b36;
   --bg-active:#2b5278;
-  --accent:#2ea9df;
-  --accent2:#54c8f0;
+  --accent:#5288c1;
+  --accent2:#4fa1eb;
   --bubble-out:#2b5278;
   --bubble-in:#182533;
-  --text-primary:#e8f4fb;
-  --text-secondary:#7da5be;
-  --text-muted:#3e6480;
-  --border:rgba(255,255,255,0.05);
+  --text-primary:#ffffff;
+  --text-secondary:#7f91a4;
+  --text-muted:#5b6d81;
+  --border:#101921;
   --online:#4dde6a;
-  --radius-msg:18px;
-  --shadow:0 2px 16px rgba(0,0,0,0.4);
+  --radius-msg:14px;
+  --shadow:0 2px 10px rgba(0,0,0,0.2);
 }
 body.theme-light{
-  --bg-base:#edf0f4;
-  --bg-sidebar:#fff;
-  --bg-panel:#fff;
-  --bg-input:#edf0f4;
-  --bg-hover:#f2f5f8;
-  --bg-active:#d4eaff;
-  --accent:#0a84ff;
-  --accent2:#3fa8ff;
-  --bubble-out:#0a84ff;
-  --bubble-in:#fff;
-  --text-primary:#111;
-  --text-secondary:#6b7c8d;
-  --text-muted:#a8b5c0;
-  --border:rgba(0,0,0,0.07);
-  --online:#30d158;
-  --shadow:0 2px 12px rgba(0,0,0,0.1);
+  --bg-base:#9eb2c0;
+  --bg-sidebar:#ffffff;
+  --bg-panel:#ffffff;
+  --bg-input:#f4f4f5;
+  --bg-hover:#f4f4f5;
+  --bg-active:#419fd9;
+  --accent:#419fd9;
+  --accent2:#3a8cc0;
+  --bubble-out:#effdde;
+  --bubble-in:#ffffff;
+  --text-primary:#000000;
+  --text-secondary:#707579;
+  --text-muted:#a8a8a8;
+  --border:#e4e4e5;
+  --online:#00c73e;
+  --shadow:0 2px 10px rgba(0,0,0,0.05);
 }
 body.theme-amoled{
   --bg-base:#000;--bg-sidebar:#0a0a0a;--bg-panel:#111;--bg-input:#1a1a1a;
@@ -918,12 +918,17 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
     <div class="admin-content" id="adminContent"></div>
   </div>
 </div>
+```
 
+---
+
+### ЧАСТЬ 2: Скрипты (JS)
+Скопируй этот код и вставь **сразу после** первой части (он заканчивает файл `index.html`):
+
+```html
 <script>
-// Google OAuth Client ID — set GOOGLE_CLIENT_ID env var on your server
-// The server will inject this via a /config endpoint or you can set it here manually:
-window.GOOGLE_CLIENT_ID_PUB = ''; // Will be populated from /config
-// Fetch server config
+// Google OAuth Client ID
+window.GOOGLE_CLIENT_ID_PUB = '';
 fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
   if (cfg.googleClientId) {
     window.GOOGLE_CLIENT_ID_PUB = cfg.googleClientId;
@@ -1066,7 +1071,7 @@ function renderSettingsMain() {
     </div>
     <div class="settings-row" onclick="openVerifySettings()">
       <div class="sr-icon" style="background:rgba(46,169,223,0.15)">✓</div>
-      <div class="sr-info"><div class="sr-label">Верификация</div><div class="sr-desc">\${myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации'}</div></div>
+      <div class="sr-info"><div class="sr-label">Верификация</div><div class="sr-desc">${myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации'}</div></div>
       <span class="sr-arrow">›</span>
     </div>
     <div class="settings-row" onclick="doLogout()" style="color:#ff6b6b">
@@ -1790,6 +1795,7 @@ function renderAllChats(){
 }
 
 function switchToGeneral(){
+  clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   document.getElementById('dialogBgBtn').style.display='none';
   setActiveTab('tabGeneral');
@@ -1804,7 +1810,7 @@ function switchToPrivate(){
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
+  var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';_msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyChats');
 }
@@ -1832,7 +1838,9 @@ socket.on('searchResults',function(users){
     if(u.avatar)avatarCache[u.login]=u.avatar;
     var avHtml=u.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+u.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+u.nickname[0].toUpperCase()+'</div>';
     var subline=u.username?'@'+u.username:'Написать';
-    html+='<div class="chat-item" onclick="openPM(\''+u.login+'\',\''+u.nickname+'\')">'+avHtml+'<div class="info"><div class="name">'+u.nickname+'</div><div class="last">'+subline+'</div></div></div>';
+    var safeLogin = u.login.replace(/'/g, "\\'");
+    var safeNick = u.nickname.replace(/'/g, "\\'");
+    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+avHtml+'<div class="info"><div class="name">'+u.nickname+'</div><div class="last">'+subline+'</div></div></div>';
   });
   list.innerHTML=html;
 });
@@ -1882,9 +1890,14 @@ function buildChatItem(c, isPinned, chatType) {
   if(c.unread>0) metaHtml+='<div class="badge">'+c.unread+'</div>';
   if(c.lastMsg&&c.lastMsg.timestamp) metaHtml='<div class="time">'+formatTime(c.lastMsg.timestamp)+'</div>'+metaHtml;
   var typeBadge = chatType==='room' ? '<span class="chat-type-badge">'+(c.type||'group')+'</span>' : '';
+  
+  var safeLogin = c.login ? c.login.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
+  var safeNick = (c.name||c.nickname||'').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+  
   var onclickFn = chatType==='room'
     ? 'openRoom('+c.id+')'
-    : 'openPM(\''+c.login+'\',\''+c.nickname+'\')'; 
+    : 'openPM(\''+safeLogin+'\',\''+safeNick+'\')'; 
+    
   var isActive = chatType==='room' ? currentRoomId==c.id : currentPrivateLogin===c.login;
   return '<div class="chat-item'+(isActive?' active':'')+pinClass+'" onclick="'+onclickFn+'" oncontextmenu="showMuteMenu(event,\''+chatType+'\','+(chatType==='room'?c.id:'\''+c.login+'\'')+')" data-chattype="'+chatType+'" data-chatid="'+(chatType==='room'?c.id:c.login)+'">'
     + avHtml
@@ -1959,6 +1972,7 @@ socket.on('myRooms',function(rooms){
 });
 
 function openGeneral(){
+  clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
@@ -2051,6 +2065,7 @@ socket.on('userProfile', function(p){
 });
 
 function openPM(login,nickname){
+  clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   // Request last seen status
   socket.emit('getLastSeen',{login:login});
   currentView='pm';currentPrivateLogin=login;currentPMProfile=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
@@ -2063,11 +2078,16 @@ function openPM(login,nickname){
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
-  var _md=document.getElementById('messages');_md.innerHTML='<div class="empty-list">Загрузка...</div>';_md.dataset.loading='pm';
+  // IMPORTANT: increment token FIRST, then clear messages, then request
+  // This ensures any pending stale response is rejected
+  _pmToken++;
+  var _myPmToken=_pmToken;
+  var _md=document.getElementById('messages');
+  _md.innerHTML='<div class="empty-list">Загрузка...</div>';
+  _md.dataset.loading='pm';
+  _md.dataset.forLogin=login; // Mark who this messages div is waiting for
+  _md.dataset.forToken=String(_myPmToken);
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  _pmToken++; var _myPmToken=_pmToken;
-  // Store session key in messages div - this is the ground truth for which chat is expected
-  document.getElementById('messages').setAttribute('data-pm-session', login + ':' + _myPmToken);
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
@@ -2079,6 +2099,7 @@ function openPM(login,nickname){
 window.openPM=openPM;
 
 function openRoom(roomId){
+  clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   roomId=Number(roomId);
   currentView='room';currentRoomId=roomId;currentPrivateLogin=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabRooms');
@@ -2112,7 +2133,7 @@ socket.on('roomData',function(data){
   // Guard: ignore if user switched away to a different room or PM
   if(currentView==='pm'||currentView==='general'||currentView==='all'||currentView==='private')return;
   if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
-  if(data.token && data.token !== _roomToken)return; // stale response
+  if(data.token!==_roomToken)return; // strict token check - always required
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2213,12 +2234,14 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
+  // TRIPLE guard: global state + div data attributes + token
   if(currentView!=='pm')return;
-  // Check the session key stored in the messages div - most reliable guard
+  if(currentPrivateLogin!==d.otherLogin)return;
+  if(d.token!==_pmToken)return;
   var md=document.getElementById('messages');
-  var expectedSession = md.getAttribute('data-pm-session');
-  var actualSession = d.otherLogin + ':' + d.token;
-  if(expectedSession !== actualSession)return; // wrong chat or stale response
+  // Extra check: the div itself must be waiting for this exact login+token
+  if(md.dataset.forLogin!==d.otherLogin)return;
+  if(md.dataset.forToken && String(d.token)!==md.dataset.forToken)return;
   md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
@@ -2573,8 +2596,8 @@ document.getElementById('photoInput').addEventListener('change',function(){
   var imageFiles=allFiles.filter(function(f){return f.type.startsWith('image/');});
   
   // Check image size limits
-  var oversized=imageFiles.filter(function(f){return f.size>25*1024*1024;});
-  if(oversized.length){alert('Макс 25MB на фото. Большие файлы пропущены.');imageFiles=imageFiles.filter(function(f){return f.size<=25*1024*1024;});}
+  var oversized=imageFiles.filter(function(f){return f.size>10*1024*1024;});
+  if(oversized.length){alert('Макс 10MB на фото. Большие файлы пропущены.');imageFiles=imageFiles.filter(function(f){return f.size<=10*1024*1024;});}
   
   // Send videos one by one
   videoFiles.forEach(function(file){
@@ -2589,33 +2612,33 @@ document.getElementById('photoInput').addEventListener('change',function(){
     reader.readAsDataURL(file);
   });
   
-  // Send images - resize via Canvas to max 1600px before sending
+  // Send images - compress via Canvas first to keep size manageable
   if(imageFiles.length>0){
-    function resizeAndSend(files, done_cb){
-      var results=[];var count=0;
-      files.forEach(function(file,i){
-        var reader=new FileReader();
-        reader.onload=function(e){
-          var img=new Image();
-          img.onload=function(){
-            var MAX=1600;
-            var w=img.width,h=img.height;
-            if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
-            var canvas=document.createElement('canvas');
-            canvas.width=w;canvas.height=h;
-            canvas.getContext('2d').drawImage(img,0,0,w,h);
-            results[i]=canvas.toDataURL('image/jpeg',0.82);
-            count++;if(count===files.length)done_cb(results);
-          };
-          img.onerror=function(){results[i]=e.target.result;count++;if(count===files.length)done_cb(results);};
-          img.src=e.target.result;
+    function compressImage(file,cb){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        var img=new Image();
+        img.onload=function(){
+          var canvas=document.createElement('canvas');
+          var MAX=1280;var w=img.width,h=img.height;
+          if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+          canvas.width=w;canvas.height=h;
+          canvas.getContext('2d').drawImage(img,0,0,w,h);
+          cb(canvas.toDataURL('image/jpeg',file.size>2*1024*1024?0.7:0.85));
         };
-        reader.onerror=function(){count++;if(count===files.length)done_cb(results.filter(Boolean));};
-        reader.readAsDataURL(file);
-      });
+        img.onerror=function(){cb(e.target.result);};
+        img.src=e.target.result;
+      };
+      reader.onerror=function(){cb(null);};
+      reader.readAsDataURL(file);
     }
-    resizeAndSend(imageFiles,function(images){
-      if(!images||!images.length)return;
+    function compressAll(list,cb){
+      var results=[];var done=0;
+      if(!list.length){cb([]);return;}
+      list.forEach(function(f,i){compressImage(f,function(d){if(d)results[i]=d;done++;if(done===list.length)cb(results.filter(Boolean));});});
+    }
+    compressAll(imageFiles,function(images){
+      if(!images.length)return;
       var payload=Object.assign({image:images.length===1?images[0]:images,type:'image'},rd);
       if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
       else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId},payload));
@@ -2806,12 +2829,6 @@ function startCallTimer(){
 
 function stopCallTimer(){clearInterval(callTimerInterval);callTimerInterval=null;}
 
-function formatTime(ts){
-  if(!ts)return "";
-  var d=new Date(Number(ts)),h=d.getHours(),m=d.getMinutes();
-  return (h<10?"0":"")+h+":"+(m<10?"0":"")+m;
-}
-
 function getDuration(){
   if(!callStartTime)return 0;
   return Math.floor((Date.now()-callStartTime)/1000);
@@ -2985,7 +3002,7 @@ socket.on('callEnded',function(data){
   incomingCallData=null;
   // Refresh PM chat to show new call log entry
   if(currentView==='pm'&&currentPrivateLogin&&partner===currentPrivateLogin){
-    (function(savedLogin,savedToken){setTimeout(function(){if(currentView==='pm'&&currentPrivateLogin===savedLogin){socket.emit('getPrivateHistory',{login:savedLogin,token:savedToken});}},600);})(currentPrivateLogin,_pmToken);
+    setTimeout(function(){_pmToken++;var tk=_pmToken;socket.emit('getPrivateHistory',{login:currentPrivateLogin,token:tk});},600);
   }
 });
 
@@ -3361,15 +3378,7 @@ function startEdit(msgId, msgType, currentText) {
 }
 window.startEdit = startEdit;
 
-function cancelEdit() {
-  editingMsgId = null; editingMsgType = null;
-  document.getElementById('editBar').classList.remove('active');
-  document.getElementById('msgInput').value = '';
-}
-window.cancelEdit = cancelEdit;
-
-// Override send to handle edit mode - integrated into existing sendBtn listener above
-// (handled by checking editingMsgId in the original click handler)
+// (cancelEdit is implemented earlier)
 
 socket.on('messageEdited', function(d) {
   var el = document.getElementById('msg-' + d.msgId) || document.getElementById('pm-' + d.msgId) || document.getElementById('rmsg-' + d.msgId);
@@ -3445,7 +3454,6 @@ window.closeForwardModal = closeForwardModal;
 socket.on('forwardDone', function(d) { /* handled in doForward */ });
 
 /* Cache chats/rooms for forward modal */
-// _myChatsCache now updated in myChats handler above
 socket.on('myRooms', function(rooms) { window._myRoomsCache = rooms; });
 
 /* ── 5. SAVED MESSAGES ── */
@@ -3490,7 +3498,6 @@ function markRoomMessagesRead() {
 }
 
 // Call markRoomMessagesRead when room is opened
-var origRoomData = socket.listeners ? null : null;
 socket.on('roomData', function() { setTimeout(markRoomMessagesRead, 500); });
 
 /* ── 7. PER-DIALOG BACKGROUND ── */
@@ -3559,8 +3566,6 @@ function handleDialogBgUpload(input, chatType, chatId) {
 }
 window.handleDialogBgUpload = handleDialogBgUpload;
 
-/* Fetch dialog bg when opening PM or room - handled directly in openPM/openRoom above */
-
 /* ── EXTEND REACTION PANEL with Edit/Forward ── */
 var _origShowReactionPanel = showReactionPanel;
 window.showReactionPanel = function(msgId, msgType, anchorEl, replyUser, replyText, canDelete) {
@@ -3620,8 +3625,6 @@ window.showReactionPanel = function(msgId, msgType, anchorEl, replyUser, replyTe
   setTimeout(function() { document.addEventListener('click', closeReactionPanel, { once: true }); document.addEventListener('touchstart', closeReactionPanel, { once: true, passive: true }); }, 50);
 };
 
-/* ── SAVED MESSAGES + VERIFICATION items integrated directly into renderSettingsMain above ── */
-
 function openVerifySettings() {
   var body = document.getElementById('settingsBody');
   body.innerHTML = '<div class="settings-header" style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);"><button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button><h3 style="font-size:16px;font-weight:700;">✓ Верификация</h3></div>'
@@ -3645,7 +3648,6 @@ function submitVerifyCode() {
 window.submitVerifyCode = submitVerifyCode;
 
 /* ── ADD VERIFY TAB TO ADMIN PANEL ── */
-// Extend admin tabs with verify codes
 var _origLoadTab = loadTab;
 window.loadTab = function(tab) {
   if (tab === 'verify') {
@@ -3675,20 +3677,11 @@ socket.on('adminVerifyCodes', function(rows) {
   }).join('');
 });
 
-// verify tab already in HTML
-
-/* ── ADD DIALOG BG BUTTON TO CHAT HEADER - handled in openPM/openRoom directly ── */
 function buildFwdHeader(msg) {
   if (!msg.fwd_from_nick) return '';
   return '<div class="fwd-header">📤 Переслано от: ' + escHtml(msg.fwd_from_nick) + '</div>';
 }
 
-/* ── PATCH addMsg / addPM / addRoomMsg to show fwd_header and edited tag ── */
-var _origAddMsg = addMsg;
-// We can't easily wrap addMsg since it's a plain function; instead override via rebuild
-// The edited tag and fwd header will be added by server — handled in messageEdited event above
-
-// Patch buildMsgTime to also show read count for room messages
 var _origBuildMsgTime = buildMsgTime;
 window.buildMsgTime = function(ts, msgId, isRoom, isMine) {
   if (!ts) return '';
@@ -3730,7 +3723,6 @@ function toggleEmojiPanel() {
   panel.style.display = emojiPanelOpen ? 'block' : 'none';
   if (emojiPanelOpen) {
     showEmojiTab('emoji');
-    // position panel above input area
     var inputArea = document.getElementById('inputArea');
     var rect = inputArea.getBoundingClientRect();
     panel.style.bottom = (window.innerHeight - rect.top) + 'px';
@@ -3767,13 +3759,11 @@ function insertEmoji(emoji) {
   inp.value = inp.value.slice(0, pos) + emoji + inp.value.slice(pos);
   inp.focus();
   inp.selectionStart = inp.selectionEnd = pos + emoji.length;
-  // Close panel
   document.getElementById('emojiPanel').style.display = 'none';
   emojiPanelOpen = false;
 }
 
 function sendSticker(emoji) {
-  // Send sticker as a message
   var msgObj = { type: 'sticker', text: emoji, timestamp: Date.now() };
   if (currentView === 'pm' && currentPrivateLogin) {
     socket.emit('privateMessage', { toLogin: currentPrivateLogin, text: emoji, type: 'sticker' });
@@ -3786,7 +3776,6 @@ function sendSticker(emoji) {
   emojiPanelOpen = false;
 }
 
-// Close emoji panel when clicking outside
 document.addEventListener('click', function(e) {
   var panel = document.getElementById('emojiPanel');
   var btn = document.getElementById('emojiPanelBtn');
@@ -3824,12 +3813,28 @@ document.getElementById('fileInput').addEventListener('change', function() {
   self.value = '';
 });
 
-/* duplicate video handler removed */
+(function() {
+  var origPhotoHandler = document.getElementById('photoInput').onchange;
+  document.getElementById('photoInput').addEventListener('change', function() {
+    var files = Array.from(this.files);
+    var videos = files.filter(function(f) { return f.type.startsWith('video/'); });
+    var images = files.filter(function(f) { return f.type.startsWith('image/'); });
+    
+    videos.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(ev) {
+        var payload = { type: 'video', text: file.name, file_url: ev.target.result, file_name: file.name, file_size: file.size };
+        if (currentView === 'pm' && currentPrivateLogin) { socket.emit('privateMessage', Object.assign({toLogin:currentPrivateLogin}, payload)); }
+        else if (currentView === 'room' && currentRoomId) { socket.emit('roomMessage', Object.assign({roomId:currentRoomId}, payload)); }
+        else if (currentView === 'general') { socket.emit('chatMessage', payload); }
+      };
+      reader.readAsDataURL(file);
+    });
+  }, true); 
+})();
 
-// Render video/file messages - patch addMsg
 (function() {
   var _buildContent = window.buildMsgContent;
-  
   function buildFileHtml(msg) {
     if (msg.type === 'video' && (msg.file_url || msg.image)) {
       return '<video src="' + (msg.file_url || msg.image) + '" controls style="max-width:280px;max-height:220px;border-radius:10px;display:block;margin-top:4px;"></video>' + (msg.file_name ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 ' + msg.file_name + '</div>' : '');
@@ -3843,7 +3848,6 @@ document.getElementById('fileInput').addEventListener('change', function() {
     }
     return null;
   }
-  
   window._buildFileHtml = buildFileHtml;
 })();
 
@@ -3866,7 +3870,6 @@ socket.on('storiesData', function(stories) {
 });
 
 socket.on('newStory', function(story) {
-  // Add to top if not already there
   var existing = allStories.findIndex(function(s){ return s.id === story.id; });
   if (existing === -1) {
     allStories.unshift(story);
@@ -3880,6 +3883,10 @@ socket.on('storyDeleted', function(d) {
 });
 
 socket.on('storyResult', function(d) {
+  var btns = document.querySelectorAll('#addStoryModal button');
+  var pubBtn = btns[btns.length - 1];
+  if(pubBtn) { pubBtn.textContent = 'Опубликовать'; pubBtn.disabled = false; }
+
   if (d.ok) { closeAddStory(); loadStories(); }
   else alert('Ошибка: ' + (d.msg||'неизвестно'));
 });
@@ -3891,7 +3898,6 @@ function renderStoriesBar(stories) {
   row.innerHTML = '';
   row.appendChild(addBtn);
   
-  // Group by user
   var byUser = {};
   stories.forEach(function(s) {
     if (!byUser[s.user_login]) byUser[s.user_login] = [];
@@ -3914,7 +3920,6 @@ function renderStoriesBar(stories) {
     var idx = allStories.findIndex(function(s){ return s.user_login === login; });
     div.onclick = function() { openStoryViewer(idx); };
     if (isMe && userStories.length > 0) {
-      // Long-press to delete own story
       div.addEventListener('contextmenu', function(e) {
         e.preventDefault();
         if (confirm('Удалить историю?')) {
@@ -3930,7 +3935,7 @@ function openAddStory() {
   storyFileData = null;
   storyFileType = 'image';
   var inp = document.getElementById('storyFileInput');
-  if (inp) inp.value = ''; // Reset so same file can be re-selected
+  if (inp) inp.value = '';
   var zone = document.getElementById('storyPickZone');
   if (zone) zone.style.borderColor = '';
   var prev = document.getElementById('storyPreview');
@@ -3951,10 +3956,14 @@ document.getElementById('storyFileInput').addEventListener('change', function() 
   storyFileType = file.type.startsWith('video/') ? 'video' : 'image';
   var zone = document.getElementById('storyPickZone');
   if (zone) zone.style.borderColor = 'var(--accent)';
+  
+  // FIX: ИНДИКАТОР ЗАГРУЗКИ В ИСТОРИИ
+  var prev = document.getElementById('storyPreview');
+  if (prev) prev.innerHTML = '⏳<br><span style="font-size:13px;">Обработка файла... Подождите пару секунд</span>';
+  
   var reader = new FileReader();
   reader.onload = function(ev) {
     storyFileData = ev.target.result;
-    var prev = document.getElementById('storyPreview');
     if (storyFileType === 'video') {
       prev.innerHTML = '<video src="' + storyFileData + '" style="max-width:100%;max-height:130px;border-radius:10px;display:block;" controls></video><div style="font-size:12px;color:var(--accent);margin-top:6px;font-weight:600;">✓ Видео выбрано</div>';
     } else {
@@ -3962,11 +3971,18 @@ document.getElementById('storyFileInput').addEventListener('change', function() 
     }
   };
   reader.readAsDataURL(file);
+  this.value = '';
 });
 
 function submitStory() {
   if (!storyFileData) { alert('Выбери фото или видео'); return; }
   var text = document.getElementById('storyTextInput').value.trim();
+  
+  // FIX: БЛОКИРОВКА КНОПКИ
+  var btns = document.querySelectorAll('#addStoryModal button');
+  var pubBtn = btns[btns.length - 1];
+  if(pubBtn) { pubBtn.textContent = 'Отправка...'; pubBtn.disabled = true; }
+  
   socket.emit('addStory', { mediaUrl: storyFileData, mediaType: storyFileType, text: text || null });
 }
 
@@ -3981,10 +3997,8 @@ function showStory(idx) {
   currentStoryIdx = idx;
   var s = allStories[idx];
   
-  // Mark as viewed
   socket.emit('viewStory', { storyId: s.id });
   
-  // Render
   var content = document.getElementById('storyViewerContent');
   if (s.media_type === 'video') {
     content.innerHTML = '<video src="' + s.media_url + '" autoplay controls style="max-width:100vw;max-height:80vh;border-radius:8px;"></video>';
@@ -3996,7 +4010,6 @@ function showStory(idx) {
   document.getElementById('storyViewerMeta').textContent = (s.user_nickname||s.user_login) + ' • ' + ts.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
   document.getElementById('storyViewerText').textContent = s.text || '';
   
-  // Progress bar
   clearTimeout(storyTimer);
   var prog = document.getElementById('storyProgress');
   prog.style.transition = 'none';
@@ -4024,12 +4037,6 @@ function closeStoryViewer() {
   document.getElementById('storyViewerContent').innerHTML = '';
 }
 
-// Load stories on auth
-socket.on('authSuccess', function() { /* stories loaded after authSuccess */ });
-
-// ============================================================
-// RENDER STICKERS/VIDEO/FILE in messages - patch addMsg, addPM, addRoomMsg
-// ============================================================
 (function() {
   function patchMsgText(msg, htmlText) {
     if (msg.type === 'sticker') {
@@ -4045,16 +4052,12 @@ socket.on('authSuccess', function() { /* stories loaded after authSuccess */ });
       var sz = msg.file_size ? ' (' + Math.round(msg.file_size/1024) + ' KB)' : '';
       return htmlText + '<a href="' + msg.file_url + '" download="' + (msg.file_name||'file') + '" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">' + (msg.file_name||'Файл') + '</div><div style="font-size:11px;color:var(--text-muted);">' + sz + '</div></div></a>';
     }
-    return null; // no override
+    return null; 
   }
   window._patchMsgText = patchMsgText;
 })();
 
-// ============================================================
-// FINALIZE: load stories after login
-// ============================================================
 var _origAuthSuccess = socket.listeners ? null : null;
-// We add a separate handler just to load stories + show stories bar
 var _authSuccessOnce = false;
 socket.on('authSuccess', function() {
   if (!_authSuccessOnce) { 
@@ -4068,7 +4071,6 @@ socket.on('authSuccess', function() {
 <div id="addStoryModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);z-index:9999;align-items:center;justify-content:center;">
   <div style="background:var(--bg-sidebar);border-radius:16px;padding:24px;width:320px;max-width:92vw;max-height:90vh;overflow-y:auto;">
     <h3 style="margin:0 0 16px;font-size:16px;color:var(--text-primary);">📸 Добавить историю</h3>
-    <!-- File pick area: transparent input covers entire zone, no overflow:hidden -->
     <label for="storyFileInput" id="storyPickZone" style="position:relative;width:100%;min-height:100px;border:2px dashed var(--text-muted);border-radius:14px;cursor:pointer;margin-bottom:14px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
       <div id="storyPreview" style="color:var(--text-muted);text-align:center;padding:20px;font-size:14px;line-height:1.8;pointer-events:none;">📷<br><span style="font-size:13px;">Нажми для выбора фото/видео</span></div>
       <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:absolute;width:1px;height:1px;opacity:0;">
