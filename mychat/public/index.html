@@ -1012,7 +1012,7 @@ function renderSettingsMain() {
   body.innerHTML = `
     <div class="settings-avatar-section">
       <div style="position:relative;">${avatarHtml}</div>
-      <div class="settings-nickname">${myNickname||'—'}</div>
+      <div class="settings-nickname">${getNickWithEmoji(myLogin, myNickname)||'—'}</div>
       <div class="settings-login">${myUsername?'@'+myUsername:'@'+myLogin}</div>
     </div>
     <div class="settings-section-title">Аккаунт</div>
@@ -1970,6 +1970,7 @@ function openGeneral(){
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
+  document.getElementById('messages').dataset.loading='general';
   socket.emit('getGeneralHistory');
 }
 window.openGeneral=openGeneral;
@@ -2062,7 +2063,7 @@ function openPM(login,nickname){
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
   document.getElementById('inputArea').style.display='flex';
-  document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
+  var _md=document.getElementById('messages');_md.innerHTML='<div class="empty-list">Загрузка...</div>';_md.dataset.loading='pm';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   _pmToken++; var _myPmToken=_pmToken; socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
@@ -2104,6 +2105,9 @@ socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('В�
 socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
+  // Guard: ignore if user switched away to a different room or PM
+  if(currentView==='pm'||currentView==='general'||currentView==='all'||currentView==='private')return;
+  if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2326,7 +2330,9 @@ window.delPM=delPM;
 /* ── GENERAL CHAT ── */
 socket.on('messageHistory',function(msgs){
   if(currentView!=='general')return;
-  var md=document.getElementById('messages');md.innerHTML='';
+  var md=document.getElementById('messages');
+  if(md.dataset.loading!=='general')return; // switched away before response
+  md.innerHTML='';
   if(msgs.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
   else msgs.forEach(function(m){addMsg(m);});
   md.scrollTop=md.scrollHeight;
@@ -4048,7 +4054,7 @@ socket.on('authSuccess', function() {
     <!-- File pick area: transparent input covers entire zone, no overflow:hidden -->
     <label for="storyFileInput" id="storyPickZone" style="position:relative;width:100%;min-height:100px;border:2px dashed var(--text-muted);border-radius:14px;cursor:pointer;margin-bottom:14px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
       <div id="storyPreview" style="color:var(--text-muted);text-align:center;padding:20px;font-size:14px;line-height:1.8;pointer-events:none;">📷<br><span style="font-size:13px;">Нажми для выбора фото/видео</span></div>
-      <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+      <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:absolute;width:1px;height:1px;opacity:0;">
     </label>
     <div style="margin-bottom:12px;">
       <input type="text" id="storyTextInput" placeholder="Подпись (необязательно)" style="display:block;width:100%;padding:10px 12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;font-family:inherit;">
