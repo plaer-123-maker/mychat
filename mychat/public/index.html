@@ -1804,7 +1804,7 @@ function switchToPrivate(){
   document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
+  var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';_msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyChats');
 }
@@ -2070,6 +2070,8 @@ function openPM(login,nickname){
   var _md=document.getElementById('messages');
   _md.innerHTML='<div class="empty-list">Загрузка...</div>';
   _md.dataset.loading='pm';
+  _md.dataset.forLogin=login; // Mark who this messages div is waiting for
+  _md.dataset.forToken=String(_myPmToken);
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
@@ -2216,11 +2218,15 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // STRICT guard: must be in PM mode, correct chat, AND token must match exactly
+  // TRIPLE guard: global state + div data attributes + token
   if(currentView!=='pm')return;
   if(currentPrivateLogin!==d.otherLogin)return;
-  if(d.token!==_pmToken)return; // always check token - 0 means mismatch too
-  var md=document.getElementById('messages');md.innerHTML='';
+  if(d.token!==_pmToken)return;
+  var md=document.getElementById('messages');
+  // Extra check: the div itself must be waiting for this exact login+token
+  if(md.dataset.forLogin!==d.otherLogin)return;
+  if(md.dataset.forToken && String(d.token)!==md.dataset.forToken)return;
+  md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
   md.scrollTop=md.scrollHeight;
