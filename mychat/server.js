@@ -874,14 +874,16 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); socket.emit('myChats', []); }
   });
 
-  socket.on('getPrivateHistory', async (otherLogin) => {
+  socket.on('getPrivateHistory', async (data) => {
+    var otherLogin = typeof data === 'string' ? data : data.login;
+    var token = typeof data === 'object' ? data.token : null;
     if (!socket.userLogin) return;
     try {
       const res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 200', [socket.userLogin, otherLogin]);
       const now = Date.now();
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
       await pool.query('UPDATE private_messages SET read=true, read_at=$1 WHERE from_login=$2 AND to_login=$3 AND read=false', [now, otherLogin, socket.userLogin]);
-      socket.emit('privateHistory', { otherLogin, messages: res.rows });
+      socket.emit('privateHistory', { otherLogin, messages: res.rows, token });
       // Fix: immediately notify client to clear unread badge
       socket.emit('clearUnreadBadge', { login: otherLogin });
       if (unreadRes.rows.length > 0) {

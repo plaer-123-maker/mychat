@@ -1361,7 +1361,7 @@ window.doLogout = doLogout;
 /* SOCKET & APP */
 
 var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
-currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,
+currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,_pmToken=0,_roomToken=0,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
 currentAdminTab='stats',typingTimeout=null,searchTimeout=null,
 replyTo=null,myVipUntil=0,myVipEmoji=null,myVerified=false,
@@ -1657,7 +1657,8 @@ socket.on('authSuccess',function(d){
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
   switchToGeneral();
   // Refresh chats on login
-  switchToAll();
+  socket.emit('getMyChats');
+  socket.emit('getMyRooms');
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');
@@ -1774,8 +1775,6 @@ function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forE
 
 function switchToAll(){
   currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
-  socket.emit('getMyChats');
-  socket.emit('getMyRooms');
   setActiveTab('tabAll');
   document.getElementById('searchInput').value='';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
@@ -1961,7 +1960,6 @@ socket.on('myRooms',function(rooms){
 
 function openGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
-  var md=document.getElementById('messages');if(md)md.dataset.historyLoaded='';
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
@@ -2066,7 +2064,7 @@ function openPM(login,nickname){
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  socket.emit('getPrivateHistory',login);
+  _pmToken++; var _myPmToken=_pmToken; socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
   // Dialog background
@@ -2207,6 +2205,7 @@ window.closeAllModals=closeAllModals;
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
   if(currentView!=='pm'||currentPrivateLogin!==d.otherLogin)return;
+  if(d.token && d.token !== _pmToken)return; // stale response
   var md=document.getElementById('messages');md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
@@ -2327,10 +2326,7 @@ window.delPM=delPM;
 /* ── GENERAL CHAT ── */
 socket.on('messageHistory',function(msgs){
   if(currentView!=='general')return;
-  var md=document.getElementById('messages');
-  if(md.dataset.historyLoaded==='1')return;
-  md.dataset.historyLoaded='1';
-  md.innerHTML='';
+  var md=document.getElementById('messages');md.innerHTML='';
   if(msgs.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
   else msgs.forEach(function(m){addMsg(m);});
   md.scrollTop=md.scrollHeight;
@@ -4050,10 +4046,10 @@ socket.on('authSuccess', function() {
   <div style="background:var(--bg-sidebar);border-radius:16px;padding:24px;width:320px;max-width:92vw;max-height:90vh;overflow-y:auto;">
     <h3 style="margin:0 0 16px;font-size:16px;color:var(--text-primary);">📸 Добавить историю</h3>
     <!-- File pick area: transparent input covers entire zone, no overflow:hidden -->
-    <div id="storyPickZone" style="position:relative;width:100%;min-height:100px;border:2px dashed var(--text-muted);border-radius:14px;cursor:pointer;margin-bottom:14px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;" onclick="document.getElementById('storyFileInput').click()">
+    <label for="storyFileInput" id="storyPickZone" style="position:relative;width:100%;min-height:100px;border:2px dashed var(--text-muted);border-radius:14px;cursor:pointer;margin-bottom:14px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
       <div id="storyPreview" style="color:var(--text-muted);text-align:center;padding:20px;font-size:14px;line-height:1.8;pointer-events:none;">📷<br><span style="font-size:13px;">Нажми для выбора фото/видео</span></div>
-      <input type="file" id="storyFileInput" accept="image/*,video/*" style="display:none;">
-    </div>
+      <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+    </label>
     <div style="margin-bottom:12px;">
       <input type="text" id="storyTextInput" placeholder="Подпись (необязательно)" style="display:block;width:100%;padding:10px 12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;font-family:inherit;">
     </div>
