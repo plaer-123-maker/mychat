@@ -1799,26 +1799,40 @@ function switchToPrivate(){
   currentView='private';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabPrivate');
   document.getElementById('searchInput').value='';
-  document.getElementById('mainChat').classList.remove('show');
+  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  document.getElementById('mobileBackBtn').style.display='none';
   var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';
   _msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';_msgDiv.dataset.loading='';
-  if(latestChats&&latestChats.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
+  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  // ВАЖНО: Всегда очищать sidebar перед загрузкой, 
+  // чтобы не показывались "Общий чат", группы или каналы
+  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   socket.emit('getMyChats');
-  // Fallback: if no response in 3s, show empty state
-  setTimeout(function(){if(currentView==='private'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}},3000);
+  // Fallback: если нет ответа 3 сек — из кэша или "нет чатов"
+  setTimeout(function(){
+    if(currentView==='private'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){
+      if(latestChats&&latestChats.length>0){renderChatList();}
+      else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет переписок. Найди человека через поиск ☝️</div>';}
+    }
+  },3000);
 }
 function switchToRooms(){
   currentView='rooms';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
-  document.getElementById('mainChat').classList.remove('show');
+  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
-  document.getElementById('mobileBackBtn').style.display='none';
-  if(latestRooms&&latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
+  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  // ВАЖНО: Всегда очищать sidebar перед загрузкой
+  document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
   socket.emit('getMyRooms');
+  setTimeout(function(){
+    if(currentView==='rooms'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){
+      if(latestRooms&&latestRooms.length>0){renderChatList();}
+      else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет групп. Создай ➕ или найди через поиск</div>';}
+    }
+  },3000);
 }
 
 document.getElementById('searchInput').addEventListener('input',function(){
@@ -1934,13 +1948,21 @@ function renderChatList() {
     latestChats.filter(function(c){return !pinnedLogins.includes(c.login);}).forEach(function(c){html+=buildChatItem(c,false,'pm');});
     latestRooms.filter(function(r){return !pinnedRoomIds.includes(String(r.id));}).forEach(function(r){html+=buildChatItem(r,false,'room');});
     list.innerHTML=html;
+  } else {
+    // Неизвестный view (general, none и т.д.) — не трогаем sidebar
+    return;
   }
 }
 
 socket.on('myChats',function(chats){
   latestChats=chats;
   window._myChatsCache = chats; // cache for forward modal
-  if(currentView==='private'||currentView==='pm'||currentView==='all'){
+  // Рендерим только если мы на вкладке личных или всех чатов
+  // НЕ рендерим если currentView='general', 'rooms', 'room', 'none' - это предотвращает
+  // появление "Общий чат" или групп в разделе "Личные"
+  if(currentView==='private'||currentView==='pm'){
+    if(!document.getElementById('searchInput').value.trim()) renderChatList();
+  } else if(currentView==='all'){
     if(!document.getElementById('searchInput').value.trim()) renderChatList();
   }
 });
@@ -1961,14 +1983,16 @@ socket.on('unreadNotification',function(d){
 
 socket.on('myRooms',function(rooms){
   latestRooms=rooms;
-  if(currentView!=='rooms'&&currentView!=='room'&&currentView!=='all')return;
-  if(document.getElementById('searchInput').value.trim())return;
-  renderChatList();
+  // Рендерим только для правильных вкладок
+  if(currentView==='rooms'||currentView==='room'||currentView==='all'){
+    if(!document.getElementById('searchInput').value.trim()) renderChatList();
+  }
 });
 
 function openGeneral(){
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  setActiveTab('tabGeneral');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
