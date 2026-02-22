@@ -4,12 +4,23 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
+const { OAuth2Client } = require('google-auth-library');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 25e6 });
 
 app.use(express.static('public'));
+app.use(express.json());
+
+// Config endpoint — tells frontend what features are enabled
+app.get('/config', (req, res) => {
+  res.json({
+    googleClientId: process.env.GOOGLE_CLIENT_ID || null,
+    emailEnabled: EMAIL_ENABLED
+  });
+});
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -17,6 +28,34 @@ const pool = new Pool({
 });
 
 const ADMIN_LOGIN = 'pekka';
+
+// ── EMAIL CONFIG ──────────────────────────────────────────
+// Set these env vars in Railway: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM
+const EMAIL_ENABLED = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+let mailer = null;
+if (EMAIL_ENABLED) {
+  mailer = nodemailer.createTransport({
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT || '587'),
+    secure: process.env.EMAIL_PORT === '465',
+    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+  });
+}
+async function sendEmail(to, subject, html) {
+  if (!mailer) return false;
+  try {
+    await mailer.sendMail({ from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to, subject, html });
+    return true;
+  } catch(e) { console.error('Email error:', e.message); return false; }
+}
+
+// ── GOOGLE OAUTH CONFIG ───────────────────────────────────
+// Set GOOGLE_CLIENT_ID in Railway env vars
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+
+// Email verification codes (in-memory, short TTL)
+const pendingEmailVerifications = new Map(); // code -> { login, password, nickname, email, expiresAt }
 
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -165,6 +204,22 @@ async function initDB() {
     UNIQUE(user_login, chat_type, chat_id)
   )`);
 
+  // Email verification
+  await pool.query(`CREATE TABLE IF NOT EXISTS pending_registrations (
+    id SERIAL PRIMARY KEY,
+    login VARCHAR(50) NOT NULL,
+    nickname VARCHAR(50) NOT NULL,
+    email VARCHAR(200) NOT NULL,
+    password_hash VARCHAR(200) NOT NULL,
+    code VARCHAR(10) NOT NULL,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL
+  )`);
+  // User email field
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(200) DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(200) DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_method VARCHAR(20) DEFAULT \'password\''); } catch(e) {}
   // Stories
   await pool.query(`CREATE TABLE IF NOT EXISTS stories (
     id SERIAL PRIMARY KEY,
@@ -263,24 +318,170 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
 
-  socket.on('register', async ({ login, password, nickname }) => {
+  // ── REGISTER WITH EMAIL VERIFICATION ─────────────────────
+  socket.on('register', async ({ login, password, nickname, email }) => {
     try {
       if (!login || !password || !nickname) return socket.emit('authError', 'Заполни все поля');
+      login = login.trim().toLowerCase();
+      nickname = nickname.trim();
+      email = (email || '').trim().toLowerCase();
+
+      // Validate login
+      if (!/^[a-z0-9_]{3,30}$/.test(login)) return socket.emit('authError', 'Логин: 3-30 символов, только a-z, 0-9, _');
+      if (password.length < 6) return socket.emit('authError', 'Пароль минимум 6 символов');
+      if (nickname.length < 2 || nickname.length > 30) return socket.emit('authError', 'Ник 2-30 символов');
+
       const exists = await pool.query('SELECT id FROM users WHERE login=$1', [login]);
       if (exists.rows.length > 0) return socket.emit('authError', 'Этот логин уже занят');
       const nickExists = await pool.query('SELECT id FROM users WHERE LOWER(nickname)=LOWER($1)', [nickname]);
       if (nickExists.rows.length > 0) return socket.emit('authError', 'Этот ник уже занят');
+
       const hash = await bcrypt.hash(password, 10);
+
+      // If email provided and mailer configured → send verification code
+      if (email && EMAIL_ENABLED) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return socket.emit('authError', 'Неверный формат email');
+        const emailExists = await pool.query('SELECT id FROM users WHERE email=$1', [email]);
+        if (emailExists.rows.length > 0) return socket.emit('authError', 'Email уже используется');
+
+        // Clean old pending
+        await pool.query('DELETE FROM pending_registrations WHERE login=$1 OR email=$2', [login, email]);
+
+        const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
+        const now = Date.now();
+        const expires = now + 15 * 60000; // 15 min
+        await pool.query('INSERT INTO pending_registrations (login,nickname,email,password_hash,code,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [login, nickname, email, hash, code, now, expires]);
+
+        const html = `<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;">
+          <h2 style="color:#2ea9df;">MyChat — Подтверждение регистрации</h2>
+          <p>Привет, <b>\${nickname}</b>! Для завершения регистрации введи этот код:</p>
+          <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;background:#f0f4f8;border-radius:12px;margin:20px 0;">\${code}</div>
+          <p style="color:#666;">Код действителен 15 минут. Если ты не регистрировался — проигнорируй это письмо.</p>
+        </div>`;
+
+        const sent = await sendEmail(email, 'MyChat — Код подтверждения: ' + code, html);
+        if (!sent) return socket.emit('authError', 'Не удалось отправить email. Попробуй без почты.');
+
+        socket.emit('emailVerificationRequired', { login, email });
+        return;
+      }
+
+      // Registration without email (or email disabled)
       const role = login === ADMIN_LOGIN ? 'admin' : 'user';
       const token = generateToken();
-      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token) VALUES ($1,$2,$3,false,0,$4,$5)', [login, hash, nickname, role, token]);
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,$7,$8)',
+        [login, hash, nickname, role, token, email || null, email ? false : null, 'password']);
       socket.username = nickname; socket.userLogin = login; socket.userRole = role;
       onlineUsers.set(socket.id, { nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null });
+      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
       sendOnlineToAll();
       await addLog('register', nickname, 'Registered', ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
+  });
+
+  // ── CONFIRM EMAIL CODE ──────────────────────────────────
+  socket.on('confirmEmailCode', async ({ login, code }) => {
+    try {
+      const row = await pool.query('SELECT * FROM pending_registrations WHERE login=$1 AND code=$2', [login, code.trim()]);
+      if (!row.rows.length) return socket.emit('emailCodeError', 'Неверный код');
+      const pending = row.rows[0];
+      if (Date.now() > pending.expires_at) {
+        await pool.query('DELETE FROM pending_registrations WHERE id=$1', [pending.id]);
+        return socket.emit('emailCodeError', 'Код истёк. Зарегистрируйся снова');
+      }
+      // Create user
+      const role = pending.login === ADMIN_LOGIN ? 'admin' : 'user';
+      const token = generateToken();
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,true,$7)',
+        [pending.login, pending.password_hash, pending.nickname, role, token, pending.email, 'email']);
+      await pool.query('DELETE FROM pending_registrations WHERE id=$1', [pending.id]);
+      socket.username = pending.nickname; socket.userLogin = pending.login; socket.userRole = role;
+      onlineUsers.set(socket.id, { nickname: pending.nickname, login: pending.login, ip });
+      socketUsers.set(socket.id, socket);
+      socket.emit('authSuccess', { nickname: pending.nickname, role, login: pending.login, token, vip_until: 0, vip_emoji: null, verified: false });
+      sendOnlineToAll();
+      await addLog('register', pending.nickname, 'Registered via email', ip);
+    } catch(e) { console.error(e); socket.emit('emailCodeError', 'Ошибка сервера'); }
+  });
+
+  // ── RESEND EMAIL CODE ──────────────────────────────────
+  socket.on('resendEmailCode', async ({ login }) => {
+    try {
+      const row = await pool.query('SELECT * FROM pending_registrations WHERE login=$1', [login]);
+      if (!row.rows.length) return socket.emit('emailCodeError', 'Заявка не найдена');
+      const pending = row.rows[0];
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expires = Date.now() + 15 * 60000;
+      await pool.query('UPDATE pending_registrations SET code=$1, expires_at=$2 WHERE id=$3', [code, expires, pending.id]);
+      const html = `<h2 style="color:#2ea9df;">MyChat — Новый код</h2><p>Твой новый код: <b style="font-size:24px;">\${code}</b></p><p>Действителен 15 минут.</p>`;
+      const sent = await sendEmail(pending.email, 'MyChat — Новый код: ' + code, html);
+      if (sent) socket.emit('emailCodeResent', { ok: true });
+      else socket.emit('emailCodeError', 'Не удалось отправить письмо');
+    } catch(e) { socket.emit('emailCodeError', 'Ошибка'); }
+  });
+
+  // ── GOOGLE OAUTH LOGIN/REGISTER ─────────────────────────
+  socket.on('googleAuth', async ({ idToken }) => {
+    if (!googleClient) return socket.emit('authError', 'Google авторизация не настроена');
+    try {
+      const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_CLIENT_ID });
+      const payload = ticket.getPayload();
+      const googleId = payload.sub;
+      const googleEmail = (payload.email || '').toLowerCase();
+      const googleName = payload.name || payload.given_name || 'User';
+
+      // Check if user exists by google_id
+      let user = await pool.query('SELECT * FROM users WHERE google_id=$1', [googleId]);
+      if (!user.rows.length) {
+        // Check by email
+        user = await pool.query('SELECT * FROM users WHERE email=$1', [googleEmail]);
+      }
+
+      if (user.rows.length > 0) {
+        // Existing user — login
+        const u = user.rows[0];
+        if (u.banned) return socket.emit('authError', 'Аккаунт заблокирован');
+        if (!u.google_id) await pool.query('UPDATE users SET google_id=$1 WHERE id=$2', [googleId, u.id]);
+        const token = generateToken();
+        await pool.query('UPDATE users SET token=$1 WHERE id=$2', [token, u.id]);
+        socket.username = u.nickname; socket.userLogin = u.login; socket.userRole = u.login === ADMIN_LOGIN ? 'admin' : (u.role || 'user');
+        onlineUsers.set(socket.id, { nickname: u.nickname, login: u.login, ip });
+        socketUsers.set(socket.id, socket);
+        socket.emit('authSuccess', { nickname: u.nickname, role: socket.userRole, login: u.login, token, avatar: u.avatar || null, username: u.username || null, verified: u.verified || false, vip_until: u.vip_until || 0, vip_emoji: u.vip_emoji || null });
+        sendOnlineToAll();
+        await addLog('login', u.nickname, 'Login via Google', ip);
+      } else {
+        // New user — need to pick a login/nickname
+        socket.emit('googleNeedSetup', { googleId, email: googleEmail, suggestedName: googleName });
+      }
+    } catch(e) { console.error('Google auth error:', e); socket.emit('authError', 'Ошибка Google авторизации: ' + e.message); }
+  });
+
+  socket.on('googleRegisterSetup', async ({ googleId, email, login, nickname }) => {
+    try {
+      login = (login || '').trim().toLowerCase();
+      nickname = (nickname || '').trim();
+      if (!/^[a-z0-9_]{3,30}$/.test(login)) return socket.emit('authError', 'Логин: 3-30 символов, только a-z, 0-9, _');
+      if (nickname.length < 2 || nickname.length > 30) return socket.emit('authError', 'Ник 2-30 символов');
+      const exists = await pool.query('SELECT id FROM users WHERE login=$1', [login]);
+      if (exists.rows.length > 0) return socket.emit('authError', 'Логин уже занят');
+      const nickExists = await pool.query('SELECT id FROM users WHERE LOWER(nickname)=LOWER($1)', [nickname]);
+      if (nickExists.rows.length > 0) return socket.emit('authError', 'Ник уже занят');
+
+      const fakeHash = await bcrypt.hash(googleId + Date.now(), 8); // unused password
+      const role = login === ADMIN_LOGIN ? 'admin' : 'user';
+      const token = generateToken();
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,google_id,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,true,$7,$8)',
+        [login, fakeHash, nickname, role, token, email || null, googleId, 'google']);
+      socket.username = nickname; socket.userLogin = login; socket.userRole = role;
+      onlineUsers.set(socket.id, { nickname, login, ip });
+      socketUsers.set(socket.id, socket);
+      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
+      sendOnlineToAll();
+      await addLog('register', nickname, 'Registered via Google', ip);
+    } catch(e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
   });
 
   socket.on('login', async ({ login, password }) => {
@@ -452,10 +653,10 @@ io.on('connection', (socket) => {
     // Get vip_emoji for sender
     let vipEmoji = null;
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmoji = ve.rows[0].vip_emoji || null; } catch(e) {}
-    const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
+    const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
-      const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id',
-        [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
+      const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
+        [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       io.emit('chatMessage', msg);
     } catch (e) { console.error(e); }
@@ -621,10 +822,10 @@ io.on('connection', (socket) => {
     } catch(e) {}
     let vipEmojiPM = null;
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiPM = ve.rows[0].vip_emoji || null; } catch(e) {}
-    const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
+    const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
-      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
-        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
+      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
+        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       socket.emit('newPrivateMessage', msg);
       var target = findSocketByLogin(data.toLogin);
@@ -728,9 +929,9 @@ io.on('connection', (socket) => {
       if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
       let vipEmojiR = null;
       try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiR = ve.rows[0].vip_emoji || null; } catch(e) {}
-      var msg = { room_id: roomId, user_login: socket.userLogin, vip_emoji: vipEmojiR, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null };
-      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp, reply_to_id, reply_to_text, reply_to_user) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
-        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user]);
+      var msg = { room_id: roomId, user_login: socket.userLogin, vip_emoji: vipEmojiR, username: socket.username, text: data.text||'', image: data.image||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
+      var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp, reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
+        [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       io.to('room_' + roomId).emit('roomNewMessage', msg);
     } catch(e) { console.error(e); }
