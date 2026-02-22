@@ -817,8 +817,8 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
     </div>
 
     <div class="sidebar-tabs">
-      <button id="tabAll">Все</button>
-      <button class="active" id="tabGeneral">Общий</button>
+      <button class="active" id="tabAll">Все</button>
+      <button id="tabGeneral">Общий</button>
       <button id="tabPrivate">Личные</button>
       <button id="tabRooms">Группы</button>
     </div>
@@ -1639,6 +1639,7 @@ socket.on('authSuccess',function(d){
   myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
   myAvatar=d.avatar||null;myUsername=d.username||null;
   myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;myVerified=d.verified||false;
+  if(myVipEmoji)vipEmojiCache[myLogin]=myVipEmoji;
   if(d.verified)verifiedCache[d.login]=true;
   if(d.vip_emoji)vipEmojiCache[d.login]=d.vip_emoji;
   if(d.avatar)avatarCache[d.login]=d.avatar;
@@ -1656,8 +1657,7 @@ socket.on('authSuccess',function(d){
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
   switchToGeneral();
   // Refresh chats on login
-  socket.emit('getMyChats');
-  socket.emit('getMyRooms');
+  switchToAll();
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');
@@ -1774,6 +1774,8 @@ function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forE
 
 function switchToAll(){
   currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  socket.emit('getMyChats');
+  socket.emit('getMyRooms');
   setActiveTab('tabAll');
   document.getElementById('searchInput').value='';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
@@ -1785,10 +1787,7 @@ function switchToAll(){
 
 function renderAllChats(){
   if(currentView!=='all')return;
-  var list=document.getElementById('sidebarList');
-  list.innerHTML='<div class="empty-list">Загрузка...</div>';
-  socket.emit('getMyChats');
-  socket.emit('getMyRooms');
+  renderChatList();
 }
 
 function switchToGeneral(){
@@ -1962,6 +1961,7 @@ socket.on('myRooms',function(rooms){
 
 function openGeneral(){
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  var md=document.getElementById('messages');if(md)md.dataset.historyLoaded='';
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
@@ -2327,7 +2327,10 @@ window.delPM=delPM;
 /* ── GENERAL CHAT ── */
 socket.on('messageHistory',function(msgs){
   if(currentView!=='general')return;
-  var md=document.getElementById('messages');md.innerHTML='';
+  var md=document.getElementById('messages');
+  if(md.dataset.historyLoaded==='1')return;
+  md.dataset.historyLoaded='1';
+  md.innerHTML='';
   if(msgs.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
   else msgs.forEach(function(m){addMsg(m);});
   md.scrollTop=md.scrollHeight;
@@ -4047,9 +4050,9 @@ socket.on('authSuccess', function() {
   <div style="background:var(--bg-sidebar);border-radius:16px;padding:24px;width:320px;max-width:92vw;max-height:90vh;overflow-y:auto;">
     <h3 style="margin:0 0 16px;font-size:16px;color:var(--text-primary);">📸 Добавить историю</h3>
     <!-- File pick area: transparent input covers entire zone, no overflow:hidden -->
-    <div id="storyPickZone" style="position:relative;width:100%;min-height:100px;border:2px dashed var(--text-muted);border-radius:14px;cursor:pointer;margin-bottom:14px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;">
-      <div id="storyPreview" style="color:var(--text-muted);text-align:center;padding:20px;pointer-events:none;font-size:14px;line-height:1.8;">📷<br><span style="font-size:13px;">Нажми для выбора фото/видео</span></div>
-      <input type="file" id="storyFileInput" accept="image/*,video/*" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+    <div id="storyPickZone" style="position:relative;width:100%;min-height:100px;border:2px dashed var(--text-muted);border-radius:14px;cursor:pointer;margin-bottom:14px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;" onclick="document.getElementById('storyFileInput').click()">
+      <div id="storyPreview" style="color:var(--text-muted);text-align:center;padding:20px;font-size:14px;line-height:1.8;pointer-events:none;">📷<br><span style="font-size:13px;">Нажми для выбора фото/видео</span></div>
+      <input type="file" id="storyFileInput" accept="image/*,video/*" style="display:none;">
     </div>
     <div style="margin-bottom:12px;">
       <input type="text" id="storyTextInput" placeholder="Подпись (необязательно)" style="display:block;width:100%;padding:10px 12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-primary);border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;font-family:inherit;">
