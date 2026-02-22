@@ -4,8 +4,10 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
-const { OAuth2Client } = require('google-auth-library');
+let nodemailer = null;
+try { nodemailer = require('nodemailer'); } catch(e) { console.log('nodemailer not installed — email disabled'); }
+let OAuth2Client = null;
+try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { console.log('google-auth-library not installed — Google auth disabled'); }
 
 const app = express();
 const server = http.createServer(app);
@@ -33,7 +35,7 @@ const ADMIN_LOGIN = 'pekka';
 // Set these env vars in Railway: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM
 const EMAIL_ENABLED = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 let mailer = null;
-if (EMAIL_ENABLED) {
+if (EMAIL_ENABLED && nodemailer) {
   mailer = nodemailer.createTransport({
     host: process.env.EMAIL_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.EMAIL_PORT || '587'),
@@ -52,7 +54,7 @@ async function sendEmail(to, subject, html) {
 // ── GOOGLE OAUTH CONFIG ───────────────────────────────────
 // Set GOOGLE_CLIENT_ID in Railway env vars
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || null;
-const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
+const googleClient = (GOOGLE_CLIENT_ID && OAuth2Client) ? new OAuth2Client(GOOGLE_CLIENT_ID) : null;
 
 // Email verification codes (in-memory, short TTL)
 const pendingEmailVerifications = new Map(); // code -> { login, password, nickname, email, expiresAt }
