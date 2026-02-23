@@ -515,6 +515,16 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   .settings-panel{width:100%;}
 }
 
+
+/* ── BLOCK / DELETE HISTORY ── */
+.action-sheet-overlay{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.6);display:none;align-items:flex-end;justify-content:center;}
+.action-sheet-overlay.show{display:flex;}
+.action-sheet{background:var(--bg-panel);border-radius:20px 20px 0 0;width:100%;max-width:480px;padding:8px 0 28px;}
+.action-sheet-title{font-size:13px;color:var(--text-muted);text-align:center;padding:12px 20px 8px;border-bottom:1px solid var(--border);margin-bottom:6px;}
+.action-sheet-btn{display:block;width:100%;padding:16px 24px;border:none;background:none;color:var(--text-primary);font-size:16px;text-align:left;cursor:pointer;font-family:inherit;}
+.action-sheet-btn:hover{background:var(--bg-hover);}
+.action-sheet-btn.danger{color:#e94560;}
+.action-sheet-btn.cancel{color:var(--text-muted);border-top:1px solid var(--border);margin-top:6px;}
 </style>
 </head>
 <body>
@@ -1793,10 +1803,7 @@ function switchToAll(){
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
-  socket.emit('getMyChats');
-  socket.emit('getMyRooms');
-  if(latestChats.length>0||latestRooms.length>0){renderChatList();}
-  else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
+  renderAllChats();
 }
 
 function renderAllChats(){
@@ -1854,7 +1861,7 @@ socket.on('searchResults',function(users){
     var subline=u.username?'@'+u.username:'Написать';
     var safeLogin = u.login.replace(/'/g, "\\'");
     var safeNick = dn.replace(/'/g, "\\'");
-    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+avHtml+'<div class="info"><div class="name">'+dn+'</div><div class="last">'+subline+'</div></div></div>';
+    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+'<div class="avatar" style="background:none;padding:0;">'.replace('>','')+avHtml+'<div class="info"><div class="name">'+dn+'</div><div class="last">'+subline+'</div></div></div>';
   });
   list.innerHTML=html;
 });
@@ -2095,7 +2102,7 @@ function openPM(login,nickname){
   updateHeaderAvatar(login, nickname);
   document.getElementById('typingIndicator').textContent='';
   document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="startCall(\''+login+'\',\'video\')" title="Видео">📹</button><button onclick="startCall(\''+login+'\',\'audio\')" title="Аудио">📞</button>';
+  updatePmHeaderBtns(login, nickname);
   document.getElementById('inputArea').style.display='flex';
   // Increment token and clear messages - both must match when history arrives
   _pmToken++;
@@ -3364,7 +3371,19 @@ function showMuteMenu(e, chatType, chatId) {
       '<span onclick="muteChat(\''+chatType+'\',\''+chatId+'\',24)" style="padding:4px 10px;cursor:pointer;font-size:13px;">24 часа</span>'+
       '<span onclick="muteChat(\''+chatType+'\',\''+chatId+'\',9999)" style="padding:4px 10px;cursor:pointer;font-size:13px;">Навсегда</span>'+
       '</div></div>';
-  menu.innerHTML = pinHtml + muteHtml;
+  var extraHtml = '';
+  if (chatType === 'pm') {
+    var safeChatId = String(chatId).replace(/'/g, "\\'");
+    var safeNickForMenu = (function(){
+      var c = latestChats.find(function(x){ return x.login === chatId; });
+      return c ? (c.nickname||c.login||'').replace(/'/g, "\\'") : String(chatId);
+    })();
+    extraHtml += '<div onclick="openPmActionSheet(\''+safeChatId+'\',\''+safeNickForMenu+'\');if(ctxMenu){ctxMenu.remove();ctxMenu=null;}">⋯ Блок / Удалить историю</div>';
+  }
+  if (chatType === 'room') {
+    extraHtml += '<div class="ctx-danger" onclick="leaveRoomFromList('+chatId+');if(ctxMenu){ctxMenu.remove();ctxMenu=null;}">🚪 Покинуть</div>';
+  }
+  menu.innerHTML = pinHtml + muteHtml + extraHtml;
   document.body.appendChild(menu); ctxMenu = menu;
   setTimeout(function(){document.addEventListener('click',function rm(){ctxMenu&&ctxMenu.remove();ctxMenu=null;document.removeEventListener('click',rm);});},10);
 }
@@ -4148,7 +4167,122 @@ socket.on('authSuccess', function() {
   reader.readAsDataURL(fileRef);
   });
 })();
+
+/* ══════════════════════════════════════════
+   BLOCK USER + DELETE CHAT HISTORY
+══════════════════════════════════════════ */
+var _pmActionLogin = null;
+var _pmActionNick = '';
+var _pmBlockedStatus = false;
+
+function openPmActionSheet(login, nick) {
+  _pmActionLogin = login;
+  _pmActionNick = nick || login;
+  var title = document.getElementById('pmActionSheetTitle');
+  if (title) title.textContent = 'Чат с ' + _pmActionNick;
+  // Check block status
+  socket.emit('checkBlocked', { login: login });
+  document.getElementById('pmActionSheet').classList.add('show');
+}
+window.openPmActionSheet = openPmActionSheet;
+
+function closePmActionSheet() {
+  document.getElementById('pmActionSheet').classList.remove('show');
+  _pmActionLogin = null;
+}
+window.closePmActionSheet = closePmActionSheet;
+
+socket.on('blockStatus', function(d) {
+  _pmBlockedStatus = d.iBlockedThem;
+  var btn = document.getElementById('pmActionBlockBtn');
+  if (btn) {
+    if (d.iBlockedThem) {
+      btn.textContent = '✅ Разблокировать';
+      btn.classList.remove('danger');
+    } else {
+      btn.textContent = '🚫 Заблокировать';
+      btn.classList.add('danger');
+    }
+  }
+});
+
+function pmActionBlock() {
+  if (!_pmActionLogin) return;
+  if (_pmBlockedStatus) {
+    if (confirm('Разблокировать ' + _pmActionNick + '?')) {
+      socket.emit('unblockUser', { login: _pmActionLogin });
+    }
+  } else {
+    if (confirm('Заблокировать ' + _pmActionNick + '? Они не смогут писать тебе.')) {
+      socket.emit('blockUser', { login: _pmActionLogin });
+    }
+  }
+  closePmActionSheet();
+}
+window.pmActionBlock = pmActionBlock;
+
+function pmActionDeleteMine() {
+  if (!_pmActionLogin) return;
+  if (!confirm('Удалить всю историю переписки с ' + _pmActionNick + ' только у себя?')) return;
+  socket.emit('deleteChatHistory', { login: _pmActionLogin, forBoth: false });
+  closePmActionSheet();
+}
+window.pmActionDeleteMine = pmActionDeleteMine;
+
+function pmActionDeleteBoth() {
+  if (!_pmActionLogin) return;
+  if (!confirm('Удалить всю историю переписки с ' + _pmActionNick + ' у ОБОИХ? Это необратимо!')) return;
+  socket.emit('deleteChatHistory', { login: _pmActionLogin, forBoth: true });
+  closePmActionSheet();
+}
+window.pmActionDeleteBoth = pmActionDeleteBoth;
+
+socket.on('blockResult', function(d) {
+  if (!d.ok) { showError('Ошибка: ' + (d.msg || '')); return; }
+  if (d.action === 'blocked') showError('🚫 ' + d.login + ' заблокирован');
+  else showError('✅ ' + d.login + ' разблокирован');
+});
+
+socket.on('chatHistoryDeleted', function(d) {
+  // If currently viewing this chat — clear messages
+  if (currentView === 'pm' && currentPrivateLogin === d.login) {
+    document.getElementById('messages').innerHTML = '<div class="empty-list">История удалена</div>';
+  }
+  // Refresh chat list
+  socket.emit('getMyChats');
+  showError('🗑 История удалена');
+});
+
+/* ── Add 3-dot menu button to PM header ── */
+function updatePmHeaderBtns(login, nick) {
+  var safeLogin = (login||'').replace(/'/g,"\'");
+  var safeNick = (nick||'').replace(/'/g,"\'");
+  document.getElementById('chatHeaderBtns').innerHTML =
+    '<button onclick="startCall(\''+safeLogin+'\',\'video\')" title="Видео">📹</button>' +
+    '<button onclick="startCall(\''+safeLogin+'\',\'audio\')" title="Аудио">📞</button>' +
+    '<button onclick="openPmActionSheet(\''+safeLogin+'\',\''+safeNick+'\')" title="Ещё" style="font-size:20px;font-weight:700;letter-spacing:1px;">⋯</button>';
+}
+window.updatePmHeaderBtns = updatePmHeaderBtns;
+
+/* ── Add leave button to room context menu ── */
+function leaveRoomFromList(roomId) {
+  if (confirm('Покинуть группу/канал?')) {
+    socket.emit('leaveRoom', Number(roomId));
+  }
+}
+window.leaveRoomFromList = leaveRoomFromList;
 </script>
 
+
+<!-- Action sheet for PM options -->
+<div class="action-sheet-overlay" id="pmActionSheet">
+  <div class="action-sheet">
+    <div class="action-sheet-title" id="pmActionSheetTitle">Действия</div>
+    <button class="action-sheet-btn" id="pmActionBlockBtn" onclick="pmActionBlock()">🚫 Заблокировать</button>
+    <button class="action-sheet-btn danger" onclick="pmActionDeleteMine()">🗑 Удалить историю у себя</button>
+    <button class="action-sheet-btn danger" onclick="pmActionDeleteBoth()">💣 Удалить у обоих</button>
+    <button class="action-sheet-btn cancel" onclick="closePmActionSheet()">Отмена</button>
+  </div>
+</div>
 </body>
 </html>

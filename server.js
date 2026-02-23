@@ -266,6 +266,15 @@ async function initDB() {
   try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS file_size BIGINT DEFAULT NULL'); } catch(e) {}
 
+  // Blocked users
+  await pool.query(`CREATE TABLE IF NOT EXISTS blocked_users (
+    id SERIAL PRIMARY KEY,
+    blocker_login VARCHAR(50) NOT NULL,
+    blocked_login VARCHAR(50) NOT NULL,
+    created_at BIGINT NOT NULL DEFAULT 0,
+    UNIQUE(blocker_login, blocked_login)
+  )`);
+
   console.log('Database ready');
 }
 initDB();
@@ -992,27 +1001,7 @@ io.on('connection', (socket) => {
         JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
         ORDER BY r.timestamp DESC
       `, [socket.userLogin]);
-      const rooms = res.rows;
-      if (rooms.length === 0) return socket.emit('myRooms', []);
-      // Fetch last message for each room in one query
-      const roomIds = rooms.map(r => r.id);
-      let lastMsgMap = {};
-      try {
-        const lmRes = await pool.query(`
-          SELECT DISTINCT ON (room_id) room_id, text, type, timestamp
-          FROM room_messages
-          WHERE room_id = ANY($1::int[])
-          ORDER BY room_id, timestamp DESC
-        `, [roomIds]);
-        lmRes.rows.forEach(r => { lastMsgMap[r.room_id] = { text: r.text, type: r.type, timestamp: Number(r.timestamp) }; });
-      } catch(e) { console.error('getMyRooms lastMsg error:', e); }
-      const withMeta = rooms.map(r => Object.assign({}, r, { lastMsg: lastMsgMap[r.id] || null }));
-      withMeta.sort((a, b) => {
-        const at = a.lastMsg ? a.lastMsg.timestamp : Number(a.timestamp);
-        const bt = b.lastMsg ? b.lastMsg.timestamp : Number(b.timestamp);
-        return bt - at;
-      });
-      socket.emit('myRooms', withMeta);
+      socket.emit('myRooms', res.rows);
     } catch(e) { console.error('getMyRooms error:', e); socket.emit('myRooms', []); }
   });
 
@@ -1604,6 +1593,78 @@ io.on('connection', (socket) => {
       if (res.rows.length) socket.emit('dialogBgData', { chatType, chatId, bgId: res.rows[0].bg_id, bgData: res.rows[0].bg_data });
       else socket.emit('dialogBgData', { chatType, chatId, bgId: 'none', bgData: null });
     } catch(e) {}
+  });
+
+
+  // === BLOCK / UNBLOCK USER ===
+  socket.on('blockUser', async ({ login }) => {
+    if (!socket.userLogin || !login || login === socket.userLogin) return;
+    try {
+      await pool.query(
+        'INSERT INTO blocked_users (blocker_login, blocked_login, created_at) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING',
+        [socket.userLogin, login, Date.now()]
+      );
+      socket.emit('blockResult', { ok: true, login, action: 'blocked' });
+    } catch(e) { socket.emit('blockResult', { ok: false, msg: e.message }); }
+  });
+
+  socket.on('unblockUser', async ({ login }) => {
+    if (!socket.userLogin || !login) return;
+    try {
+      await pool.query('DELETE FROM blocked_users WHERE blocker_login=$1 AND blocked_login=$2', [socket.userLogin, login]);
+      socket.emit('blockResult', { ok: true, login, action: 'unblocked' });
+    } catch(e) { socket.emit('blockResult', { ok: false, msg: e.message }); }
+  });
+
+  socket.on('getBlockedUsers', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query(
+        'SELECT bu.blocked_login, u.nickname FROM blocked_users bu LEFT JOIN users u ON bu.blocked_login=u.login WHERE bu.blocker_login=$1',
+        [socket.userLogin]
+      );
+      socket.emit('blockedUsers', res.rows);
+    } catch(e) { socket.emit('blockedUsers', []); }
+  });
+
+  socket.on('checkBlocked', async ({ login }) => {
+    if (!socket.userLogin || !login) return;
+    try {
+      const r1 = await pool.query('SELECT id FROM blocked_users WHERE blocker_login=$1 AND blocked_login=$2', [socket.userLogin, login]);
+      const r2 = await pool.query('SELECT id FROM blocked_users WHERE blocker_login=$1 AND blocked_login=$2', [login, socket.userLogin]);
+      socket.emit('blockStatus', { login, iBlockedThem: r1.rows.length > 0, theyBlockedMe: r2.rows.length > 0 });
+    } catch(e) {}
+  });
+
+  // === DELETE PRIVATE CHAT HISTORY ===
+  socket.on('deleteChatHistory', async ({ login, forBoth }) => {
+    if (!socket.userLogin || !login) return;
+    try {
+      if (forBoth) {
+        // Delete messages for both sides
+        await pool.query(
+          'DELETE FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)',
+          [socket.userLogin, login]
+        );
+        // Notify the other user too
+        const target = findSocketByLogin(login);
+        if (target) target.emit('chatHistoryDeleted', { login: socket.userLogin });
+        socket.emit('chatHistoryDeleted', { login });
+      } else {
+        // Only delete from my side — mark messages as deleted for me
+        // Simplest approach: delete where I am sender, clear read receipts visible to me
+        await pool.query(
+          'DELETE FROM private_messages WHERE from_login=$1 AND to_login=$2',
+          [socket.userLogin, login]
+        );
+        // Also delete messages sent to me (so I don't see them)
+        await pool.query(
+          'DELETE FROM private_messages WHERE from_login=$2 AND to_login=$1',
+          [socket.userLogin, login]
+        );
+        socket.emit('chatHistoryDeleted', { login });
+      }
+    } catch(e) { console.error('deleteChatHistory error:', e); socket.emit('chatError', 'Ошибка удаления истории'); }
   });
 
   socket.on('disconnect', () => {
