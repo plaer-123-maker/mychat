@@ -1652,13 +1652,16 @@ socket.on('authSuccess',function(d){
   socket.emit('getMutedChats');
   // init notifications
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
-  // При логине грузим данные для кэша сразу, потом открываем нужную вкладку
+  // Данные из localStorage кэша уже в latestChats/latestRooms
+  // Показываем UI мгновенно, сервер тихо обновит в фоне
+  switchToAll();
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
-  switchToAll();
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');
+  localStorage.removeItem('_myChatsCache');
+  localStorage.removeItem('_myRoomsCache');
   var shown = false;
   ['loginError','registerError','googleSetupError'].forEach(function(id){
     var el = document.getElementById(id);
@@ -1730,7 +1733,7 @@ socket.on('userVipUpdated',function(d){
   }
   if(currentView!=='general'&&currentView!=='none') renderChatList();
 });
-socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
+socket.on('kicked',function(m){localStorage.removeItem('mychat_token');localStorage.removeItem('_myChatsCache');localStorage.removeItem('_myRoomsCache');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
 socket.on('avatarChanged',function(av){myAvatar=av;if(av)avatarCache[myLogin]=av;else delete avatarCache[myLogin];});
 socket.on('usernameChanged',function(un){myUsername=un;});
@@ -1849,7 +1852,18 @@ socket.on('roomSearchResults',function(rooms){
 });
 
 // Store latest chats/rooms for unified view
-var latestChats=[], latestRooms=[];
+// === КЭШИРУЕМ В localStorage ДЛЯ МГНОВЕННОЙ ЗАГРУЗКИ ===
+var latestChats = [], latestRooms = [];
+(function(){
+  try {
+    var cc = localStorage.getItem('_myChatsCache');
+    if(cc) latestChats = JSON.parse(cc);
+  } catch(e) { latestChats = []; }
+  try {
+    var rc = localStorage.getItem('_myRoomsCache');
+    if(rc) latestRooms = JSON.parse(rc);
+  } catch(e) { latestRooms = []; }
+})();
 
 function buildChatItem(c, isPinned, chatType) {
   if(c.avatar) avatarCache[c.login||''] = c.avatar;
@@ -1943,7 +1957,7 @@ function renderChatList() {
 socket.on('myChats',function(chats){
   latestChats=chats;
   window._myChatsCache = chats;
-  // Тихо обновляем список только для подходящих вкладок
+  try { localStorage.setItem('_myChatsCache', JSON.stringify(chats)); } catch(e) {}
   if((currentView==='private'||currentView==='pm'||currentView==='all')&&!document.getElementById('searchInput').value.trim()){
     renderChatList();
   }
@@ -1957,13 +1971,14 @@ var onlineLogins = new Set();
 
 socket.on('unreadNotification',function(d){
   if(currentView==='pm'&&currentPrivateLogin===d.from)return;
-  if(currentView==='private'||currentView==='pm'||currentView==='all')socket.emit('getMyChats');
-  // Push notification
+  // Обновляем кэш в фоне (не прерывая текущий view)
+  socket.emit('getMyChats');
   sendNotification(d.nickname||'Новое сообщение','Написал тебе в MyChat');
 });
 
 socket.on('myRooms',function(rooms){
   latestRooms=rooms;
+  try { localStorage.setItem('_myRoomsCache', JSON.stringify(rooms)); } catch(e) {}
   if((currentView==='rooms'||currentView==='room'||currentView==='all')&&!document.getElementById('searchInput').value.trim()){
     renderChatList();
   }
