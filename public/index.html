@@ -1796,12 +1796,18 @@ document.getElementById('tabRooms').addEventListener('click',function(){switchTo
 function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
 
 function switchToAll(){
+  _pmToken++; _roomToken++;
   currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabAll');
   document.getElementById('searchInput').value='';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
+  var _msgDivA=document.getElementById('messages');
+  _msgDivA.innerHTML='';
+  _msgDivA.dataset.loading='';
+  _msgDivA.dataset.forToken='';
+  _msgDivA.dataset.forRoomToken='';
+  _msgDivA.dataset.forLogin='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   renderAllChats();
 }
@@ -1837,13 +1843,18 @@ function switchToPrivate(){
   setTimeout(function(){if(currentView==='private'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}},3000);
 }
 function switchToRooms(){
-  _pmToken++;
+  _pmToken++; _roomToken++;
   currentView='rooms';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
   if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
   document.getElementById('noChat').style.display='flex';
-  document.getElementById('messages').innerHTML='';
+  var _msgDivR=document.getElementById('messages');
+  _msgDivR.innerHTML='';
+  _msgDivR.dataset.loading='';
+  _msgDivR.dataset.forToken='';
+  _msgDivR.dataset.forRoomToken='';
+  _msgDivR.dataset.forLogin='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   if(latestRooms&&latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
   socket.emit('getMyRooms');
