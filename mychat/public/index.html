@@ -2013,7 +2013,12 @@ function openGeneral(){
   document.getElementById('inputArea').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  document.getElementById('messages').dataset.loading='general';
+  _pmToken++; _roomToken++; // invalidate any pending PM/room responses
+  var md=document.getElementById('messages');
+  md.dataset.loading='general';
+  md.dataset.forToken='';
+  md.dataset.forRoomToken='';
+  md.dataset.forLogin='';
   socket.emit('getGeneralHistory');
 }
 window.openGeneral=openGeneral;
@@ -2110,12 +2115,12 @@ function openPM(login,nickname){
   // Increment token and clear messages - both must match when history arrives
   _pmToken++; _roomToken++; // invalidate any pending room responses
   var _myPmToken=_pmToken;
-  var _targetLogin=login;
   var _md=document.getElementById('messages');
   _md.innerHTML='<div class="empty-list">Загрузка...</div>';
   _md.dataset.loading='pm';
   _md.dataset.forLogin=login;
   _md.dataset.forToken=String(_myPmToken);
+  _md.dataset.forRoomToken='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
@@ -2142,6 +2147,11 @@ function openRoom(roomId){
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   _pmToken++; _roomToken++; var _myRoomToken=_roomToken; // invalidate any pending pm responses
+  var _md2=document.getElementById('messages');
+  _md2.dataset.loading='room';
+  _md2.dataset.forRoomToken=String(_myRoomToken);
+  _md2.dataset.forToken='';
+  _md2.dataset.forLogin='';
   socket.emit('openRoom',{roomId:roomId,token:_myRoomToken});
   // Dialog background
   currentDialogBg = null;
@@ -2159,8 +2169,12 @@ socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('В�
 socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
-  // Guard: token must match (prevents stale responses)
-  if(data.token !== _roomToken) return;
+  var md=document.getElementById('messages');
+  // Guard: reject if not waiting for a room response
+  if(md.dataset.loading!=='room')return;
+  // Guard: reject stale token (compare with the token stored at open time)
+  if(data.token!==undefined && String(data.token)!==md.dataset.forRoomToken)return;
+  md.dataset.loading='';
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2173,7 +2187,7 @@ socket.on('roomData',function(data){
   btns+='<button onclick="leaveCurrentRoom()" title="Покинуть">🚪</button>';
   document.getElementById('chatHeaderBtns').innerHTML=btns;
   document.getElementById('inputArea').style.display=(data.room.type==='channel'&&data.myRole!=='admin')?'none':'flex';
-  var md=document.getElementById('messages');md.innerHTML='';
+  md.innerHTML='';
   if(data.messages.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
   else data.messages.forEach(function(m){addRoomMsg(m);});
   md.scrollTop=md.scrollHeight;
@@ -2261,12 +2275,13 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // Guard: only show if still on this exact chat
-  if(currentView!=='pm')return;
-  if(currentPrivateLogin!==d.otherLogin)return;
-  // Token check: reject stale responses from previous chats
-  if(d.token !== undefined && d.token !== -1 && d.token !== _pmToken) return;
   var md=document.getElementById('messages');
+  // Guard: reject if not waiting for a PM response
+  if(md.dataset.loading!=='pm')return;
+  // Guard: reject if login doesn't match what we opened
+  if(md.dataset.forLogin!==d.otherLogin)return;
+  // Guard: reject stale token (compare with the token stored at open time, not the ever-changing global)
+  if(d.token!==undefined && d.token!==-1 && String(d.token)!==md.dataset.forToken)return;
   md.innerHTML='';
   md.dataset.loading='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
