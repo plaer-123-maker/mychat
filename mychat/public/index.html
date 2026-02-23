@@ -1715,14 +1715,14 @@ socket.on('lastSeenResult',function(d){
 
 function updateHeaderStatus(login){
   if(currentView!=='pm'||currentPrivateLogin!==login)return;
-  var sub=document.getElementById('chatSubtitle')||document.querySelector('.chat-subtitle');
-  if(!sub)return;
+  var onlineEl=document.getElementById('onlineInfo');
+  if(!onlineEl)return;
   var d=lastSeenCache[login];
   var isOnline=onlineLogins.has(login);
-  if(d&&d.hidden){sub.innerHTML='<span class="status-text offline">был(а) недавно</span>';return;}
-  if(isOnline){sub.innerHTML='<span class="status-text">● в сети</span>';return;}
-  if(d&&d.last_seen){sub.innerHTML='<span class="status-text offline">был(а) '+formatLastSeen(d.last_seen)+'</span>';return;}
-  sub.innerHTML='';
+  if(d&&d.hidden){onlineEl.innerHTML='<span class="status-text offline">был(а) недавно</span>';return;}
+  if(isOnline){onlineEl.innerHTML='<span class="status-text">● в сети</span>';return;}
+  if(d&&d.last_seen){onlineEl.innerHTML='<span class="status-text offline">был(а) '+formatLastSeen(d.last_seen)+'</span>';return;}
+  onlineEl.innerHTML='';
 }
 
 /* ── VIP SOCKET HANDLERS ── */
@@ -2105,7 +2105,6 @@ function openPM(login,nickname){
   // Request last seen status
   socket.emit('getLastSeen',{login:login});
   currentView='pm';currentPrivateLogin=login;currentPMProfile=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
-  console.log('[openPM] login='+login+' currentPrivateLogin='+currentPrivateLogin+' currentView='+currentView);
   setActiveTab('tabPrivate');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
@@ -2276,10 +2275,9 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  console.log('[privateHistory] received: otherLogin='+d.otherLogin+' | currentView='+currentView+' | currentPrivateLogin='+currentPrivateLogin);
   // Only render if this response matches the currently open PM chat
-  if(currentView !== 'pm'){console.log('[privateHistory] SKIP: currentView='+currentView);return;}
-  if(currentPrivateLogin !== d.otherLogin){console.log('[privateHistory] SKIP: login mismatch');return;}
+  if(currentView !== 'pm') return;
+  if(currentPrivateLogin !== d.otherLogin) return;
   var md=document.getElementById('messages');
   md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
