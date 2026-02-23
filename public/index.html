@@ -1813,6 +1813,7 @@ function renderAllChats(){
 
 function switchToGeneral(){
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
+  _pmToken++; _roomToken++;
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   document.getElementById('dialogBgBtn').style.display='none';
   setActiveTab('tabGeneral');
@@ -1821,6 +1822,7 @@ function switchToGeneral(){
   if(window.innerWidth>640){openGeneral();}else{document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='';}
 }
 function switchToPrivate(){
+  _roomToken++;
   currentView='private';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabPrivate');
   document.getElementById('searchInput').value='';
@@ -1835,6 +1837,7 @@ function switchToPrivate(){
   setTimeout(function(){if(currentView==='private'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}},3000);
 }
 function switchToRooms(){
+  _pmToken++;
   currentView='rooms';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   setActiveTab('tabRooms');
   document.getElementById('searchInput').value='';
@@ -2105,7 +2108,7 @@ function openPM(login,nickname){
   updatePmHeaderBtns(login, nickname);
   document.getElementById('inputArea').style.display='flex';
   // Increment token and clear messages - both must match when history arrives
-  _pmToken++;
+  _pmToken++; _roomToken++; // invalidate any pending room responses
   var _myPmToken=_pmToken;
   var _targetLogin=login;
   var _md=document.getElementById('messages');
@@ -2138,7 +2141,7 @@ function openRoom(roomId){
   document.getElementById('chatHeaderBtns').innerHTML='';
   document.getElementById('messages').innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  _roomToken++; var _myRoomToken=_roomToken;
+  _pmToken++; _roomToken++; var _myRoomToken=_roomToken; // invalidate any pending pm responses
   socket.emit('openRoom',{roomId:roomId,token:_myRoomToken});
   // Dialog background
   currentDialogBg = null;
@@ -2156,10 +2159,8 @@ socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('В�
 socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
-  // Guard: ignore if user switched away to a different view
-  if(currentView==='pm'||currentView==='general'||currentView==='private')return;
-  if(data.token!==_roomToken)return; // strict token check - always required
-  if(currentView==='room'&&currentRoomId&&currentRoomId!==data.room.id)return;
+  // Guard: token must match (prevents stale responses)
+  if(data.token !== _roomToken) return;
   currentView='room';currentRoomId=data.room.id;currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
@@ -2260,16 +2261,15 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // Guard: must be in PM view for the correct login and matching token
+  // Guard: only show if still on this exact chat
   if(currentView!=='pm')return;
   if(currentPrivateLogin!==d.otherLogin)return;
-  if(d.token!==_pmToken)return;
+  // Token check: reject stale responses from previous chats
+  if(d.token !== undefined && d.token !== -1 && d.token !== _pmToken) return;
   var md=document.getElementById('messages');
-  if(md.dataset.forLogin!==d.otherLogin)return;
-  if(md.dataset.forToken && String(d.token)!==md.dataset.forToken)return;
   md.innerHTML='';
   md.dataset.loading='';
-  if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог \uD83D\uDC4B</div>';
+  if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
   md.scrollTop=md.scrollHeight;
 });
