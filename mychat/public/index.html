@@ -1652,19 +1652,13 @@ socket.on('authSuccess',function(d){
   socket.emit('getMutedChats');
   // init notifications
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
-  // Данные из localStorage кэша уже в latestChats/latestRooms
-  // Показываем UI мгновенно из кэша, сервер тихо обновит в фоне
-  switchToAll();
-  _initialLoadDone = false;
-  _initialChatsReady = false;
-  _initialRoomsReady = false;
+  switchToGeneral();
+  // Refresh chats on login
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');
-  localStorage.removeItem('_myChatsCache');
-  localStorage.removeItem('_myRoomsCache');
   var shown = false;
   ['loginError','registerError','googleSetupError'].forEach(function(id){
     var el = document.getElementById(id);
@@ -1730,13 +1724,14 @@ socket.on('vipEmojiResult',function(d){
 socket.on('userVipUpdated',function(d){
   if(!d.login) return;
   vipEmojiCache[d.login]=d.vip_emoji||null;
+  // If it's our own update, sync local state
   if(d.login===myLogin){
     myVipUntil=d.vip_until||0;
     myVipEmoji=d.vip_emoji||null;
   }
   if(currentView!=='general'&&currentView!=='none') renderChatList();
 });
-socket.on('kicked',function(m){localStorage.removeItem('mychat_token');localStorage.removeItem('_myChatsCache');localStorage.removeItem('_myRoomsCache');alert(m);location.reload();});
+socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
 socket.on('avatarChanged',function(av){myAvatar=av;if(av)avatarCache[myLogin]=av;else delete avatarCache[myLogin];});
 socket.on('usernameChanged',function(un){myUsername=un;});
@@ -1783,7 +1778,6 @@ function switchToAll(){
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
-  // Показываем кэш мгновенно, потом тихо обновляем
   renderChatList();
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
@@ -1801,7 +1795,7 @@ function switchToGeneral(){
   setActiveTab('tabGeneral');
   document.getElementById('searchInput').value='';
   document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
-  openGeneral();
+  if(window.innerWidth>640){openGeneral();}else{document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='';}
 }
 function switchToPrivate(){
   currentView='private';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
@@ -1812,7 +1806,6 @@ function switchToPrivate(){
   var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';
   _msgDiv.dataset.forLogin='';_msgDiv.dataset.forToken='';_msgDiv.dataset.loading='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
-  // Мгновенно показываем кэш (если есть), потом тихо обновляем
   renderChatList();
   socket.emit('getMyChats');
 }
@@ -1824,7 +1817,6 @@ function switchToRooms(){
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
-  // Мгновенно показываем кэш (если есть), потом тихо обновляем
   renderChatList();
   socket.emit('getMyRooms');
 }
@@ -1855,19 +1847,7 @@ socket.on('roomSearchResults',function(rooms){
 });
 
 // Store latest chats/rooms for unified view
-// === КЭШИРУЕМ В localStorage ДЛЯ МГНОВЕННОЙ ЗАГРУЗКИ ===
-var latestChats = [], latestRooms = [];
-var _initialLoadDone = false, _initialChatsReady = false, _initialRoomsReady = false;
-(function(){
-  try {
-    var cc = localStorage.getItem('_myChatsCache');
-    if(cc) latestChats = JSON.parse(cc);
-  } catch(e) { latestChats = []; }
-  try {
-    var rc = localStorage.getItem('_myRoomsCache');
-    if(rc) latestRooms = JSON.parse(rc);
-  } catch(e) { latestRooms = []; }
-})();
+var latestChats=[], latestRooms=[];
 
 function buildChatItem(c, isPinned, chatType) {
   if(c.avatar) avatarCache[c.login||''] = c.avatar;
@@ -1945,31 +1925,22 @@ function renderChatList() {
       if(p.chat_type==='pm'){var c=latestChats.find(function(x){return x.login===p.chat_id;});if(c)allItems.push({item:c,type:'pm',pinned:true});}
       else{var r=latestRooms.find(function(x){return String(x.id)===String(p.chat_id);});if(r)allItems.push({item:r,type:'room',pinned:true});}
     });
-    // General chat first
-    html += '<div class="chat-item'+(currentView==='general'?' active':'')+'" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
+    html += '<div class="chat-item" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
     if(allItems.length>0){html+='<div class="pinned-section-title">📌 Закреплённые</div>';allItems.forEach(function(a){html+=buildChatItem(a.item,true,a.type);});}
-    // Then rest
     var pinnedLogins = pinnedChats.filter(function(p){return p.chat_type==='pm';}).map(function(p){return p.chat_id;});
     var pinnedRoomIds = pinnedChats.filter(function(p){return p.chat_type==='room';}).map(function(p){return String(p.chat_id);});
     latestChats.filter(function(c){return !pinnedLogins.includes(c.login);}).forEach(function(c){html+=buildChatItem(c,false,'pm');});
     latestRooms.filter(function(r){return !pinnedRoomIds.includes(String(r.id));}).forEach(function(r){html+=buildChatItem(r,false,'room');});
     list.innerHTML=html;
   }
-  // Для general/none/других view — sidebar не трогаем
+  // general/none/другие view — sidebar не трогаем
 }
 
 socket.on('myChats',function(chats){
   latestChats=chats;
-  window._myChatsCache = chats;
-  try { localStorage.setItem('_myChatsCache', JSON.stringify(chats)); } catch(e) {}
-  _initialChatsReady = true;
-  if(!_initialLoadDone && _initialChatsReady && _initialRoomsReady){
-    _initialLoadDone = true;
-    renderChatList(); // первый рендер с полными данными
-    return;
-  }
-  if((currentView==='private'||currentView==='pm'||currentView==='all')&&!document.getElementById('searchInput').value.trim()){
-    renderChatList();
+  window._myChatsCache = chats; // cache for forward modal
+  if(currentView==='private'||currentView==='pm'||currentView==='all'){
+    if(!document.getElementById('searchInput').value.trim()) renderChatList();
   }
 });
 
@@ -1981,23 +1952,15 @@ var onlineLogins = new Set();
 
 socket.on('unreadNotification',function(d){
   if(currentView==='pm'&&currentPrivateLogin===d.from)return;
-  // Обновляем кэш в фоне (не прерывая текущий view)
-  socket.emit('getMyChats');
+  if(currentView==='private'||currentView==='pm'||currentView==='all')socket.emit('getMyChats');
+  // Push notification
   sendNotification(d.nickname||'Новое сообщение','Написал тебе в MyChat');
 });
 
 socket.on('myRooms',function(rooms){
   latestRooms=rooms;
-  window._myRoomsCache = rooms;
-  try { localStorage.setItem('_myRoomsCache', JSON.stringify(rooms)); } catch(e) {}
-  _initialRoomsReady = true;
-  if(!_initialLoadDone && _initialChatsReady && _initialRoomsReady){
-    _initialLoadDone = true;
-    renderChatList(); // первый рендер с полными данными
-    return;
-  }
-  if((currentView==='rooms'||currentView==='room'||currentView==='all')&&!document.getElementById('searchInput').value.trim()){
-    renderChatList();
+  if(currentView==='rooms'||currentView==='room'||currentView==='all'){
+    if(!document.getElementById('searchInput').value.trim()) renderChatList();
   }
 });
 
@@ -2156,9 +2119,9 @@ function joinAndOpenRoom(roomId){roomId=Number(roomId);socket.emit('joinRoom',ro
 window.joinAndOpenRoom=joinAndOpenRoom;
 
 socket.on('joinedRoom',function(){if(currentView==='rooms'||currentView==='room')socket.emit('getMyRooms');});
-socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=null;currentRoomData=null;currentView='rooms';setActiveTab('tabRooms');document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
-socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';setActiveTab('tabRooms');document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
-socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';setActiveTab('tabRooms');document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
   // Guard: ignore if user switched away to a different view
@@ -2764,7 +2727,7 @@ socket.on('passwordResult',function(m){if(m==='ok'){document.getElementById('pas
 
 document.getElementById('mobileBackBtn').addEventListener('click',function(){
   document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';
-  if(currentView==='pm'){currentView='private';currentPrivateLogin=null;setActiveTab('tabPrivate');renderChatList();socket.emit('getMyChats');}
+  if(currentView==='pm'){currentView='private';currentPrivateLogin=null;socket.emit('getMyChats');}
   else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;socket.emit('getMyRooms');}
   else if(currentView==='general')switchToGeneral();
 });
@@ -3331,7 +3294,11 @@ document.getElementById('photoViewer').addEventListener('click',function(e){
 socket.on('userVerified', function(d) {
   verifiedCache[d.login] = (d.verified !== false);
   if (d.login === myLogin) myVerified = (d.verified !== false);
-  if(currentView!=='general'&&currentView!=='none') renderChatList();
+  // Refresh visible messages
+  document.querySelectorAll('.msg-nick, .name').forEach(function(el) {
+    // lightweight: just trigger re-render by reloading chat list
+  });
+  renderChatList();
 });
 socket.on('verifyActivateResult', function(d) {
   var el = document.getElementById('verifyResult');
@@ -3481,7 +3448,7 @@ window.closeForwardModal = closeForwardModal;
 socket.on('forwardDone', function(d) { /* handled in doForward */ });
 
 /* Cache chats/rooms for forward modal */
-// _myRoomsCache обновляется в основном myRooms handler выше
+socket.on('myRooms', function(rooms) { window._myRoomsCache = rooms; });
 
 /* ── 5. SAVED MESSAGES ── */
 function openSavedMessages() {
