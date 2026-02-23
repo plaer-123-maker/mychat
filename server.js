@@ -992,7 +992,29 @@ io.on('connection', (socket) => {
         JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
         ORDER BY r.timestamp DESC
       `, [socket.userLogin]);
-      socket.emit('myRooms', res.rows);
+      const rooms = res.rows;
+      if (rooms.length === 0) return socket.emit('myRooms', []);
+      // Fetch last message for each room
+      const roomIds = rooms.map(r => r.id);
+      const lastMsgsRes = await pool.query(`
+        SELECT DISTINCT ON (room_id) room_id, text, type, timestamp, user_login
+        FROM room_messages
+        WHERE room_id = ANY($1)
+        ORDER BY room_id, timestamp DESC
+      `, [roomIds]);
+      const lastMsgMap = {};
+      lastMsgsRes.rows.forEach(r => { lastMsgMap[r.room_id] = r; });
+      const withMeta = rooms.map(r => {
+        var lm = lastMsgMap[r.id] || null;
+        return Object.assign({}, r, { lastMsg: lm });
+      });
+      // Sort by last message time desc, then by room timestamp
+      withMeta.sort(function(a, b) {
+        var at = a.lastMsg ? a.lastMsg.timestamp : a.timestamp;
+        var bt = b.lastMsg ? b.lastMsg.timestamp : b.timestamp;
+        return (bt || 0) - (at || 0);
+      });
+      socket.emit('myRooms', withMeta);
     } catch(e) { console.error('getMyRooms error:', e); socket.emit('myRooms', []); }
   });
 

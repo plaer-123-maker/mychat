@@ -1741,6 +1741,8 @@ socket.on('userAvatarUpdated',function(d){if(d.avatar)avatarCache[d.login]=d.ava
 });
 socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
 socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
+function showError(m){var e=document.getElementById('chatError');if(!e)return;e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);}
+window.showError=showError;
 socket.on('onlineUsers',function(d){
   // Track online logins for green dots (server sends count for all, users list for admins)
   // We use lastSeenResult for individual online status, but also track count
@@ -1778,12 +1780,21 @@ function switchToAll(){
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  // Always refresh data when switching to "All"
+  socket.emit('getMyChats');
+  socket.emit('getMyRooms');
   renderAllChats();
 }
 
 function renderAllChats(){
   if(currentView!=='all')return;
-  renderChatList();
+  // If we already have data, render immediately; otherwise show loading
+  if(latestChats.length>0||latestRooms.length>0){
+    renderChatList();
+  } else {
+    document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
+    setTimeout(function(){if(currentView==='all'){renderChatList();}},3000);
+  }
 }
 
 function switchToGeneral(){
@@ -1831,11 +1842,12 @@ socket.on('searchResults',function(users){
   if(users.length===0){list.innerHTML='<div class="empty-list">Никого не найдено</div>';return;}
   var html='';users.forEach(function(u){
     if(u.avatar)avatarCache[u.login]=u.avatar;
-    var avHtml=u.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+u.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+u.nickname[0].toUpperCase()+'</div>';
+    var displayName=(u.nickname||u.login||'?');
+    var avHtml=u.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+u.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+displayName[0].toUpperCase()+'</div>';
     var subline=u.username?'@'+u.username:'Написать';
     var safeLogin = u.login.replace(/'/g, "\\'");
-    var safeNick = u.nickname.replace(/'/g, "\\'");
-    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+avHtml+'<div class="info"><div class="name">'+u.nickname+'</div><div class="last">'+subline+'</div></div></div>';
+    var safeNick = displayName.replace(/'/g, "\\'");
+    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+avHtml+'<div class="info"><div class="name">'+displayName+'</div><div class="last">'+subline+'</div></div></div>';
   });
   list.innerHTML=html;
 });
@@ -2993,9 +3005,16 @@ socket.on('callEnded',function(data){
   clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
   document.getElementById('incomingCallModal').classList.remove('show');
   var partner=callPartnerLogin||(incomingCallData?incomingCallData.from:null);
-  if(data&&data.reason==='timeout'&&!peerConnection){
+  if(data&&data.reason==='offline'){
+    cleanupCall();
+    showError('📵 Пользователь недоступен');
+  } else if(data&&data.reason==='timeout'&&!peerConnection){
     // We were ringing — just close the modal, server already saved log
     incomingCallData=null;
+  } else if(data&&data.reason==='timeout'&&peerConnection){
+    // We called someone — they didn't answer
+    cleanupCall();
+    showError('📵 Нет ответа');
   } else {
     cleanupCall();
   }
