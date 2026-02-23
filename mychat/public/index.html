@@ -1729,7 +1729,7 @@ socket.on('userVipUpdated',function(d){
     myVipUntil=d.vip_until||0;
     myVipEmoji=d.vip_emoji||null;
   }
-  renderChatList();
+  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all') renderChatList();
 });
 socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
@@ -1780,21 +1780,14 @@ function switchToAll(){
   document.getElementById('noChat').style.display='flex';
   document.getElementById('messages').innerHTML='';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
-  // Always refresh data when switching to "All"
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
-  renderAllChats();
+  if(latestChats.length>0||latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
 }
 
 function renderAllChats(){
   if(currentView!=='all')return;
-  // If we already have data, render immediately; otherwise show loading
-  if(latestChats.length>0||latestRooms.length>0){
-    renderChatList();
-  } else {
-    document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';
-    setTimeout(function(){if(currentView==='all'){renderChatList();}},3000);
-  }
+  renderChatList();
 }
 
 function switchToGeneral(){
@@ -1842,12 +1835,12 @@ socket.on('searchResults',function(users){
   if(users.length===0){list.innerHTML='<div class="empty-list">Никого не найдено</div>';return;}
   var html='';users.forEach(function(u){
     if(u.avatar)avatarCache[u.login]=u.avatar;
-    var displayName=(u.nickname||u.login||'?');
-    var avHtml=u.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+u.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+displayName[0].toUpperCase()+'</div>';
+    var dn=(u.nickname||u.login||'?');
+    var avHtml=u.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+u.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+dn[0].toUpperCase()+'</div>';
     var subline=u.username?'@'+u.username:'Написать';
     var safeLogin = u.login.replace(/'/g, "\\'");
-    var safeNick = displayName.replace(/'/g, "\\'");
-    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+avHtml+'<div class="info"><div class="name">'+displayName+'</div><div class="last">'+subline+'</div></div></div>';
+    var safeNick = dn.replace(/'/g, "\\'");
+    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+avHtml+'<div class="info"><div class="name">'+dn+'</div><div class="last">'+subline+'</div></div></div>';
   });
   list.innerHTML=html;
 });
@@ -3005,16 +2998,19 @@ socket.on('callEnded',function(data){
   clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
   document.getElementById('incomingCallModal').classList.remove('show');
   var partner=callPartnerLogin||(incomingCallData?incomingCallData.from:null);
-  if(data&&data.reason==='offline'){
+  var reason=data&&data.reason;
+  if(reason==='offline'){
     cleanupCall();
-    showError('📵 Пользователь недоступен');
-  } else if(data&&data.reason==='timeout'&&!peerConnection){
-    // We were ringing — just close the modal, server already saved log
-    incomingCallData=null;
-  } else if(data&&data.reason==='timeout'&&peerConnection){
-    // We called someone — they didn't answer
-    cleanupCall();
-    showError('📵 Нет ответа');
+    showError('📵 Пользователь не в сети');
+  } else if(reason==='timeout'){
+    if(peerConnection){
+      // We were the caller and nobody answered
+      cleanupCall();
+      showError('📵 Нет ответа');
+    } else {
+      // We were the callee — missed call
+      incomingCallData=null;
+    }
   } else {
     cleanupCall();
   }
@@ -3144,7 +3140,7 @@ function renderVideoNote(src,isMine){
 /* ── PINNED CHATS ── */
 socket.on('pinnedChats',function(rows){
   pinnedChats=rows;
-  renderChatList();
+  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all') renderChatList();
 });
 socket.on('pinChatResult',function(d){
   if(d.ok){socket.emit('getPinnedChats');}
@@ -3334,7 +3330,7 @@ socket.on('verifyActivateResult', function(d) {
 /* ── 2. MUTED CHATS ── */
 socket.on('mutedChats', function(rows) {
   mutedChats = rows;
-  renderChatList();
+  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all') renderChatList();
 });
 socket.on('muteChatResult', function(d) {
   if (d.ok) {

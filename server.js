@@ -994,25 +994,23 @@ io.on('connection', (socket) => {
       `, [socket.userLogin]);
       const rooms = res.rows;
       if (rooms.length === 0) return socket.emit('myRooms', []);
-      // Fetch last message for each room
+      // Fetch last message for each room in one query
       const roomIds = rooms.map(r => r.id);
-      const lastMsgsRes = await pool.query(`
-        SELECT DISTINCT ON (room_id) room_id, text, type, timestamp, user_login
-        FROM room_messages
-        WHERE room_id = ANY($1)
-        ORDER BY room_id, timestamp DESC
-      `, [roomIds]);
-      const lastMsgMap = {};
-      lastMsgsRes.rows.forEach(r => { lastMsgMap[r.room_id] = r; });
-      const withMeta = rooms.map(r => {
-        var lm = lastMsgMap[r.id] || null;
-        return Object.assign({}, r, { lastMsg: lm });
-      });
-      // Sort by last message time desc, then by room timestamp
-      withMeta.sort(function(a, b) {
-        var at = a.lastMsg ? a.lastMsg.timestamp : a.timestamp;
-        var bt = b.lastMsg ? b.lastMsg.timestamp : b.timestamp;
-        return (bt || 0) - (at || 0);
+      let lastMsgMap = {};
+      try {
+        const lmRes = await pool.query(`
+          SELECT DISTINCT ON (room_id) room_id, text, type, timestamp
+          FROM room_messages
+          WHERE room_id = ANY($1::int[])
+          ORDER BY room_id, timestamp DESC
+        `, [roomIds]);
+        lmRes.rows.forEach(r => { lastMsgMap[r.room_id] = { text: r.text, type: r.type, timestamp: Number(r.timestamp) }; });
+      } catch(e) { console.error('getMyRooms lastMsg error:', e); }
+      const withMeta = rooms.map(r => Object.assign({}, r, { lastMsg: lastMsgMap[r.id] || null }));
+      withMeta.sort((a, b) => {
+        const at = a.lastMsg ? a.lastMsg.timestamp : Number(a.timestamp);
+        const bt = b.lastMsg ? b.lastMsg.timestamp : Number(b.timestamp);
+        return bt - at;
       });
       socket.emit('myRooms', withMeta);
     } catch(e) { console.error('getMyRooms error:', e); socket.emit('myRooms', []); }
