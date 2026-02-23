@@ -1903,17 +1903,22 @@ function buildChatItem(c, isPinned, chatType) {
 }
 
 function renderChatList() {
-  if(document.getElementById('searchInput').value.trim()) return;
-  var list = document.getElementById('sidebarList');
+  var _si = document.getElementById('searchInput');
+  var _sl = document.getElementById('sidebarList');
+  if(window._log)window._log('renderChatList view='+currentView+' chats='+latestChats.length+' rooms='+latestRooms.length+' search="'+(_si?_si.value.trim():'')+'" list='+(_sl?'ok':'NULL'));
+  if(_si && _si.value.trim()) return;
+  if(!_sl){ if(window._log)window._log('ERROR: sidebarList is NULL'); return; }
+  var list = _sl;
   var html = '';
-  if(window._log)window._log('renderChatList view='+currentView+' chats='+latestChats.length+' rooms='+latestRooms.length);
   if(currentView==='private'||currentView==='pm') {
     var pinned = latestChats.filter(function(c){ return isPinned('pm', c.login); });
     var unpinned = latestChats.filter(function(c){ return !isPinned('pm', c.login); });
+    if(window._log)window._log('private branch: pinned='+pinned.length+' unpinned='+unpinned.length);
     if(pinned.length>0){ html+='<div class="pinned-section-title">📌 Закреплённые</div>'; pinned.forEach(function(c){html+=buildChatItem(c,true,'pm');}); }
     if(unpinned.length===0&&pinned.length===0){html='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}
     else unpinned.forEach(function(c){html+=buildChatItem(c,false,'pm');});
     list.innerHTML=html;
+    if(window._log)window._log('DONE private: html_len='+html.length+' sidebar_now='+list.innerHTML.substr(0,50));
   } else if(currentView==='rooms'||currentView==='room') {
     var pinned = latestRooms.filter(function(r){ return isPinned('room', r.id); });
     var unpinned = latestRooms.filter(function(r){ return !isPinned('room', r.id); });
