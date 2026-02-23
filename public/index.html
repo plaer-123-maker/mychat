@@ -2017,7 +2017,9 @@ function openGeneral(){
   document.getElementById('onlineInfo').textContent='';
   document.getElementById('chatHeaderBtns').innerHTML='';
   document.getElementById('inputArea').style.display='flex';
-  document.getElementById('messages').innerHTML='';
+  var _mdg=document.getElementById('messages');
+  _mdg.innerHTML='';
+  _mdg.dataset.loading='general';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   _pmToken++; _roomToken++; // invalidate any pending PM/room responses
   _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
