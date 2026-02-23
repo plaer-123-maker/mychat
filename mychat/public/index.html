@@ -1653,8 +1653,11 @@ socket.on('authSuccess',function(d){
   // init notifications
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
   // Данные из localStorage кэша уже в latestChats/latestRooms
-  // Показываем UI мгновенно, сервер тихо обновит в фоне
+  // Показываем UI мгновенно из кэша, сервер тихо обновит в фоне
   switchToAll();
+  _initialLoadDone = false;
+  _initialChatsReady = false;
+  _initialRoomsReady = false;
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
 });
@@ -1854,6 +1857,7 @@ socket.on('roomSearchResults',function(rooms){
 // Store latest chats/rooms for unified view
 // === КЭШИРУЕМ В localStorage ДЛЯ МГНОВЕННОЙ ЗАГРУЗКИ ===
 var latestChats = [], latestRooms = [];
+var _initialLoadDone = false, _initialChatsReady = false, _initialRoomsReady = false;
 (function(){
   try {
     var cc = localStorage.getItem('_myChatsCache');
@@ -1958,6 +1962,12 @@ socket.on('myChats',function(chats){
   latestChats=chats;
   window._myChatsCache = chats;
   try { localStorage.setItem('_myChatsCache', JSON.stringify(chats)); } catch(e) {}
+  _initialChatsReady = true;
+  if(!_initialLoadDone && _initialChatsReady && _initialRoomsReady){
+    _initialLoadDone = true;
+    renderChatList(); // первый рендер с полными данными
+    return;
+  }
   if((currentView==='private'||currentView==='pm'||currentView==='all')&&!document.getElementById('searchInput').value.trim()){
     renderChatList();
   }
@@ -1978,7 +1988,14 @@ socket.on('unreadNotification',function(d){
 
 socket.on('myRooms',function(rooms){
   latestRooms=rooms;
+  window._myRoomsCache = rooms;
   try { localStorage.setItem('_myRoomsCache', JSON.stringify(rooms)); } catch(e) {}
+  _initialRoomsReady = true;
+  if(!_initialLoadDone && _initialChatsReady && _initialRoomsReady){
+    _initialLoadDone = true;
+    renderChatList(); // первый рендер с полными данными
+    return;
+  }
   if((currentView==='rooms'||currentView==='room'||currentView==='all')&&!document.getElementById('searchInput').value.trim()){
     renderChatList();
   }
@@ -2139,9 +2156,9 @@ function joinAndOpenRoom(roomId){roomId=Number(roomId);socket.emit('joinRoom',ro
 window.joinAndOpenRoom=joinAndOpenRoom;
 
 socket.on('joinedRoom',function(){if(currentView==='rooms'||currentView==='room')socket.emit('getMyRooms');});
-socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
-socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
-socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=null;currentRoomData=null;currentView='rooms';setActiveTab('tabRooms');document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';setActiveTab('tabRooms');document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';setActiveTab('tabRooms');document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
   // Guard: ignore if user switched away to a different view
@@ -3464,7 +3481,7 @@ window.closeForwardModal = closeForwardModal;
 socket.on('forwardDone', function(d) { /* handled in doForward */ });
 
 /* Cache chats/rooms for forward modal */
-socket.on('myRooms', function(rooms) { window._myRoomsCache = rooms; });
+// _myRoomsCache обновляется в основном myRooms handler выше
 
 /* ── 5. SAVED MESSAGES ── */
 function openSavedMessages() {
