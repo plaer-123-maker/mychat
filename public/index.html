@@ -2105,6 +2105,7 @@ function openPM(login,nickname){
   // Request last seen status
   socket.emit('getLastSeen',{login:login});
   currentView='pm';currentPrivateLogin=login;currentPMProfile=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  console.log('[openPM] login='+login+' currentPrivateLogin='+currentPrivateLogin+' currentView='+currentView);
   setActiveTab('tabPrivate');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
@@ -2172,14 +2173,10 @@ socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('В�
 socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
 socket.on('roomData',function(data){
-  // Guard 1: reject if not the room we're waiting for
-  if(data.room.id !== _expectedRoomId) return;
-  // Guard 2: reject stale token
-  if(data.token !== undefined && data.token !== _expectedRoomToken) return;
-  // All checks passed
-  _expectedRoomId = null; // consume
+  // Only render if this response matches the currently requested room
+  if(Number(currentRoomId) !== Number(data.room.id)) return;
   var md=document.getElementById('messages');
-  currentView='room';currentRoomId=data.room.id;currentRoomData=data;
+  currentView='room';currentRoomData=data;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
@@ -2279,12 +2276,10 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // Guard 1: reject if this is not the chat we're waiting for (by login)
-  if(d.otherLogin !== _expectedPmLogin) return;
-  // Guard 2: reject stale responses by token
-  if(d.token !== undefined && d.token !== -1 && d.token !== _expectedPmToken) return;
-  // All checks passed - render messages
-  _expectedPmLogin = null; // consume - prevent duplicate renders
+  console.log('[privateHistory] received: otherLogin='+d.otherLogin+' | currentView='+currentView+' | currentPrivateLogin='+currentPrivateLogin);
+  // Only render if this response matches the currently open PM chat
+  if(currentView !== 'pm'){console.log('[privateHistory] SKIP: currentView='+currentView);return;}
+  if(currentPrivateLogin !== d.otherLogin){console.log('[privateHistory] SKIP: login mismatch');return;}
   var md=document.getElementById('messages');
   md.innerHTML='';
   if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
