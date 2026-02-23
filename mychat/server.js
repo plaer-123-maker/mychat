@@ -4,6 +4,76 @@ const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+// ═══════════════════════════════════════════════
+// AES-256-GCM MESSAGE ENCRYPTION
+// Set MSG_SECRET env variable (32+ random chars) to enable
+// ═══════════════════════════════════════════════
+const MSG_SECRET = process.env.MSG_SECRET || null;
+const ENCRYPT_ENABLED = !!MSG_SECRET;
+
+function deriveKey() {
+  // Derive a 32-byte key from the secret using SHA-256
+  return crypto.createHash('sha256').update(MSG_SECRET).digest();
+}
+
+function encryptText(text) {
+  if (!ENCRYPT_ENABLED || !text || typeof text !== 'string') return text;
+  try {
+    const key = deriveKey();
+    const iv = crypto.randomBytes(12); // 96-bit IV for GCM
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag(); // 16-byte authentication tag
+    // Format: iv(12) + tag(16) + ciphertext — all base64
+    return 'ENC:' + Buffer.concat([iv, tag, encrypted]).toString('base64');
+  } catch(e) {
+    console.error('[CRYPTO] encrypt error:', e.message);
+    return text;
+  }
+}
+
+function decryptText(text) {
+  if (!ENCRYPT_ENABLED || !text || typeof text !== 'string') return text;
+  if (!text.startsWith('ENC:')) return text; // not encrypted
+  try {
+    const key = deriveKey();
+    const buf = Buffer.from(text.slice(4), 'base64');
+    const iv = buf.slice(0, 12);
+    const tag = buf.slice(12, 28);
+    const ciphertext = buf.slice(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return decipher.update(ciphertext) + decipher.final('utf8');
+  } catch(e) {
+    console.error('[CRYPTO] decrypt error (wrong key or corrupted):', e.message);
+    return '[зашифровано]';
+  }
+}
+
+function encryptMsg(msg) {
+  // Encrypt text fields of a message object before DB insert
+  if (!ENCRYPT_ENABLED) return msg;
+  const m = { ...msg };
+  if (m.text) m.text = encryptText(m.text);
+  if (m.reply_to_text) m.reply_to_text = encryptText(m.reply_to_text);
+  return m;
+}
+
+function decryptMsg(msg) {
+  // Decrypt text fields of a message object after DB read
+  if (!msg) return msg;
+  const m = { ...msg };
+  if (m.text) m.text = decryptText(m.text);
+  if (m.reply_to_text) m.reply_to_text = decryptText(m.reply_to_text);
+  return m;
+}
+
+if (ENCRYPT_ENABLED) {
+  console.log('[CRYPTO] Message encryption ENABLED (AES-256-GCM)');
+} else {
+  console.log('[CRYPTO] Message encryption DISABLED (set MSG_SECRET env to enable)');
+}
+
 let nodemailer = null;
 try { nodemailer = require('nodemailer'); } catch(e) { console.log('nodemailer not installed — email disabled'); }
 let OAuth2Client = null;
@@ -11,10 +81,36 @@ try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { c
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 100e6 });
+const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
 
 app.use(express.static('public'));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' })); // limit JSON body size
+
+// ── HTTP Security Headers ──────────────────────────────────
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+// ── HTTP Rate limiter (login/register endpoints if ever exposed via HTTP) ──
+const httpHits = new Map(); // ip -> { count, resetAt }
+app.use((req, res, next) => {
+  if (req.path === '/config' || req.path.startsWith('/socket.io')) return next();
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  let h = httpHits.get(ip);
+  if (!h || now > h.resetAt) { h = { count: 0, resetAt: now + 60_000 }; httpHits.set(ip, h); }
+  h.count++;
+  if (h.count > 300) { // 300 HTTP requests per minute per IP
+    console.warn('[SECURITY] HTTP flood from', ip);
+    return res.status(429).json({ error: 'Too Many Requests' });
+  }
+  next();
+});
 
 // Config endpoint — tells frontend what features are enabled
 app.get('/config', (req, res) => {
@@ -305,8 +401,10 @@ function deserializeImage(imgStr) {
 
 // Apply deserialize to a message row (mutates in place)
 function fixMsgImages(msg) {
-  if (msg && msg.image) msg.image = deserializeImage(msg.image);
-  return msg;
+  if (!msg) return msg;
+  if (msg.image) msg.image = deserializeImage(msg.image);
+  // Decrypt text fields from DB
+  return decryptMsg(msg);
 }
 
 function getIP(socket) {
@@ -349,8 +447,99 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+
+// ═══════════════════════════════════════════════
+// SECURITY LAYER
+// ═══════════════════════════════════════════════
+
+// --- Rate limiter (in-memory, per IP) ---
+const rateLimitMap = new Map(); // ip -> { events: [timestamps], blocked_until }
+const RATE_RULES = {
+  login:    { max: 5,  windowMs: 60_000,  blockMs: 300_000 },  // 5 попыток / мин → бан 5 мин
+  register: { max: 3,  windowMs: 60_000,  blockMs: 600_000 },  // 3 регистрации / мин → бан 10 мин
+  message:  { max: 30, windowMs: 10_000,  blockMs: 30_000  },  // 30 сообщений / 10с → бан 30с
+  socket:   { max: 100,windowMs: 10_000,  blockMs: 60_000  },  // 100 событий / 10с → бан 1 мин
+};
+
+function checkRateLimit(ip, action) {
+  const rule = RATE_RULES[action];
+  if (!rule) return true;
+  const key = ip + ':' + action;
+  const now = Date.now();
+  let entry = rateLimitMap.get(key);
+  if (!entry) { entry = { events: [], blocked_until: 0 }; rateLimitMap.set(key, entry); }
+  if (entry.blocked_until > now) return false; // заблокирован
+  entry.events = entry.events.filter(t => now - t < rule.windowMs);
+  entry.events.push(now);
+  if (entry.events.length > rule.max) {
+    entry.blocked_until = now + rule.blockMs;
+    entry.events = [];
+    console.warn('[SECURITY] Rate limit hit:', action, 'IP:', ip);
+    return false;
+  }
+  return true;
+}
+
+// Cleanup rate limit map every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (entry.blocked_until < now && entry.events.length === 0) rateLimitMap.delete(key);
+  }
+}, 600_000);
+
+// --- Input sanitizer ---
+function sanitize(str, maxLen) {
+  if (typeof str !== 'string') return '';
+  return str.slice(0, maxLen || 1000);
+}
+
+function stripHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/<[^>]*>/g, '');
+}
+
+// --- Socket event rate limiter wrapper ---
+function guardedOn(socket, event, handler) {
+  socket.on(event, function(...args) {
+    const ip = getIP(socket);
+    if (!checkRateLimit(ip, 'socket')) {
+      return socket.emit('rateLimited', { msg: 'Слишком много запросов, подождите.' });
+    }
+    return handler(...args);
+  });
+}
+
 io.on('connection', (socket) => {
   const ip = getIP(socket);
+
+  // ── Per-socket global event flood guard ──────────────────
+  let _socketEventCount = 0;
+  let _socketEventReset = Date.now() + 10_000;
+  let _socketBlocked = false;
+
+  socket.onAny((event) => {
+    const now = Date.now();
+    if (now > _socketEventReset) {
+      _socketEventCount = 0;
+      _socketEventReset = now + 10_000;
+      _socketBlocked = false;
+    }
+    _socketEventCount++;
+    if (_socketEventCount > 150) { // 150 events per 10s per socket
+      if (!_socketBlocked) {
+        console.warn('[SECURITY] Socket flood from', ip, 'event:', event);
+        socket.emit('rateLimited', { msg: 'Слишком много запросов. Подождите.' });
+        _socketBlocked = true;
+        // Disconnect repeat offenders
+        if (_socketEventCount > 500) {
+          console.warn('[SECURITY] Disconnecting flood socket', ip);
+          socket.disconnect(true);
+        }
+      }
+    }
+  });
+  // ─────────────────────────────────────────────────────────
 
   socket.on('autoLogin', async (token) => {
     if (!token) return socket.emit('authError', 'Нет токена');
@@ -371,8 +560,10 @@ io.on('connection', (socket) => {
 
   // ── REGISTER WITH EMAIL VERIFICATION ─────────────────────
   socket.on('register', async ({ login, password, nickname, email }) => {
+    if (!checkRateLimit(ip, 'register')) return socket.emit('authError', 'Слишком много регистраций с вашего IP. Подождите.');
     try {
       if (!login || !password || !nickname) return socket.emit('authError', 'Заполни все поля');
+      login = sanitize(login, 50); password = sanitize(password, 200); nickname = sanitize(nickname, 50); email = sanitize(email, 200);
       login = login.trim().toLowerCase();
       nickname = nickname.trim();
       email = (email || '').trim().toLowerCase();
@@ -597,8 +788,10 @@ io.on('connection', (socket) => {
   });
 
   socket.on('login', async ({ login, password }) => {
+    if (!checkRateLimit(ip, 'login')) return socket.emit('authError', 'Слишком много попыток. Подождите 5 минут.');
     try {
       if (!login || !password) return socket.emit('authError', 'Заполни все поля');
+      login = sanitize(login, 50); password = sanitize(password, 200);
       const res = await pool.query('SELECT * FROM users WHERE login=$1', [login]);
       if (res.rows.length === 0) return socket.emit('authError', 'Неверный логин или пароль');
       const user = res.rows[0];
@@ -757,6 +950,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chatMessage', async (data) => {
+    if (!checkRateLimit(ip, 'message')) return socket.emit('rateLimited', { msg: 'Слишком быстро! Помедленнее.' });
+    if (!socket.userLogin) return;
+    if (data && data.text) data.text = sanitize(data.text, 4000);
     if (!socket.username) return;
     try {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
@@ -767,6 +963,8 @@ io.on('connection', (socket) => {
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmoji = ve.rows[0].vip_emoji || null; } catch(e) {}
     const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
+      if (data.text) data.text = encryptText(data.text);
+      if (data.reply_to_text) data.reply_to_text = encryptText(data.reply_to_text);
       const res = await pool.query('INSERT INTO messages (username,user_login,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id',
         [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
@@ -943,6 +1141,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('privateMessage', async (data) => {
+    if (!checkRateLimit(ip, 'message')) return socket.emit('rateLimited', { msg: 'Слишком быстро! Помедленнее.' });
+    if (!socket.userLogin) return;
+    if (data && data.text) data.text = sanitize(data.text, 4000);
     if (!socket.userLogin) return;
     try {
       const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
@@ -952,6 +1153,8 @@ io.on('connection', (socket) => {
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiPM = ve.rows[0].vip_emoji || null; } catch(e) {}
     const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
+      if (data.text) data.text = encryptText(data.text);
+      if (data.reply_to_text) data.reply_to_text = encryptText(data.reply_to_text);
       const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
         [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
@@ -1049,6 +1252,9 @@ io.on('connection', (socket) => {
   });
 
   socket.on('roomMessage', async (data) => {
+    if (!checkRateLimit(ip, 'message')) return socket.emit('rateLimited', { msg: 'Слишком быстро! Помедленнее.' });
+    if (!socket.userLogin) return;
+    if (data && data.text) data.text = sanitize(data.text, 4000);
     if (!socket.userLogin || !data.roomId) return;
     var roomId = Number(data.roomId);
     try {
@@ -1060,6 +1266,8 @@ io.on('connection', (socket) => {
       let vipEmojiR = null;
       try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiR = ve.rows[0].vip_emoji || null; } catch(e) {}
       var msg = { room_id: roomId, user_login: socket.userLogin, vip_emoji: vipEmojiR, username: socket.username, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
+      if (data.text) data.text = encryptText(data.text);
+      if (data.reply_to_text) data.reply_to_text = encryptText(data.reply_to_text);
       var res = await pool.query('INSERT INTO room_messages (room_id, user_login, username, text, image, voice, type, timestamp, reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
         [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
@@ -1430,14 +1638,16 @@ io.on('connection', (socket) => {
   socket.on('editMessage', async ({ msgType, msgId, newText }) => {
     if (!socket.userLogin || !newText || !newText.trim()) return;
     try {
+      const cleanText = newText.trim();
+      const encText = encryptText(cleanText); // encrypt before storing
       if (msgType === 'general') {
-        const res = await pool.query('UPDATE messages SET text=$1, edited=true WHERE id=$2 AND (username=$3 OR $4=true) RETURNING id', [newText.trim(), msgId, socket.username, isAdmin(socket)]);
-        if (res.rows.length) io.emit('messageEdited', { msgType, msgId, newText: newText.trim() });
+        const res = await pool.query('UPDATE messages SET text=$1, edited=true WHERE id=$2 AND (username=$3 OR $4=true) RETURNING id', [encText, msgId, socket.username, isAdmin(socket)]);
+        if (res.rows.length) io.emit('messageEdited', { msgType, msgId, newText: cleanText });
       } else if (msgType === 'pm') {
-        const res = await pool.query('UPDATE private_messages SET text=$1, edited=true WHERE id=$2 AND from_login=$3 RETURNING from_login, to_login', [newText.trim(), msgId, socket.userLogin]);
+        const res = await pool.query('UPDATE private_messages SET text=$1, edited=true WHERE id=$2 AND from_login=$3 RETURNING from_login, to_login', [encText, msgId, socket.userLogin]);
         if (res.rows.length) {
           const other = res.rows[0].to_login;
-          const payload = { msgType, msgId, newText: newText.trim() };
+          const payload = { msgType, msgId, newText: cleanText };
           socket.emit('messageEdited', payload);
           const t = findSocketByLogin(other); if (t) t.emit('messageEdited', payload);
         }
@@ -1445,8 +1655,8 @@ io.on('connection', (socket) => {
         const msg = await pool.query('SELECT room_id FROM room_messages WHERE id=$1', [msgId]);
         if (!msg.rows.length) return;
         const roomId = msg.rows[0].room_id;
-        const res = await pool.query('UPDATE room_messages SET text=$1, edited=true WHERE id=$2 AND (user_login=$3 OR $4=true) RETURNING id', [newText.trim(), msgId, socket.userLogin, isAdmin(socket)]);
-        if (res.rows.length) io.to('room_' + roomId).emit('messageEdited', { msgType, msgId, newText: newText.trim() });
+        const res = await pool.query('UPDATE room_messages SET text=$1, edited=true WHERE id=$2 AND (user_login=$3 OR $4=true) RETURNING id', [encText, msgId, socket.userLogin, isAdmin(socket)]);
+        if (res.rows.length) io.to('room_' + roomId).emit('messageEdited', { msgType, msgId, newText: cleanText });
       }
     } catch(e) { console.error(e); }
   });

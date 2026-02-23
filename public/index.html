@@ -2229,7 +2229,7 @@ function addRoomMsg(msg){
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz+'</div></div></a>';}
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
+  else html+='<div class="text">'+escHtml(msg.text||'')+'</div>';
   if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html.replace('<div class="name','<div class="name');
   html+=buildMsgTime(msg.timestamp);
   if(isMine&&msg.id)html=html.replace('</div>','<span class="msg-checks check-single" style="cursor:pointer;margin-left:4px;" onclick="showReadersPopup(event,'+msg.id+')" title="Кто прочитал">✓</span></div>');
@@ -2286,6 +2286,22 @@ socket.on('privateHistory',function(d){
   else d.messages.forEach(function(m){addPM(m);});
   md.scrollTop=md.scrollHeight;
 });
+socket.on('rateLimited',function(d){
+  // Show non-intrusive toast notification
+  var msg = (d && d.msg) ? d.msg : 'Слишком много запросов. Подождите.';
+  var toast = document.getElementById('_rateLimitToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = '_rateLimitToast';
+    toast.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#e94560;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity 0.3s;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  clearTimeout(toast._hideTimeout);
+  toast._hideTimeout = setTimeout(function(){ toast.style.opacity = '0'; }, 3000);
+});
+
 socket.on('newPrivateMessage',function(msg){
   if(currentView==='pm'&&(currentPrivateLogin===msg.from_login||currentPrivateLogin===msg.to_login)){
     var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
@@ -2386,7 +2402,7 @@ function addPM(msg){
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
+  else html+='<div class="text">'+escHtml(msg.text||'')+'</div>';
   if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html;
   html+=buildMsgTime(msg.timestamp);
   if(isMine||myRole==='admin')html+='<span class="del-btn" onclick="delPM('+msg.id+')">Удалить</span>';
@@ -2507,7 +2523,7 @@ socket.on('reactionUpdated',function(d){
 
 function buildReplyQuote(msg){
   if(!msg.reply_to_id)return'';
-  return'<div class="reply-quote"><div class="rq-name">'+msg.reply_to_user+'</div><div class="rq-text">'+(msg.reply_to_text||'📎 Медиа')+'</div></div>';
+  return'<div class="reply-quote"><div class="rq-name">'+escHtml(msg.reply_to_user||'')+'</div><div class="rq-text">'+escHtml(msg.reply_to_text||'📎 Медиа')+'</div></div>';
 }
 
 /* ── ATTACH SWIPE + TAP EVENTS ── */
@@ -2586,7 +2602,7 @@ function addMsg(msg){
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
-  else html+='<div class="text">'+(msg.text||'')+'</div>';
+  else html+='<div class="text">'+escHtml(msg.text||'')+'</div>';
   if(!isS)html+=buildMsgTime(msg.timestamp);
   div.innerHTML=html;
   if(msg.type==='video_note'&&msg.voice){div.classList.add('video-note-msg');div.appendChild(renderVideoNote(msg.voice,isM));}
