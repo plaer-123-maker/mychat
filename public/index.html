@@ -1905,6 +1905,10 @@ function buildChatItem(c, isPinned, chatType) {
 function renderChatList() {
   if(document.getElementById('searchInput').value.trim()) return;
   var list = document.getElementById('sidebarList');
+  // Сразу очищаем — чтобы никогда не оставался контент от другой вкладки
+  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all'){
+    list.innerHTML='';
+  }
   var html = '';
   if(currentView==='private'||currentView==='pm') {
     var pinned = latestChats.filter(function(c){ return isPinned('pm', c.login); });
