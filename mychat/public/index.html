@@ -1392,6 +1392,19 @@ function getNickPlain(login, nickname) {
   return nickname || login;
 }
 
+function formatTime(ts) {
+  if (!ts) return '';
+  var d = new Date(Number(ts));
+  var now = new Date();
+  var isToday = d.toDateString() === now.toDateString();
+  var h = d.getHours(), m = d.getMinutes();
+  var time = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+  if (isToday) return time;
+  var yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return 'вчера';
+  return d.toLocaleDateString('ru', { day: 'numeric', month: 'short' });
+}
+
 function formatLastSeen(ts) {
   if (!ts) return 'давно';
   var diff = Date.now() - ts;
@@ -1729,7 +1742,7 @@ socket.on('userVipUpdated',function(d){
     myVipUntil=d.vip_until||0;
     myVipEmoji=d.vip_emoji||null;
   }
-  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all') renderChatList();
+  renderChatList();
 });
 socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
 socket.on('nicknameChanged',function(n){myNickname=n;});
@@ -1782,7 +1795,8 @@ function switchToAll(){
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
-  if(latestChats.length>0||latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
+  if(latestChats.length>0||latestRooms.length>0){renderChatList();}
+  else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
 }
 
 function renderAllChats(){
@@ -2998,19 +3012,9 @@ socket.on('callEnded',function(data){
   clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
   document.getElementById('incomingCallModal').classList.remove('show');
   var partner=callPartnerLogin||(incomingCallData?incomingCallData.from:null);
-  var reason=data&&data.reason;
-  if(reason==='offline'){
-    cleanupCall();
-    showError('📵 Пользователь не в сети');
-  } else if(reason==='timeout'){
-    if(peerConnection){
-      // We were the caller and nobody answered
-      cleanupCall();
-      showError('📵 Нет ответа');
-    } else {
-      // We were the callee — missed call
-      incomingCallData=null;
-    }
+  if(data&&data.reason==='timeout'&&!peerConnection){
+    // We were ringing — just close the modal, server already saved log
+    incomingCallData=null;
   } else {
     cleanupCall();
   }
@@ -3140,7 +3144,7 @@ function renderVideoNote(src,isMine){
 /* ── PINNED CHATS ── */
 socket.on('pinnedChats',function(rows){
   pinnedChats=rows;
-  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all') renderChatList();
+  renderChatList();
 });
 socket.on('pinChatResult',function(d){
   if(d.ok){socket.emit('getPinnedChats');}
@@ -3330,7 +3334,7 @@ socket.on('verifyActivateResult', function(d) {
 /* ── 2. MUTED CHATS ── */
 socket.on('mutedChats', function(rows) {
   mutedChats = rows;
-  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all') renderChatList();
+  renderChatList();
 });
 socket.on('muteChatResult', function(d) {
   if (d.ok) {
