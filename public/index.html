@@ -2574,29 +2574,21 @@ function formatText(s){
   // Code blocks (``` ```)  - must be before inline code
   t=t.replace(/```([\s\S]*?)```/g,'<pre class="msg-code-block">$1</pre>');
   // Inline code
-  t=t.replace(/`([^`
-]+)`/g,'<code class="msg-code">$1</code>');
+  t=t.replace(/`([^`\n]+)`/g,'<code class="msg-code">$1</code>');
   // Bold **text** or __text__
-  t=t.replace(/\*\*([^*
-]+)\*\*/g,'<b>$1</b>');
-  t=t.replace(/__([^_
-]+)__/g,'<b>$1</b>');
+  t=t.replace(/\*\*([^*\n]+)\*\*/g,'<b>$1</b>');
+  t=t.replace(/__([^_\n]+)__/g,'<b>$1</b>');
   // Italic *text* or _text_
-  t=t.replace(/\*([^*
-]+)\*/g,'<i>$1</i>');
-  t=t.replace(/_([^_
-]+)_/g,'<i>$1</i>');
+  t=t.replace(/\*([^*\n]+)\*/g,'<i>$1</i>');
+  t=t.replace(/_([^_\n]+)_/g,'<i>$1</i>');
   // Strikethrough ~~text~~
-  t=t.replace(/~~([^~
-]+)~~/g,'<s>$1</s>');
+  t=t.replace(/~~([^~\n]+)~~/g,'<s>$1</s>');
   // Spoiler ||text||
-  t=t.replace(/\|\|([^|
-]+)\|\|/g,'<span class="msg-spoiler" onclick="this.classList.toggle('revealed')">$1</span>');
+  t=t.replace(/\|\|([^|\n]+)\|\|/g,"<span class=\"msg-spoiler\" onclick=\"this.classList.toggle('revealed')\">$1</span>");
   // URLs
   t=t.replace(/(https?:\/\/[^\s<>"]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer" class="msg-link">$1</a>');
   // Newlines
-  t=t.replace(/
-/g,'<br>');
+  t=t.replace(/\n/g,'<br>');
   return t;
 }
 
@@ -2817,8 +2809,8 @@ function msgSearchInput() {
     // Highlight occurrences
     var result = '';
     var last = 0;
-    var re = new RegExp(escHtml(q).replace(/[.*+?^${}()|[\]\]/g,'\$&'), 'gi');
-    result = el.innerHTML.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\]/g,'\$&')+')', 'gi'), '<mark class="msg-highlight">$1</mark>');
+        var re = new RegExp(escHtml(q).replace(/[-[\]{}()*+?.,\\^$|#\s]/g,'\\$&'), 'gi');
+        result = el.innerHTML.replace(new RegExp('('+q.replace(/[-[\]{}()*+?.,\\^$|#\s]/g,'\\$&')+')', 'gi'), '<mark class="msg-highlight">$1</mark>');
     el.innerHTML = result;
   });
   
@@ -2972,7 +2964,7 @@ function openScheduleModal() {
     '<input type="datetime-local" id="schedTime" value="'+dtLocal+'">' +
     '<div id="schedList" class="sched-list"></div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end">' +
-    '<button onclick="document.getElementById('schedModal').remove()" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button>' +
+    '<button onclick="var m=document.getElementById(\'schedModal\');if(m)m.remove();" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button>' +
     '<button onclick="submitSchedule()" style="background:var(--accent);border:none;border-radius:10px;padding:9px 18px;color:#fff;cursor:pointer;font-weight:600">Запланировать</button>' +
     '</div></div>';
   document.body.appendChild(modal);
@@ -3053,7 +3045,7 @@ function openSecretTimerModal() {
   modal.innerHTML = '<div class="secret-modal-box"><h3>🔥 Самоудаляющиеся сообщения</h3><p style="font-size:13px;color:var(--text-secondary);margin:0">Сообщения в этом чате будут автоматически удаляться через выбранное время после отправки.</p>' +
     '<div class="secret-timer-options">' +
     opts.map(function(o){ return '<div class="secret-timer-opt'+(current===o.val?' selected':'')+'" onclick="setSecretTimer('+o.val+',this)">'+o.label+'</div>'; }).join('') +
-    '</div><div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="this.closest('.secret-modal').remove()" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button></div></div>';
+    '</div><div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="this.closest(\'.secret-modal\').remove()" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button></div></div>';
   document.body.appendChild(modal);
   modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
 }
