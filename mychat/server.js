@@ -1153,15 +1153,20 @@ io.on('connection', (socket) => {
     try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmojiPM = ve.rows[0].vip_emoji || null; } catch(e) {}
     const msg = { from_login: socket.userLogin, vip_emoji: vipEmojiPM, to_login: data.toLogin, from_nickname: socket.username, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
-      if (data.text) data.text = encryptText(data.text);
-      if (data.reply_to_text) data.reply_to_text = encryptText(data.reply_to_text);
+      const encPmText = encryptText(msg.text);
+      const encPmReply = encryptText(msg.reply_to_text);
       const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,image,voice,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id',
-        [msg.from_login, msg.to_login, msg.from_nickname, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
+        [msg.from_login, msg.to_login, msg.from_nickname, encPmText, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, encPmReply, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       const msgToSend = fixMsgImages({...msg});
-      socket.emit('newPrivateMessage', msgToSend);
-      var target = findSocketByLogin(data.toLogin);
-      if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+      // If sending to self (Saved Messages) — emit only once
+      if (data.toLogin === socket.userLogin) {
+        socket.emit('newPrivateMessage', msgToSend);
+      } else {
+        socket.emit('newPrivateMessage', msgToSend);
+        var target = findSocketByLogin(data.toLogin);
+        if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+      }
     } catch(e) { console.error(e); }
   });
 

@@ -2304,6 +2304,8 @@ socket.on('rateLimited',function(d){
 
 socket.on('newPrivateMessage',function(msg){
   if(currentView==='pm'&&(currentPrivateLogin===msg.from_login||currentPrivateLogin===msg.to_login)){
+    // Guard against duplicate messages (e.g. saved messages sends to self)
+    if(msg.id && document.getElementById('pm-'+msg.id)) return;
     var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
     addPM(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
   }
