@@ -2132,25 +2132,48 @@ async function initAiBot(pool) {
 }
 if (AI_BOT_KEY) initAiBot(pool);
 
+// Free models to try in order (fallback if one is unavailable)
+const AI_FREE_MODELS = [
+  'meta-llama/llama-3.3-70b-instruct:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'google/gemma-3-27b-it:free',
+  'mistralai/mistral-7b-instruct:free',
+];
+
 async function askAiBot(userMessage, history) {
-  if (!AI_BOT_KEY) return 'AI бот не настроен. Добавьте AI_BOT_KEY в переменные среды.';
-  try {
-    const messages = (history || []).slice(-10).concat([{ role: 'user', content: userMessage }]);
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + AI_BOT_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'meta-llama/llama-3.1-8b-instruct:free',
-        messages: [{ role: 'system', content: 'Ты дружелюбный помощник в мессенджере MyChat. Отвечай кратко и по делу.' }].concat(messages),
-        max_tokens: 500
-      })
-    });
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || 'Не удалось получить ответ';
-  } catch(e) {
-    console.error('[AI Bot] error:', e);
-    return 'Ошибка AI: ' + e.message;
+  if (!AI_BOT_KEY) return '\u26a0\ufe0f AI бот не настроен. Добавьте AI_BOT_KEY в переменные Railway.';
+  const messages = (history || []).slice(-10).concat([{ role: 'user', content: userMessage }]);
+  const systemMsg = { role: 'system', content: 'Ты дружелюбный помощник в мессенджере MyChat. Отвечай кратко и по делу. Можешь отвечать на русском языке.' };
+
+  for (const model of AI_FREE_MODELS) {
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + AI_BOT_KEY,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://mychat.app',
+          'X-Title': 'MyChat AI Bot'
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [systemMsg].concat(messages),
+          max_tokens: 600
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        console.error('[AI Bot] Model ' + model + ' error:', JSON.stringify(data.error || data));
+        continue;
+      }
+      const text = data.choices?.[0]?.message?.content;
+      if (text) return text;
+      console.error('[AI Bot] Model ' + model + ' returned empty choices:', JSON.stringify(data));
+    } catch(e) {
+      console.error('[AI Bot] Model ' + model + ' exception:', e.message);
+    }
   }
+  return '\ud83d\ude14 Все AI модели сейчас недоступны. Попробуй позже.';
 }
 
 // ── SECRET CHATS (auto-delete timer) ─────────────────────
