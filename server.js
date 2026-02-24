@@ -92,7 +92,7 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Permissions-Policy', 'camera=*, microphone=*, geolocation=*');
   next();
 });
 
@@ -414,6 +414,15 @@ function getIP(socket) {
 async function addLog(action, username, detail, ip) {
   try { await pool.query('INSERT INTO logs (action,username,detail,ip,timestamp) VALUES ($1,$2,$3,$4,$5)',
     [action, username||'', detail||'', ip||'', Date.now()]); } catch(e) {}
+}
+
+function anonymizeVotes(votes) {
+  const counts = {};
+  Object.values(votes||{}).forEach(function(v) {
+    var ids = Array.isArray(v) ? v : [v];
+    ids.forEach(function(id) { counts[id] = (counts[id] || 0) + 1; });
+  });
+  return { __anonymous: true, counts };
 }
 
 function isAdmin(socket) {
@@ -1882,6 +1891,160 @@ io.on('connection', (socket) => {
     } catch(e) { console.error('deleteChatHistory error:', e); socket.emit('chatError', 'Ошибка удаления истории'); }
   });
 
+
+  // ── POLLS ───────────────────────────────────────────────
+  socket.on('createPoll', async ({ chatType, chatId, question, options, multipleChoice, anonymous }) => {
+    if (!socket.userLogin) return;
+    if (!question || !options || options.length < 2 || options.length > 10) return socket.emit('chatError', 'Опрос: от 2 до 10 вариантов');
+    try {
+      const opts = options.map((text, i) => ({ id: i, text: String(text).slice(0, 100) }));
+      const res = await pool.query(
+        'INSERT INTO polls (chat_type,chat_id,creator_login,question,options,votes,created_at,multiple_choice,anonymous) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+        [chatType, String(chatId), socket.userLogin, String(question).slice(0, 300), JSON.stringify(opts), '{}', Date.now(), !!multipleChoice, !!anonymous]
+      );
+      const poll = { id: res.rows[0].id, chatType, chatId, question, options: opts, votes: {}, creatorLogin: socket.userLogin, creatorNick: socket.username, multipleChoice: !!multipleChoice, anonymous: !!anonymous, createdAt: Date.now() };
+      // Broadcast to correct chat
+      if (chatType === 'general') io.emit('newPoll', poll);
+      else if (chatType === 'room') io.to('room_' + chatId).emit('newPoll', poll);
+      else if (chatType === 'pm') {
+        socket.emit('newPoll', poll);
+        const other = findSocketByLogin(chatId);
+        if (other) other.emit('newPoll', poll);
+      }
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('votePoll', async ({ pollId, optionId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT * FROM polls WHERE id=$1', [pollId]);
+      if (!res.rows.length) return;
+      const poll = res.rows[0];
+      let votes = poll.votes || {};
+      if (poll.multiple_choice) {
+        if (!Array.isArray(votes[socket.userLogin])) votes[socket.userLogin] = [];
+        const idx = votes[socket.userLogin].indexOf(optionId);
+        if (idx === -1) votes[socket.userLogin].push(optionId);
+        else votes[socket.userLogin].splice(idx, 1);
+      } else {
+        if (votes[socket.userLogin] === optionId) delete votes[socket.userLogin];
+        else votes[socket.userLogin] = optionId;
+      }
+      await pool.query('UPDATE polls SET votes=$1 WHERE id=$2', [JSON.stringify(votes), pollId]);
+      // Build results to send (anonymous = hide who voted)
+      const result = { pollId, votes: poll.anonymous ? anonymizeVotes(votes) : votes };
+      if (poll.chat_type === 'general') io.emit('pollVoteUpdate', result);
+      else if (poll.chat_type === 'room') io.to('room_' + poll.chat_id).emit('pollVoteUpdate', result);
+      else if (poll.chat_type === 'pm') {
+        socket.emit('pollVoteUpdate', result);
+        const other = findSocketByLogin(poll.chat_id);
+        if (other) other.emit('pollVoteUpdate', result);
+      }
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('getPolls', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT * FROM polls WHERE chat_type=$1 AND chat_id=$2 ORDER BY created_at DESC LIMIT 20', [chatType, String(chatId)]);
+      socket.emit('pollsHistory', res.rows.map(p => ({
+        id: p.id, question: p.question, options: p.options, votes: p.anonymous ? anonymizeVotes(p.votes) : p.votes,
+        creatorLogin: p.creator_login, multipleChoice: p.multiple_choice, anonymous: p.anonymous, createdAt: p.created_at
+      })));
+    } catch(e) {}
+  });
+
+  socket.on('deletePoll', async ({ pollId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT creator_login, chat_type, chat_id FROM polls WHERE id=$1', [pollId]);
+      if (!res.rows.length) return;
+      const p = res.rows[0];
+      if (p.creator_login !== socket.userLogin && !isAdmin(socket)) return;
+      await pool.query('DELETE FROM polls WHERE id=$1', [pollId]);
+      const payload = { pollId };
+      if (p.chat_type === 'general') io.emit('pollDeleted', payload);
+      else if (p.chat_type === 'room') io.to('room_' + p.chat_id).emit('pollDeleted', payload);
+      else { socket.emit('pollDeleted', payload); const other = findSocketByLogin(p.chat_id); if(other) other.emit('pollDeleted', payload); }
+    } catch(e) {}
+  });
+
+
+
+
+  // ── AI BOT ───────────────────────────────────────────────
+  socket.on('askAiBot', async ({ message, history }) => {
+    if (!socket.userLogin) return;
+    if (!message || !message.trim()) return;
+    if (!checkRateLimit(ip, 'message')) return socket.emit('rateLimited', { msg: 'Слишком быстро!' });
+    try {
+      const reply = await askAiBot(sanitize(message, 1000), history || []);
+      const ts = Date.now();
+      const msg = { from_login: AI_BOT_LOGIN, to_login: socket.userLogin, from_nickname: AI_BOT_NICK, text: reply, type: 'text', timestamp: ts, id: Date.now() };
+      // Save to DB
+      const encReply = encryptText(reply);
+      const encMsg = encryptText(message);
+      const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+        [AI_BOT_LOGIN, socket.userLogin, AI_BOT_NICK, encReply, 'text', ts]);
+      msg.id = res.rows[0].id;
+      socket.emit('newPrivateMessage', msg);
+      socket.emit('getMyChats');
+    } catch(e) { console.error(e); socket.emit('chatError', 'Ошибка AI бота'); }
+  });
+
+  // ── SCHEDULED MESSAGES ───────────────────────────────────
+  socket.on('scheduleMessage', async ({ chatType, chatId, text, sendAt }) => {
+    if (!socket.userLogin || !text || !sendAt) return;
+    if (sendAt <= Date.now()) return socket.emit('chatError', 'Время должно быть в будущем');
+    if (sendAt - Date.now() > 365 * 24 * 3600 * 1000) return socket.emit('chatError', 'Максимум 1 год вперёд');
+    try {
+      const res = await pool.query(
+        'INSERT INTO scheduled_messages (user_login,chat_type,chat_id,text,send_at,created_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+        [socket.userLogin, chatType, String(chatId), sanitize(text, 4000), sendAt, Date.now()]
+      );
+      socket.emit('scheduledMsgCreated', { id: res.rows[0].id, chatType, chatId, text, sendAt });
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('getScheduledMessages', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT * FROM scheduled_messages WHERE user_login=$1 AND sent=false ORDER BY send_at ASC', [socket.userLogin]);
+      socket.emit('scheduledMessages', res.rows);
+    } catch(e) {}
+  });
+
+  socket.on('cancelScheduledMessage', async ({ id }) => {
+    if (!socket.userLogin) return;
+    try {
+      await pool.query('DELETE FROM scheduled_messages WHERE id=$1 AND user_login=$2', [id, socket.userLogin]);
+      socket.emit('scheduledMsgCancelled', { id });
+    } catch(e) {}
+  });
+
+  // ── SECRET CHAT TIMER ────────────────────────────────────
+  socket.on('setSecretTimer', async ({ otherLogin, timerSeconds }) => {
+    if (!socket.userLogin) return;
+    const t = parseInt(timerSeconds) || 0;
+    try {
+      await pool.query(
+        'INSERT INTO secret_chat_settings (user_login, other_login, timer_seconds) VALUES ($1,$2,$3) ON CONFLICT (user_login, other_login) DO UPDATE SET timer_seconds=$3',
+        [socket.userLogin, otherLogin, t]
+      );
+      socket.emit('secretTimerSet', { otherLogin, timerSeconds: t });
+      const other = findSocketByLogin(otherLogin);
+      if (other) other.emit('secretTimerSet', { otherLogin: socket.userLogin, timerSeconds: t });
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('getSecretTimer', async ({ otherLogin }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT timer_seconds FROM secret_chat_settings WHERE user_login=$1 AND other_login=$2', [socket.userLogin, otherLogin]);
+      socket.emit('secretTimerResult', { otherLogin, timerSeconds: res.rows[0]?.timer_seconds || 0 });
+    } catch(e) {}
+  });
+
   socket.on('disconnect', () => {
     if (socket.username) addLog('logout', socket.username, 'Logout', ip);
     if (socket.userLogin) {
@@ -1894,3 +2057,153 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log('Server running on port ' + PORT));
+// ── SCHEDULED MESSAGES ──────────────────────────────────
+async function initScheduledTables(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS scheduled_messages (
+    id SERIAL PRIMARY KEY,
+    user_login VARCHAR(50) NOT NULL,
+    chat_type VARCHAR(10) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    text TEXT,
+    send_at BIGINT NOT NULL,
+    sent BOOLEAN DEFAULT false,
+    created_at BIGINT NOT NULL
+  )`);
+}
+initScheduledTables(pool).catch(console.error);
+
+// Check and send scheduled messages every 30 seconds
+setInterval(async () => {
+  try {
+    const now = Date.now();
+    const due = await pool.query('SELECT * FROM scheduled_messages WHERE sent=false AND send_at <= $1 LIMIT 50', [now]);
+    for (const msg of due.rows) {
+      await pool.query('UPDATE scheduled_messages SET sent=true WHERE id=$1', [msg.id]);
+      const userSocket = findSocketByLogin(msg.user_login);
+      const encText = encryptText(msg.text);
+      const ts = Date.now();
+      try {
+        if (msg.chat_type === 'general') {
+          const res = await pool.query('INSERT INTO messages (username,user_login,text,type,timestamp) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+            [msg.user_login, msg.user_login, encText, 'text', ts]);
+          const outMsg = { id: res.rows[0].id, username: msg.user_login, user_login: msg.user_login, text: msg.text, type: 'text', timestamp: ts };
+          io.emit('chatMessage', outMsg);
+        } else if (msg.chat_type === 'pm') {
+          const u = await pool.query('SELECT nickname FROM users WHERE login=$1', [msg.user_login]);
+          const nick = u.rows[0]?.nickname || msg.user_login;
+          const res = await pool.query('INSERT INTO private_messages (from_login,to_login,from_nickname,text,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+            [msg.user_login, msg.chat_id, nick, encText, 'text', ts]);
+          const outMsg = { id: res.rows[0].id, from_login: msg.user_login, to_login: msg.chat_id, from_nickname: nick, text: msg.text, type: 'text', timestamp: ts };
+          if (userSocket) userSocket.emit('newPrivateMessage', outMsg);
+          const target = findSocketByLogin(msg.chat_id);
+          if (target && msg.chat_id !== msg.user_login) target.emit('newPrivateMessage', outMsg);
+        } else if (msg.chat_type === 'room') {
+          const u = await pool.query('SELECT nickname FROM users WHERE login=$1', [msg.user_login]);
+          const nick = u.rows[0]?.nickname || msg.user_login;
+          const res = await pool.query('INSERT INTO room_messages (room_id,user_login,username,text,type,timestamp) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+            [parseInt(msg.chat_id), msg.user_login, nick, encText, 'text', ts]);
+          const outMsg = { id: res.rows[0].id, room_id: parseInt(msg.chat_id), user_login: msg.user_login, username: nick, text: msg.text, type: 'text', timestamp: ts };
+          io.to('room_' + msg.chat_id).emit('roomNewMessage', outMsg);
+        }
+      } catch(e) { console.error('scheduled send error:', e); }
+      if (userSocket) userSocket.emit('scheduledMsgSent', { id: msg.id });
+    }
+  } catch(e) { console.error('scheduler error:', e); }
+}, 30_000);
+
+// ── AI BOT INTEGRATION ──────────────────────────────────
+// Set AI_BOT_KEY env variable to your OpenAI/OpenRouter API key
+const AI_BOT_KEY = process.env.AI_BOT_KEY || null;
+const AI_BOT_LOGIN = '_ai_bot';
+const AI_BOT_NICK = '🤖 AI Ассистент';
+
+async function initAiBot(pool) {
+  try {
+    const exists = await pool.query('SELECT login FROM users WHERE login=$1', [AI_BOT_LOGIN]);
+    if (exists.rows.length === 0) {
+      const fakeHash = await require('bcryptjs').hash('bot_no_login_' + Date.now(), 6);
+      await pool.query(
+        'INSERT INTO users (login,password,nickname,banned,muted_until,role,token) VALUES ($1,$2,$3,false,0,$4,$5)',
+        [AI_BOT_LOGIN, fakeHash, AI_BOT_NICK, 'bot', require('crypto').randomBytes(32).toString('hex')]
+      );
+      console.log('[AI Bot] Bot account created');
+    }
+  } catch(e) { console.log('[AI Bot] init skipped:', e.message); }
+}
+if (AI_BOT_KEY) initAiBot(pool);
+
+async function askAiBot(userMessage, history) {
+  if (!AI_BOT_KEY) return 'AI бот не настроен. Добавьте AI_BOT_KEY в переменные среды.';
+  try {
+    const messages = (history || []).slice(-10).concat([{ role: 'user', content: userMessage }]);
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + AI_BOT_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'meta-llama/llama-3.1-8b-instruct:free',
+        messages: [{ role: 'system', content: 'Ты дружелюбный помощник в мессенджере MyChat. Отвечай кратко и по делу.' }].concat(messages),
+        max_tokens: 500
+      })
+    });
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'Не удалось получить ответ';
+  } catch(e) {
+    console.error('[AI Bot] error:', e);
+    return 'Ошибка AI: ' + e.message;
+  }
+}
+
+// ── SECRET CHATS (auto-delete timer) ─────────────────────
+async function initSecretChatTables(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS secret_chat_settings (
+    id SERIAL PRIMARY KEY,
+    user_login VARCHAR(50) NOT NULL,
+    other_login VARCHAR(50) NOT NULL,
+    timer_seconds INT NOT NULL DEFAULT 0,
+    UNIQUE(user_login, other_login)
+  )`);
+}
+initSecretChatTables(pool).catch(console.error);
+
+// Auto-delete expired secret messages every 30 seconds
+setInterval(async () => {
+  try {
+    // Delete PM messages where both parties have a timer set
+    const settings = await pool.query('SELECT user_login, other_login, timer_seconds FROM secret_chat_settings WHERE timer_seconds > 0');
+    for (const row of settings.rows) {
+      const cutoff = Date.now() - (row.timer_seconds * 1000);
+      const deleted = await pool.query(
+        'DELETE FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND timestamp < $3 RETURNING id',
+        [row.user_login, row.other_login, cutoff]
+      );
+      if (deleted.rows.length > 0) {
+        const ids = deleted.rows.map(r => r.id);
+        const s1 = findSocketByLogin(row.user_login);
+        const s2 = findSocketByLogin(row.other_login);
+        ids.forEach(id => {
+          if (s1) s1.emit('secretMsgDeleted', { id });
+          if (s2) s2.emit('secretMsgDeleted', { id });
+        });
+      }
+    }
+  } catch(e) {}
+}, 30_000);
+
+// ═══════════════════════════════════════════════
+// POLLS / ГОЛОСОВАНИЯ
+// ═══════════════════════════════════════════════
+async function initPollTables(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS polls (
+    id SERIAL PRIMARY KEY,
+    chat_type VARCHAR(10) NOT NULL, -- 'general', 'pm', 'room'
+    chat_id VARCHAR(100) NOT NULL,  -- login pair or room_id or 'general'
+    creator_login VARCHAR(50) NOT NULL,
+    question TEXT NOT NULL,
+    options JSONB NOT NULL,          -- [{id, text}]
+    votes JSONB NOT NULL DEFAULT '{}', -- {login: optionId}
+    created_at BIGINT NOT NULL,
+    multiple_choice BOOLEAN DEFAULT false,
+    anonymous BOOLEAN DEFAULT false
+  )`);
+}
+initPollTables(pool).catch(console.error);

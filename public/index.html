@@ -180,6 +180,15 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 .message .name{font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:3px;}
 .message.mine .name{color:rgba(255,255,255,0.7);}
 .message .text{line-height:1.5;font-size:14px;}
+.msg-code-block{background:var(--bg-input);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:12px;overflow-x:auto;white-space:pre;margin:4px 0;display:block;border:1px solid rgba(255,255,255,0.08);}
+.msg-code{background:var(--bg-input);border-radius:4px;padding:1px 5px;font-family:monospace;font-size:12px;}
+.msg-link{color:var(--accent);text-decoration:underline;}
+.msg-spoiler{background:var(--text-secondary);color:var(--text-secondary);border-radius:4px;padding:0 4px;cursor:pointer;transition:0.2s;user-select:none;}
+.msg-spoiler.revealed{background:transparent;color:inherit;}
+.fmt-toolbar{display:none;flex-direction:row;gap:4px;padding:4px 8px;background:var(--bg-secondary);border-top:1px solid var(--border-color);}
+.fmt-toolbar.visible{display:flex;}
+.fmt-btn{background:var(--bg-input);border:none;color:var(--text-secondary);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:13px;font-weight:bold;transition:0.15s;display:flex;align-items:center;justify-content:center;}
+.fmt-btn:hover{background:var(--accent);color:#fff;}
 .message.has-photo{padding:3px 3px 6px;}
 .message.has-photo .photo-img-wrap{border-radius:calc(var(--radius-msg) - 3px);overflow:hidden;margin-bottom:2px;}
 .message.mine.has-photo .photo-img-wrap{border-bottom-right-radius:2px;}
@@ -525,6 +534,90 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 .action-sheet-btn:hover{background:var(--bg-hover);}
 .action-sheet-btn.danger{color:#e94560;}
 .action-sheet-btn.cancel{color:var(--text-muted);border-top:1px solid var(--border);margin-top:6px;}
+
+/* ── POLLS ───────────────────────── */
+.poll-card{background:var(--bg-secondary);border-radius:14px;padding:14px 16px;margin:4px 0;min-width:240px;max-width:340px;border:1px solid rgba(255,255,255,0.06);}
+.poll-question{font-weight:700;font-size:14px;margin-bottom:12px;line-height:1.4;}
+.poll-option{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;cursor:pointer;}
+.poll-option-bar-wrap{background:rgba(255,255,255,0.07);border-radius:8px;height:32px;position:relative;overflow:hidden;transition:0.2s;}
+.poll-option-bar-wrap:hover{background:rgba(255,255,255,0.12);}
+.poll-option-bar{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent),#7b5cff);border-radius:8px;transition:width 0.4s;}
+.poll-option-bar-wrap.voted .poll-option-bar{background:linear-gradient(90deg,#27ae60,#2ecc71);}
+.poll-option-label{position:relative;z-index:1;padding:0 10px;line-height:32px;font-size:13px;display:flex;justify-content:space-between;align-items:center;}
+.poll-option-pct{font-size:11px;color:var(--text-muted);font-weight:600;}
+.poll-footer{font-size:11px;color:var(--text-muted);margin-top:8px;display:flex;justify-content:space-between;}
+.poll-delete-btn{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:0;}
+.poll-delete-btn:hover{color:#e74c3c;}
+/* Poll create modal */
+.poll-modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:center;justify-content:center;}
+.poll-modal-box{background:var(--bg-secondary);border-radius:18px;padding:24px;width:min(420px,94vw);display:flex;flex-direction:column;gap:12px;}
+.poll-modal-box h3{margin:0;font-size:18px;}
+.poll-modal-box input,.poll-modal-box textarea{background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;color:var(--text-primary);font-size:14px;width:100%;box-sizing:border-box;outline:none;}
+.poll-option-row{display:flex;gap:8px;align-items:center;}
+.poll-option-row input{flex:1;}
+.poll-remove-opt{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:0 4px;}
+.poll-add-opt{background:var(--bg-input);border:1px dashed var(--border-color);border-radius:8px;color:var(--text-secondary);padding:8px;cursor:pointer;font-size:13px;width:100%;}
+.poll-modal-btns{display:flex;gap:8px;justify-content:flex-end;}
+.poll-modal-btns button{padding:9px 20px;border-radius:10px;border:none;cursor:pointer;font-weight:600;font-size:14px;}
+.poll-cancel-btn{background:var(--bg-input);color:var(--text-secondary);}
+.poll-create-btn{background:var(--accent);color:#fff;}
+.poll-toggle-row{display:flex;gap:16px;font-size:13px;color:var(--text-secondary);}
+.poll-toggle-row label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+
+/* ── MESSAGE SEARCH ─────────────────── */
+.msg-search-bar{display:none;align-items:center;gap:8px;padding:8px 14px;background:var(--bg-secondary);border-bottom:1px solid var(--border-color);position:relative;}
+.msg-search-bar.visible{display:flex;}
+.msg-search-bar input{flex:1;background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:7px 12px;color:var(--text-primary);font-size:13px;outline:none;}
+.msg-search-nav{display:flex;gap:4px;align-items:center;}
+.msg-search-nav button{background:var(--bg-input);border:none;color:var(--text-secondary);border-radius:8px;width:28px;height:28px;cursor:pointer;font-size:14px;}
+.msg-search-nav button:hover{background:var(--accent);color:#fff;}
+.msg-search-count{font-size:12px;color:var(--text-muted);white-space:nowrap;}
+.msg-search-close{background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;padding:0 4px;}
+.msg-highlight{background:rgba(255,200,0,0.35);border-radius:2px;}
+.msg-highlight.active{background:rgba(255,160,0,0.6);}
+
+/* ── SECRET CHAT ──────────────────── */
+.secret-timer-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(231,76,60,0.15);color:#e74c3c;border-radius:20px;padding:2px 10px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid rgba(231,76,60,0.3);}
+.secret-timer-badge:hover{background:rgba(231,76,60,0.25);}
+.secret-modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:center;justify-content:center;}
+.secret-modal-box{background:var(--bg-secondary);border-radius:18px;padding:24px;width:min(360px,94vw);display:flex;flex-direction:column;gap:14px;}
+.secret-timer-options{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.secret-timer-opt{background:var(--bg-input);border:2px solid transparent;border-radius:10px;padding:10px;cursor:pointer;text-align:center;font-size:13px;font-weight:600;transition:0.15s;}
+.secret-timer-opt:hover,.secret-timer-opt.selected{border-color:var(--accent);color:var(--accent);}
+
+/* ── SCHEDULED MESSAGES ──────────────── */
+.sched-modal{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2000;display:flex;align-items:center;justify-content:center;}
+.sched-modal-box{background:var(--bg-secondary);border-radius:18px;padding:24px;width:min(400px,94vw);display:flex;flex-direction:column;gap:14px;}
+.sched-modal-box h3{margin:0;font-size:18px;}
+.sched-modal-box input[type="datetime-local"]{background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:10px 14px;color:var(--text-primary);font-size:14px;width:100%;box-sizing:border-box;outline:none;}
+.sched-list{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;}
+.sched-item{background:var(--bg-input);border-radius:10px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;font-size:13px;}
+.sched-item-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-secondary);}
+.sched-item-time{font-size:11px;color:var(--accent);font-weight:600;margin:0 8px;}
+.sched-cancel-btn{background:none;border:none;color:#e74c3c;cursor:pointer;font-size:16px;}
+
+/* ── GEOLOCATION ─────────────────────── */
+.geo-msg{display:flex;flex-direction:column;gap:6px;background:var(--bg-input);border-radius:12px;overflow:hidden;max-width:260px;}
+.geo-map-preview{width:100%;height:140px;object-fit:cover;display:block;}
+.geo-info{padding:8px 12px;font-size:13px;}
+.geo-info a{color:var(--accent);text-decoration:none;font-weight:600;}
+.geo-info a:hover{text-decoration:underline;}
+
+/* ── AI BOT ──────────────────────────── */
+.ai-chat-btn{position:fixed;bottom:90px;right:20px;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#6c3fff,#3fa7ff);border:none;color:#fff;font-size:22px;cursor:pointer;box-shadow:0 4px 20px rgba(108,63,255,0.4);z-index:100;transition:transform 0.2s,box-shadow 0.2s;}
+.ai-chat-btn:hover{transform:scale(1.1);box-shadow:0 6px 28px rgba(108,63,255,0.6);}
+.ai-panel{position:fixed;bottom:80px;right:20px;width:340px;max-height:500px;background:var(--bg-secondary);border-radius:18px;box-shadow:0 8px 40px rgba(0,0,0,0.4);z-index:200;display:none;flex-direction:column;overflow:hidden;border:1px solid rgba(255,255,255,0.08);}
+.ai-panel.open{display:flex;}
+.ai-panel-header{padding:14px 18px;background:linear-gradient(135deg,#6c3fff,#3fa7ff);color:#fff;display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:15px;}
+.ai-panel-close{background:none;border:none;color:#fff;cursor:pointer;font-size:20px;}
+.ai-messages{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:200px;}
+.ai-msg{max-width:85%;padding:9px 13px;border-radius:12px;font-size:13px;line-height:1.5;}
+.ai-msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px;}
+.ai-msg.bot{align-self:flex-start;background:var(--bg-input);color:var(--text-primary);border-bottom-left-radius:4px;}
+.ai-msg.typing{color:var(--text-muted);font-style:italic;}
+.ai-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border-color);}
+.ai-input-row input{flex:1;background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;color:var(--text-primary);font-size:13px;outline:none;}
+.ai-input-row button{background:linear-gradient(135deg,#6c3fff,#3fa7ff);border:none;border-radius:10px;color:#fff;padding:8px 14px;cursor:pointer;font-size:16px;}
 </style>
 </head>
 <body>
@@ -861,6 +954,15 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       <div class="chat-header-btns" id="chatHeaderBtns"></div>
       <button id="dialogBgBtn" onclick="openDialogBgSettings()" title="Фон диалога" style="background:transparent;border:none;color:var(--text-secondary);font-size:18px;cursor:pointer;padding:6px;border-radius:8px;display:none;">🖼</button>
     </div>
+    <div class="msg-search-bar" id="msgSearchBar">
+      <input id="msgSearchInput" placeholder="Поиск в чате..." oninput="msgSearchInput()">
+      <div class="msg-search-nav">
+        <span class="msg-search-count" id="msgSearchCount"></span>
+        <button onclick="msgSearchNav(-1)" title="Предыдущий">▲</button>
+        <button onclick="msgSearchNav(1)" title="Следующий">▼</button>
+      </div>
+      <button class="msg-search-close" onclick="closeMsgSearch()" title="Закрыть">✕</button>
+    </div>
     <div class="messages" id="messages"></div>
     <!-- Video Note Recorder -->
     <div class="vn-modal-overlay" id="videoNoteModal">
@@ -899,10 +1001,22 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       <input type="file" id="fileInput" accept="*/*" multiple style="display:none;">
       <label class="ia-btn" for="fileInput" title="Файл">📁</label>
       <button class="ia-btn" id="emojiPanelBtn" title="Эмодзи/Стикеры">😊</button>
+      <div class="fmt-toolbar" id="fmtToolbar">
+        <button class="fmt-btn" title="Жирный (Ctrl+B)" onclick="fmtWrap('**','**')"><b>B</b></button>
+        <button class="fmt-btn" title="Курсив (Ctrl+I)" onclick="fmtWrap('_','_')"><i>I</i></button>
+        <button class="fmt-btn" title="Зачёркнутый" onclick="fmtWrap('~~','~~')"><s>S</s></button>
+        <button class="fmt-btn" title="Код" onclick="fmtWrap('`','`')">⌨</button>
+        <button class="fmt-btn" title="Блок кода" onclick="fmtWrap('```\n','\n```')">{ }</button>
+        <button class="fmt-btn" title="Спойлер" onclick="fmtWrap('||','||')">👁</button>
+      </div>
       <input type="text" id="msgInput" placeholder="Написать сообщение...">
       <button class="ia-btn" id="videoNoteBtn" title="Видео-кружочек">⏺</button>
       <button class="ia-btn" id="micBtn" title="Голосовое">🎤</button>
-      <button class="ia-btn send" id="sendBtn">➤</button>
+      <button class="ia-btn" title="Создать опрос" onclick="openCreatePoll()" style="font-size:16px;">📊</button>
+        <button class="ia-btn" title="Отложенная отправка" onclick="openScheduleModal()" style="font-size:16px;">⏰</button>
+        <button class="ia-btn" title="Поделиться геолокацией" onclick="shareLocation()" style="font-size:16px;">📍</button>
+        <button class="ia-btn" id="fmtToggleBtn" title="Форматирование текста" onclick="toggleFmtToolbar()" style="font-size:14px;">Аа</button>
+        <button class="ia-btn send" id="sendBtn">➤</button>
     </div>
   </div>
 
@@ -2015,7 +2129,7 @@ function openGeneral(){
   document.getElementById('chatHeaderAvatar').textContent='💬';
   document.getElementById('typingIndicator').textContent='';
   document.getElementById('onlineInfo').textContent='';
-  document.getElementById('chatHeaderBtns').innerHTML='';
+  document.getElementById('chatHeaderBtns').innerHTML='<button onclick="openMsgSearch()" title="Поиск в чате (Ctrl+F)">🔍</button>';
   document.getElementById('inputArea').style.display='flex';
   var _mdg=document.getElementById('messages');
   _mdg.innerHTML='';
@@ -2187,7 +2301,8 @@ socket.on('roomData',function(data){
   var btns='';
   if(data.myRole==='admin')btns+='<button onclick="openRoomSettings()" title="Настройки">⚙️</button>';
   btns+='<button onclick="leaveCurrentRoom()" title="Покинуть">🚪</button>';
-  document.getElementById('chatHeaderBtns').innerHTML=btns;
+  document.getElementById('chatHeaderBtns').innerHTML=btns+'<button onclick="openSecretTimerModal()" title="Самоудаление сообщений">🔥</button><button onclick="openMsgSearch()" title="Поиск (Ctrl+F)">🔍</button>';
+  socket.emit('getSecretTimer', { otherLogin: login });
   document.getElementById('inputArea').style.display=(data.room.type==='channel'&&data.myRole!=='admin')?'none':'flex';
   md.innerHTML='';
   if(data.messages.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
@@ -2229,7 +2344,8 @@ function addRoomMsg(msg){
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz+'</div></div></a>';}
-  else html+='<div class="text">'+escHtml(msg.text||'')+'</div>';
+  else if(msg.type==='location'&&msg.text){var geoHtml=buildLocationHtml(msg.text);html+=geoHtml||'<div class="text">'+formatText(msg.text||'')+'</div>';}
+  else html+='<div class="text">'+formatText(msg.text||'')+'</div>';
   if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html.replace('<div class="name','<div class="name');
   html+=buildMsgTime(msg.timestamp);
   if(isMine&&msg.id)html=html.replace('</div>','<span class="msg-checks check-single" style="cursor:pointer;margin-left:4px;" onclick="showReadersPopup(event,'+msg.id+')" title="Кто прочитал">✓</span></div>');
@@ -2303,6 +2419,8 @@ socket.on('rateLimited',function(d){
 });
 
 socket.on('newPrivateMessage',function(msg){
+  // Handle AI bot messages in AI panel, not in regular chat
+  if(msg.from_login==='_ai_bot'){handleAiBotMessage(msg);return;}
   if(currentView==='pm'&&(currentPrivateLogin===msg.from_login||currentPrivateLogin===msg.to_login)){
     // Guard against duplicate messages (e.g. saved messages sends to self)
     if(msg.id && document.getElementById('pm-'+msg.id)) return;
@@ -2404,7 +2522,8 @@ function addPM(msg){
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
-  else html+='<div class="text">'+escHtml(msg.text||'')+'</div>';
+  else if(msg.type==='location'&&msg.text){var geoHtml=buildLocationHtml(msg.text);html+=geoHtml||'<div class="text">'+formatText(msg.text||'')+'</div>';}
+  else html+='<div class="text">'+formatText(msg.text||'')+'</div>';
   if(msg.fwd_from_nick)html='<div class="fwd-header">📤 Переслано от: '+escHtml(msg.fwd_from_nick)+'</div>'+html;
   html+=buildMsgTime(msg.timestamp);
   if(isMine||myRole==='admin')html+='<span class="del-btn" onclick="delPM('+msg.id+')">Удалить</span>';
@@ -2446,6 +2565,40 @@ function renderAvatarInEl(el, login, nickname) {
   else{el.style.background='';el.style.padding='';el.innerHTML=(nickname?nickname[0].toUpperCase():'?');}
 }
 function escHtml(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'):''}
+
+// Format message text with markdown-like syntax
+function formatText(s){
+  if(!s)return'';
+  // Escape HTML first
+  var t=escHtml(s);
+  // Code blocks (``` ```)  - must be before inline code
+  t=t.replace(/```([\s\S]*?)```/g,'<pre class="msg-code-block">$1</pre>');
+  // Inline code
+  t=t.replace(/`([^`
+]+)`/g,'<code class="msg-code">$1</code>');
+  // Bold **text** or __text__
+  t=t.replace(/\*\*([^*
+]+)\*\*/g,'<b>$1</b>');
+  t=t.replace(/__([^_
+]+)__/g,'<b>$1</b>');
+  // Italic *text* or _text_
+  t=t.replace(/\*([^*
+]+)\*/g,'<i>$1</i>');
+  t=t.replace(/_([^_
+]+)_/g,'<i>$1</i>');
+  // Strikethrough ~~text~~
+  t=t.replace(/~~([^~
+]+)~~/g,'<s>$1</s>');
+  // Spoiler ||text||
+  t=t.replace(/\|\|([^|
+]+)\|\|/g,'<span class="msg-spoiler" onclick="this.classList.toggle('revealed')">$1</span>');
+  // URLs
+  t=t.replace(/(https?:\/\/[^\s<>"]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer" class="msg-link">$1</a>');
+  // Newlines
+  t=t.replace(/
+/g,'<br>');
+  return t;
+}
 
 // Client-side image parsing: handles both string URLs and JSON arrays from DB
 function parseImgField(img){
@@ -2604,7 +2757,8 @@ function addMsg(msg){
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
-  else html+='<div class="text">'+escHtml(msg.text||'')+'</div>';
+  else if(msg.type==='location'&&msg.text){var geoHtml=buildLocationHtml(msg.text);html+=geoHtml||'<div class="text">'+formatText(msg.text||'')+'</div>';}
+  else html+='<div class="text">'+formatText(msg.text||'')+'</div>';
   if(!isS)html+=buildMsgTime(msg.timestamp);
   div.innerHTML=html;
   if(msg.type==='video_note'&&msg.voice){div.classList.add('video-note-msg');div.appendChild(renderVideoNote(msg.voice,isM));}
@@ -2615,6 +2769,514 @@ function delMsg(id){socket.emit('deleteMessage',id);}
 window.delMsg=delMsg;
 
 /* ── SEND ── */
+
+
+// ═══════════════════════════════════════════════
+// MESSAGE SEARCH (Ctrl+F in chat)
+// ═══════════════════════════════════════════════
+var _searchMatches = [], _searchIdx = -1;
+
+function openMsgSearch() {
+  var bar = document.getElementById('msgSearchBar');
+  if (!bar) return;
+  bar.classList.add('visible');
+  document.getElementById('msgSearchInput').value = '';
+  document.getElementById('msgSearchInput').focus();
+  _searchMatches = []; _searchIdx = -1;
+  document.getElementById('msgSearchCount').textContent = '';
+}
+window.openMsgSearch = openMsgSearch;
+
+function closeMsgSearch() {
+  var bar = document.getElementById('msgSearchBar');
+  if (bar) bar.classList.remove('visible');
+  // Remove all highlights
+  document.querySelectorAll('.msg-highlight').forEach(function(el) {
+    el.outerHTML = el.textContent;
+  });
+  _searchMatches = []; _searchIdx = -1;
+  document.getElementById('msgSearchCount').textContent = '';
+}
+window.closeMsgSearch = closeMsgSearch;
+
+function msgSearchInput() {
+  var q = document.getElementById('msgSearchInput').value.trim().toLowerCase();
+  // Remove old highlights
+  document.querySelectorAll('.msg-highlight').forEach(function(el) {
+    el.outerHTML = el.textContent;
+  });
+  _searchMatches = []; _searchIdx = -1;
+  if (!q) { document.getElementById('msgSearchCount').textContent = ''; return; }
+  
+  // Find all text nodes in .text divs
+  var textEls = document.querySelectorAll('#messages .text, #messages .poll-question');
+  textEls.forEach(function(el) {
+    var txt = el.textContent;
+    var idx = txt.toLowerCase().indexOf(q);
+    if (idx === -1) return;
+    // Highlight occurrences
+    var result = '';
+    var last = 0;
+    var re = new RegExp(escHtml(q).replace(/[.*+?^${}()|[\]\]/g,'\$&'), 'gi');
+    result = el.innerHTML.replace(new RegExp('('+q.replace(/[.*+?^${}()|[\]\]/g,'\$&')+')', 'gi'), '<mark class="msg-highlight">$1</mark>');
+    el.innerHTML = result;
+  });
+  
+  _searchMatches = Array.from(document.querySelectorAll('.msg-highlight'));
+  document.getElementById('msgSearchCount').textContent = _searchMatches.length > 0 ? '1/' + _searchMatches.length : 'Не найдено';
+  if (_searchMatches.length > 0) {
+    _searchIdx = 0;
+    _searchMatches[0].classList.add('active');
+    _searchMatches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+window.msgSearchInput = msgSearchInput;
+
+function msgSearchNav(dir) {
+  if (!_searchMatches.length) return;
+  _searchMatches[_searchIdx].classList.remove('active');
+  _searchIdx = (_searchIdx + dir + _searchMatches.length) % _searchMatches.length;
+  _searchMatches[_searchIdx].classList.add('active');
+  _searchMatches[_searchIdx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+  document.getElementById('msgSearchCount').textContent = (_searchIdx+1) + '/' + _searchMatches.length;
+}
+window.msgSearchNav = msgSearchNav;
+
+// Ctrl+F to open search
+document.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey||e.metaKey) && e.key === 'f' && document.getElementById('mainChat').classList.contains('show')) {
+    e.preventDefault();
+    var bar = document.getElementById('msgSearchBar');
+    if (bar && bar.classList.contains('visible')) closeMsgSearch();
+    else openMsgSearch();
+  }
+  if (e.key === 'Escape') closeMsgSearch();
+});
+
+
+
+
+
+// ═══════════════════════════════════════════════
+// AI BOT PANEL
+// ═══════════════════════════════════════════════
+var _aiHistory = []; // {role, content}
+var _aiTyping = false;
+
+function toggleAiPanel() {
+  var panel = document.getElementById('aiPanel');
+  if (!panel) return;
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open')) {
+    document.getElementById('aiInput').focus();
+  }
+}
+window.toggleAiPanel = toggleAiPanel;
+
+function sendAiMessage() {
+  var input = document.getElementById('aiInput');
+  if (!input) return;
+  var text = input.value.trim();
+  if (!text || _aiTyping) return;
+  input.value = '';
+  
+  var msgs = document.getElementById('aiMessages');
+  // Add user message
+  var userMsg = document.createElement('div');
+  userMsg.className = 'ai-msg user';
+  userMsg.textContent = text;
+  msgs.appendChild(userMsg);
+  
+  // Add typing indicator
+  var typingEl = document.createElement('div');
+  typingEl.className = 'ai-msg bot typing';
+  typingEl.id = 'aiTyping';
+  typingEl.textContent = '🤖 печатает...';
+  msgs.appendChild(typingEl);
+  msgs.scrollTop = msgs.scrollHeight;
+  
+  _aiTyping = true;
+  _aiHistory.push({ role: 'user', content: text });
+  socket.emit('askAiBot', { message: text, history: _aiHistory.slice(-10) });
+}
+window.sendAiMessage = sendAiMessage;
+
+// AI bot message handling is merged into the main newPrivateMessage handler above
+// (handled via msg.from_login === '_ai_bot' check)
+function handleAiBotMessage(msg) {
+  var typingEl = document.getElementById('aiTyping');
+  if (typingEl) typingEl.remove();
+  _aiTyping = false;
+  var msgs = document.getElementById('aiMessages');
+  if (msgs) {
+    var botMsg = document.createElement('div');
+    botMsg.className = 'ai-msg bot';
+    botMsg.innerHTML = formatText(msg.text || '');
+    msgs.appendChild(botMsg);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  _aiHistory.push({ role: 'assistant', content: msg.text || '' });
+}
+
+// ═══════════════════════════════════════════════
+// SHARE GEOLOCATION
+// ═══════════════════════════════════════════════
+function shareLocation() {
+  if (!navigator.geolocation) return alert('Геолокация не поддерживается браузером');
+  if (!currentView || currentView==='private'||currentView==='rooms'||currentView==='all') return;
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    var lat = pos.coords.latitude.toFixed(6);
+    var lon = pos.coords.longitude.toFixed(6);
+    var text = '📍 Геолокация: ' + lat + ',' + lon;
+    var rd = replyTo ? {reply_to_id:replyTo.id,reply_to_text:replyTo.text,reply_to_user:replyTo.user} : {};
+    var payload = Object.assign({ text: text, type: 'location' }, rd);
+    if (currentView==='pm' && currentPrivateLogin) socket.emit('privateMessage', Object.assign({ toLogin: currentPrivateLogin }, payload));
+    else if (currentView==='room' && currentRoomId) socket.emit('roomMessage', Object.assign({ roomId: currentRoomId }, payload));
+    else if (currentView==='general') socket.emit('chatMessage', payload);
+    clearReply();
+  }, function(err) {
+    alert('Не удалось получить геолокацию: ' + err.message);
+  }, { enableHighAccuracy: true, timeout: 10000 });
+}
+window.shareLocation = shareLocation;
+
+// Override addPM/addMsg/addRoomMsg to handle location type
+// We patch the type check in the message renderers via a shared helper
+function buildLocationHtml(text) {
+  var match = text && text.match(/📍 Геолокация: ([-\d.]+),([-\d.]+)/);
+  if (!match) return null;
+  var lat = match[1], lon = match[2];
+  var mapUrl = 'https://static-maps.yandex.ru/1.x/?lang=ru_RU&ll='+lon+','+lat+'&z=15&size=260,140&l=map&pt='+lon+','+lat+',pm2rdm';
+  var mapsLink = 'https://maps.google.com/?q='+lat+','+lon;
+  return '<div class="geo-msg"><img class="geo-map-preview" src="'+mapUrl+'" alt="Карта" onerror="this.style.display=\'none\'"><div class="geo-info">📍 <a href="'+mapsLink+'" target="_blank" rel="noopener">Открыть на карте</a><div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+lat+', '+lon+'</div></div></div>';
+}
+window.buildLocationHtml = buildLocationHtml;
+
+// ═══════════════════════════════════════════════
+// SCHEDULED MESSAGES CLIENT
+// ═══════════════════════════════════════════════
+var _scheduledMsgs = [];
+
+function openScheduleModal() {
+  if (!currentView || currentView==='private'||currentView==='rooms'||currentView==='all') return;
+  var text = document.getElementById('msgInput').value.trim();
+  var now = new Date(Date.now() + 5*60000);
+  var dtLocal = new Date(now.getTime() - now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  socket.emit('getScheduledMessages');
+  
+  var modal = document.createElement('div');
+  modal.className = 'sched-modal';
+  modal.id = 'schedModal';
+  modal.innerHTML = '<div class="sched-modal-box"><h3>⏰ Отложенная отправка</h3>' +
+    '<textarea id="schedText" rows="3" placeholder="Текст сообщения..." style="background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:10px;color:var(--text-primary);font-size:14px;width:100%;box-sizing:border-box;resize:none;outline:none;">' + escHtml(text) + '</textarea>' +
+    '<input type="datetime-local" id="schedTime" value="'+dtLocal+'">' +
+    '<div id="schedList" class="sched-list"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+    '<button onclick="document.getElementById('schedModal').remove()" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button>' +
+    '<button onclick="submitSchedule()" style="background:var(--accent);border:none;border-radius:10px;padding:9px 18px;color:#fff;cursor:pointer;font-weight:600">Запланировать</button>' +
+    '</div></div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+}
+window.openScheduleModal = openScheduleModal;
+
+function renderScheduledList() {
+  var list = document.getElementById('schedList');
+  if (!list) return;
+  if (_scheduledMsgs.length === 0) { list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:8px">Нет запланированных сообщений</div>'; return; }
+  list.innerHTML = '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Запланированные:</div>' +
+    _scheduledMsgs.map(function(m){
+      var dt = new Date(m.send_at).toLocaleString('ru');
+      return '<div class="sched-item"><span class="sched-item-text">'+escHtml(m.text||'')+'</span><span class="sched-item-time">'+dt+'</span><button class="sched-cancel-btn" onclick="cancelScheduled('+m.id+')" title="Отменить">✕</button></div>';
+    }).join('');
+}
+
+function submitSchedule() {
+  var text = document.getElementById('schedText').value.trim();
+  var dt = document.getElementById('schedTime').value;
+  if (!text) return alert('Введите текст');
+  if (!dt) return alert('Выберите время');
+  var sendAt = new Date(dt).getTime();
+  if (sendAt <= Date.now()) return alert('Время должно быть в будущем');
+  var chatType = currentView;
+  var chatId = currentView==='pm' ? currentPrivateLogin : (currentView==='room' ? currentRoomId : 'general');
+  socket.emit('scheduleMessage', { chatType, chatId, text, sendAt });
+  document.getElementById('schedModal').remove();
+  document.getElementById('msgInput').value = '';
+}
+window.submitSchedule = submitSchedule;
+
+function cancelScheduled(id) {
+  socket.emit('cancelScheduledMessage', { id });
+}
+window.cancelScheduled = cancelScheduled;
+
+socket.on('scheduledMessages', function(msgs) {
+  _scheduledMsgs = msgs;
+  renderScheduledList();
+});
+
+socket.on('scheduledMsgCreated', function(m) {
+  _scheduledMsgs.push(m);
+  _scheduledMsgs.sort(function(a,b){ return a.send_at-b.send_at; });
+  // Show toast
+  var dt = new Date(m.sendAt).toLocaleString('ru');
+  var t = document.getElementById('_rateLimitToast');
+  if(!t){t=document.createElement('div');t.id='_rateLimitToast';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#27ae60;color:#fff;padding:10px 20px;border-radius:10px;font-size:14px;font-weight:600;z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,0.4);transition:opacity 0.3s;';document.body.appendChild(t);}
+  t.style.background='#27ae60';t.textContent='⏰ Сообщение запланировано на '+dt;t.style.opacity='1';
+  clearTimeout(t._ht);t._ht=setTimeout(function(){t.style.opacity='0';},3000);
+});
+
+socket.on('scheduledMsgCancelled', function(d) {
+  _scheduledMsgs = _scheduledMsgs.filter(function(m){ return m.id !== d.id; });
+  renderScheduledList();
+});
+
+socket.on('scheduledMsgSent', function(d) {
+  _scheduledMsgs = _scheduledMsgs.filter(function(m){ return m.id !== d.id; });
+});
+
+// ═══════════════════════════════════════════════
+// SECRET CHATS - AUTO DELETE TIMER
+// ═══════════════════════════════════════════════
+var _secretTimers = {}; // login -> seconds
+
+function openSecretTimerModal() {
+  if (currentView !== 'pm' || !currentPrivateLogin) return;
+  var current = _secretTimers[currentPrivateLogin] || 0;
+  var opts = [
+    {label:'Выкл', val:0}, {label:'30 сек', val:30}, {label:'1 мин', val:60},
+    {label:'5 мин', val:300}, {label:'1 час', val:3600}, {label:'1 день', val:86400}
+  ];
+  var modal = document.createElement('div');
+  modal.className = 'secret-modal';
+  modal.innerHTML = '<div class="secret-modal-box"><h3>🔥 Самоудаляющиеся сообщения</h3><p style="font-size:13px;color:var(--text-secondary);margin:0">Сообщения в этом чате будут автоматически удаляться через выбранное время после отправки.</p>' +
+    '<div class="secret-timer-options">' +
+    opts.map(function(o){ return '<div class="secret-timer-opt'+(current===o.val?' selected':'')+'" onclick="setSecretTimer('+o.val+',this)">'+o.label+'</div>'; }).join('') +
+    '</div><div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="this.closest('.secret-modal').remove()" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button></div></div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+}
+window.openSecretTimerModal = openSecretTimerModal;
+
+function setSecretTimer(seconds, el) {
+  document.querySelectorAll('.secret-timer-opt').forEach(function(o){ o.classList.remove('selected'); });
+  el.classList.add('selected');
+  socket.emit('setSecretTimer', { otherLogin: currentPrivateLogin, timerSeconds: seconds });
+  setTimeout(function(){ document.querySelector('.secret-modal')?.remove(); }, 300);
+}
+window.setSecretTimer = setSecretTimer;
+
+function updateSecretBadge(login, seconds) {
+  _secretTimers[login] = seconds;
+  if (currentView !== 'pm' || currentPrivateLogin !== login) return;
+  // Update or create badge in header
+  var existing = document.getElementById('secretTimerBadge');
+  var sub = document.getElementById('chatSubtitle');
+  if (!sub) return;
+  if (seconds > 0) {
+    var label = seconds < 60 ? seconds+'с' : seconds < 3600 ? Math.round(seconds/60)+'мин' : seconds < 86400 ? Math.round(seconds/3600)+'ч' : Math.round(seconds/86400)+'д';
+    if (!existing) {
+      var badge = document.createElement('span');
+      badge.id = 'secretTimerBadge';
+      badge.className = 'secret-timer-badge';
+      badge.onclick = openSecretTimerModal;
+      sub.insertBefore(badge, sub.firstChild);
+      existing = badge;
+    }
+    existing.innerHTML = '🔥 ' + label;
+  } else {
+    if (existing) existing.remove();
+  }
+}
+
+socket.on('secretTimerSet', function(d) {
+  updateSecretBadge(d.otherLogin, d.timerSeconds);
+});
+
+socket.on('secretTimerResult', function(d) {
+  updateSecretBadge(d.otherLogin, d.timerSeconds);
+});
+
+socket.on('secretMsgDeleted', function(d) {
+  var el = document.getElementById('pm-'+d.id);
+  if (el) {
+    el.style.transition = 'opacity 0.5s';
+    el.style.opacity = '0';
+    setTimeout(function(){ var w = el._wrapper || el; if(w.parentNode) w.parentNode.removeChild(w); }, 500);
+  }
+});
+
+// ═══════════════════════════════════════════════
+// POLLS CLIENT
+// ═══════════════════════════════════════════════
+var _polls = {}; // pollId -> pollData
+
+function openCreatePoll() {
+  if (!currentView || currentView === 'private' || currentView === 'rooms' || currentView === 'all') return;
+  var modal = document.createElement('div');
+  modal.className = 'poll-modal';
+  modal.id = 'pollCreateModal';
+  modal.innerHTML = `
+    <div class="poll-modal-box">
+      <h3>📊 Создать опрос</h3>
+      <input id="pollQuestion" placeholder="Вопрос..." maxlength="300">
+      <div id="pollOptions">
+        <div class="poll-option-row"><input class="poll-opt-inp" placeholder="Вариант 1" maxlength="100"><button class="poll-remove-opt" onclick="removePollOpt(this)">✕</button></div>
+        <div class="poll-option-row"><input class="poll-opt-inp" placeholder="Вариант 2" maxlength="100"><button class="poll-remove-opt" onclick="removePollOpt(this)">✕</button></div>
+      </div>
+      <button class="poll-add-opt" onclick="addPollOpt()">+ Добавить вариант</button>
+      <div class="poll-toggle-row">
+        <label><input type="checkbox" id="pollMultiple"> Несколько ответов</label>
+        <label><input type="checkbox" id="pollAnon"> Анонимный</label>
+      </div>
+      <div class="poll-modal-btns">
+        <button class="poll-cancel-btn" onclick="document.getElementById('pollCreateModal').remove()">Отмена</button>
+        <button class="poll-create-btn" onclick="submitCreatePoll()">Создать</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  document.getElementById('pollQuestion').focus();
+}
+window.openCreatePoll = openCreatePoll;
+
+function addPollOpt() {
+  var opts = document.getElementById('pollOptions');
+  if (opts.children.length >= 10) return;
+  var n = opts.children.length + 1;
+  var row = document.createElement('div');
+  row.className = 'poll-option-row';
+  row.innerHTML = '<input class="poll-opt-inp" placeholder="Вариант ' + n + '" maxlength="100"><button class="poll-remove-opt" onclick="removePollOpt(this)">✕</button>';
+  opts.appendChild(row);
+}
+window.addPollOpt = addPollOpt;
+
+function removePollOpt(btn) {
+  var opts = document.getElementById('pollOptions');
+  if (opts.children.length <= 2) return;
+  btn.parentElement.remove();
+}
+window.removePollOpt = removePollOpt;
+
+function submitCreatePoll() {
+  var question = document.getElementById('pollQuestion').value.trim();
+  if (!question) return;
+  var inputs = document.querySelectorAll('.poll-opt-inp');
+  var options = Array.from(inputs).map(function(i){ return i.value.trim(); }).filter(Boolean);
+  if (options.length < 2) return alert('Добавьте минимум 2 варианта');
+  var multiple = document.getElementById('pollMultiple').checked;
+  var anon = document.getElementById('pollAnon').checked;
+  var chatType = currentView; // 'general', 'pm', 'room'
+  var chatId = currentView==='pm' ? currentPrivateLogin : (currentView==='room' ? currentRoomId : 'general');
+  socket.emit('createPoll', { chatType, chatId, question, options, multipleChoice: multiple, anonymous: anon });
+  document.getElementById('pollCreateModal').remove();
+}
+window.submitCreatePoll = submitCreatePoll;
+
+function renderPollCard(poll, container) {
+  var existing = document.getElementById('poll-'+poll.id);
+  var isNew = !existing;
+  var el = existing || document.createElement('div');
+  el.className = 'poll-card';
+  el.id = 'poll-'+poll.id;
+  
+  var totalVoters = Object.keys(poll.votes && !poll.votes.__anonymous ? poll.votes : {}).length;
+  var myVote = poll.votes ? poll.votes[myLogin] : null;
+  
+  // Count votes per option
+  var voteCounts = {};
+  if (poll.votes && poll.votes.__anonymous) {
+    voteCounts = poll.votes.counts || {};
+    totalVoters = Object.values(voteCounts).reduce(function(a,b){return a+b;}, 0);
+  } else {
+    Object.values(poll.votes||{}).forEach(function(v) {
+      var ids = Array.isArray(v) ? v : [v];
+      ids.forEach(function(id){ voteCounts[id] = (voteCounts[id]||0) + 1; });
+    });
+  }
+  
+  var optsHtml = (poll.options||[]).map(function(opt) {
+    var count = voteCounts[opt.id] || 0;
+    var pct = totalVoters > 0 ? Math.round(count/totalVoters*100) : 0;
+    var voted = myVote !== null && myVote !== undefined && (Array.isArray(myVote) ? myVote.includes(opt.id) : myVote===opt.id);
+    return '<div class="poll-option" onclick="votePoll('+poll.id+','+opt.id+')">' +
+      '<div class="poll-option-bar-wrap'+(voted?' voted':'')+'">' +
+        '<div class="poll-option-bar" style="width:'+pct+'%"></div>' +
+        '<div class="poll-option-label"><span>'+escHtml(opt.text)+(voted?' ✓':'')+'</span><span class="poll-option-pct">'+count+' ('+pct+'%)</span></div>' +
+      '</div></div>';
+  }).join('');
+  
+  var canDelete = poll.creatorLogin===myLogin || myRole==='admin';
+  el.innerHTML = '<div class="poll-question">📊 '+escHtml(poll.question)+'</div>' + optsHtml +
+    '<div class="poll-footer"><span>'+totalVoters+' голосов'+(poll.anonymous?' · анонимный':'')+(poll.multipleChoice?' · несколько':'')+' · от '+escHtml(poll.creatorNick||poll.creatorLogin||'')+'</span>' +
+    (canDelete ? '<button class="poll-delete-btn" onclick="deletePoll('+poll.id+')">🗑</button>' : '') + '</div>';
+  
+  if (isNew && container) container.appendChild(el);
+}
+
+function votePoll(pollId, optionId) {
+  socket.emit('votePoll', { pollId, optionId });
+}
+window.votePoll = votePoll;
+
+function deletePoll(pollId) {
+  if (!confirm('Удалить опрос?')) return;
+  socket.emit('deletePoll', { pollId });
+}
+window.deletePoll = deletePoll;
+
+socket.on('newPoll', function(poll) {
+  _polls[poll.id] = poll;
+  // Only show if in correct chat
+  var isMyChat = false;
+  if (poll.chatType==='general' && currentView==='general') isMyChat = true;
+  if (poll.chatType==='room' && currentView==='room' && currentRoomId==poll.chatId) isMyChat = true;
+  if (poll.chatType==='pm' && currentView==='pm' && currentPrivateLogin===poll.chatId) isMyChat = true;
+  if (isMyChat) {
+    var md = document.getElementById('messages');
+    renderPollCard(poll, md);
+    md.scrollTop = md.scrollHeight;
+  }
+});
+
+socket.on('pollVoteUpdate', function(d) {
+  if (!_polls[d.pollId]) return;
+  _polls[d.pollId].votes = d.votes;
+  renderPollCard(_polls[d.pollId], null);
+});
+
+socket.on('pollDeleted', function(d) {
+  delete _polls[d.pollId];
+  var el = document.getElementById('poll-'+d.pollId);
+  if (el) el.remove();
+});
+
+
+// ── TEXT FORMATTING TOOLBAR ──────────────────────────────
+function toggleFmtToolbar(){
+  var tb=document.getElementById('fmtToolbar');
+  tb.classList.toggle('visible');
+  document.getElementById('fmtToggleBtn').style.color=tb.classList.contains('visible')?'var(--accent)':'';
+}
+function fmtWrap(before,after){
+  var inp=document.getElementById('msgInput');
+  var s=inp.selectionStart,e=inp.selectionEnd;
+  var val=inp.value;
+  var sel=val.slice(s,e)||'текст';
+  inp.value=val.slice(0,s)+before+sel+after+val.slice(e);
+  inp.selectionStart=s+before.length;
+  inp.selectionEnd=s+before.length+sel.length;
+  inp.focus();
+}
+// Ctrl+B / Ctrl+I shortcuts
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&document.getElementById('msgInput')===document.activeElement){
+    if(e.key==='b'){e.preventDefault();fmtWrap('**','**');}
+    if(e.key==='i'){e.preventDefault();fmtWrap('_','_');}
+  }
+});
+
 document.getElementById('sendBtn').addEventListener('click',function(){
   var text=document.getElementById('msgInput').value.trim();if(!text)return;
   // Edit mode
@@ -4313,6 +4975,22 @@ window.leaveRoomFromList = leaveRoomFromList;
     <button class="action-sheet-btn danger" onclick="pmActionDeleteMine()">🗑 Удалить историю у себя</button>
     <button class="action-sheet-btn danger" onclick="pmActionDeleteBoth()">💣 Удалить у обоих</button>
     <button class="action-sheet-btn cancel" onclick="closePmActionSheet()">Отмена</button>
+  </div>
+</div>
+
+<!-- AI Bot Panel -->
+<button class="ai-chat-btn" onclick="toggleAiPanel()" title="AI Ассистент">🤖</button>
+<div class="ai-panel" id="aiPanel">
+  <div class="ai-panel-header">
+    <span>🤖 AI Ассистент</span>
+    <button class="ai-panel-close" onclick="toggleAiPanel()">✕</button>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-msg bot">Привет! Я AI ассистент. Задай любой вопрос 😊</div>
+  </div>
+  <div class="ai-input-row">
+    <input id="aiInput" placeholder="Напиши сообщение..." onkeypress="if(event.key==='Enter')sendAiMessage()">
+    <button onclick="sendAiMessage()">➤</button>
   </div>
 </div>
 </body>
