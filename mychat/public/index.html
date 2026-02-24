@@ -5074,8 +5074,9 @@ window.leaveRoomFromList = leaveRoomFromList;
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
-// УТИЛИТА: showToast
+// FEATURES BLOCK v5 — все баги исправлены
 // ═══════════════════════════════════════════════════════════════════════
+
 window.showToast = function(msg, ms) {
   var e = document.getElementById('chatError');
   if (!e) return;
@@ -5086,73 +5087,8 @@ window.showToast = function(msg, ms) {
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// 1. ЗАКРЕП СООБЩЕНИЙ 📌
-// Проблема была: бар вставлялся в неверное место, .show не срабатывал
-// Решение: вставляем бар ПРЯМО в HTML через body.onload, без поиска заголовка
+// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
 // ═══════════════════════════════════════════════════════════════════════
-var _pinData = null;
-
-// Создаём бар один раз при загрузке
-(function() {
-  var bar = document.createElement('div');
-  bar.id = '_pinBar';
-  bar.style.cssText = [
-    'display:none',
-    'align-items:center',
-    'gap:10px',
-    'padding:7px 16px',
-    'background:rgba(92,160,220,0.12)',
-    'border-bottom:2px solid var(--accent)',
-    'cursor:pointer',
-    'position:relative',
-    'z-index:10',
-    'flex-shrink:0'
-  ].join(';');
-  bar.innerHTML =
-    '<span style="font-size:16px;flex-shrink:0;">📌</span>' +
-    '<div style="flex:1;min-width:0;">' +
-      '<div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Закреплённое</div>' +
-      '<div id="_pinText" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);"></div>' +
-    '</div>' +
-    '<button id="_pinClose" style="background:transparent;border:none;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px;flex-shrink:0;">×</button>';
-
-  bar.addEventListener('click', function(e) {
-    if (e.target.id === '_pinClose') return;
-    if (_pinData) _scrollToMsg(_pinData.msg_id);
-  });
-
-  // Вставляем после загрузки DOM
-  window.addEventListener('load', function() {
-    // Находим mainChat и вставляем бар как второй дочерний (после chat-header)
-    var mainChat = document.getElementById('mainChat');
-    if (mainChat) {
-      var header = mainChat.querySelector('.chat-header');
-      if (header) header.insertAdjacentElement('afterend', bar);
-      else mainChat.insertBefore(bar, mainChat.firstChild);
-    }
-
-    // Вешаем обработчик на кнопку закрытия
-    document.getElementById('_pinClose').addEventListener('click', function(e) {
-      e.stopPropagation();
-      var ctx = _chatCtx();
-      if (ctx) socket.emit('unpinMessage', ctx);
-    });
-  });
-})();
-
-function _showPin(data) {
-  _pinData = data;
-  var bar = document.getElementById('_pinBar');
-  var txt = document.getElementById('_pinText');
-  if (!bar || !txt) return;
-  txt.textContent = (data.msg_text || 'Сообщение').slice(0, 90);
-  bar.style.display = 'flex';
-}
-function _hidePin() {
-  _pinData = null;
-  var bar = document.getElementById('_pinBar');
-  if (bar) bar.style.display = 'none';
-}
 function _chatCtx() {
   if (currentView === 'general') return { chatType: 'general', chatId: 'general' };
   if (currentView === 'room')    return { chatType: 'room',    chatId: String(currentRoomId) };
@@ -5165,45 +5101,117 @@ function _scrollToMsg(id) {
            document.getElementById('rmsg-'+ id);
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  var prev = el.style.background;
   el.style.transition = 'background 0.3s';
   el.style.background = 'rgba(92,160,220,0.3)';
-  setTimeout(function(){ el.style.background = ''; }, 1400);
+  setTimeout(function(){ el.style.background = prev || ''; }, 1500);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// 1. ЗАКРЕП СООБЩЕНИЙ 📌
+// Исправлено: создаётся один раз, правильно вставляется, правильные поля сравнения
+// ═══════════════════════════════════════════════════════════════════════
+var _pinData = null;
+
+(function() {
+  var bar = document.createElement('div');
+  bar.id = '_pinBar';
+  bar.style.cssText = 'display:none;align-items:center;gap:10px;padding:7px 16px;background:rgba(92,160,220,0.13);border-bottom:2px solid var(--accent);cursor:pointer;position:relative;z-index:10;flex-shrink:0;';
+  bar.innerHTML =
+    '<span style="font-size:16px;flex-shrink:0;">📌</span>' +
+    '<div style="flex:1;min-width:0;">' +
+      '<div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Закреплённое</div>' +
+      '<div id="_pinText" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);"></div>' +
+    '</div>' +
+    '<button id="_pinClose" style="background:transparent;border:none;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px;flex-shrink:0;">×</button>';
+
+  bar.addEventListener('click', function(e) {
+    if (e.target.id === '_pinClose') return;
+    if (_pinData && _pinData.msg_id) _scrollToMsg(_pinData.msg_id);
+  });
+
+  window.addEventListener('load', function() {
+    // Вставляем в mainChat после chat-header — ждём чуть дольше
+    setTimeout(function() {
+      var mainChat = document.getElementById('mainChat');
+      if (!mainChat) return;
+      var header = mainChat.querySelector('.chat-header');
+      if (header) header.insertAdjacentElement('afterend', bar);
+      else mainChat.insertBefore(bar, mainChat.firstChild);
+
+      var closeBtn = document.getElementById('_pinClose');
+      if (closeBtn) {
+        closeBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var ctx = _chatCtx();
+          if (ctx) socket.emit('unpinMessage', ctx);
+        });
+      }
+    }, 300);
+  });
+})();
+
+function _showPin(msgId, msgText) {
+  _pinData = { msg_id: msgId, msg_text: msgText };
+  var bar = document.getElementById('_pinBar');
+  var txt = document.getElementById('_pinText');
+  if (!bar || !txt) return;
+  txt.textContent = (msgText || 'Сообщение').slice(0, 90);
+  bar.style.display = 'flex';
+}
+function _hidePin() {
+  _pinData = null;
+  var bar = document.getElementById('_pinBar');
+  if (bar) bar.style.display = 'none';
 }
 function _loadPin() {
   var ctx = _chatCtx();
   if (ctx) socket.emit('getPinnedMessage', ctx);
 }
+
 function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   var ctx = _chatCtx();
   if (!ctx) return;
-  socket.emit('pinMessage', Object.assign(ctx, { msgId: msgId, msgText: msgText || '', msgUser: msgUser || '' }));
+  socket.emit('pinMessage', { chatType: ctx.chatType, chatId: ctx.chatId, msgId: msgId, msgText: msgText || '', msgUser: msgUser || '' });
 }
 window.pinMessageInChat = pinMessageInChat;
 
 socket.on('pinnedMessage', function(data) {
-  if (!data || !data.msg_id) { _hidePin(); return; }
+  if (!data) return;
   var ctx = _chatCtx();
-  if (ctx && data.chat_type === ctx.chatType && String(data.chat_id) === ctx.chatId)
-    _showPin(data);
+  if (!ctx) return;
+  // Сервер возвращает data.chat_type, data.chat_id, data.msg_id, data.msg_text
+  if (data.chat_type === ctx.chatType && String(data.chat_id) === ctx.chatId) {
+    if (data.msg_id) _showPin(data.msg_id, data.msg_text);
+    else _hidePin();
+  }
 });
 socket.on('messagePinned', function(data) {
+  if (!data) return;
   var ctx = _chatCtx();
-  if (ctx && data.chatType === ctx.chatType && String(data.chatId) === ctx.chatId)
-    _showPin(data);
+  if (ctx && data.chatType === ctx.chatType && String(data.chatId) === ctx.chatId) {
+    _showPin(data.msgId, data.msgText);
+  }
   showToast('📌 Сообщение закреплено');
 });
-socket.on('messageUnpinned', function() { _hidePin(); showToast('Откреплено'); });
+socket.on('messageUnpinned', function(data) {
+  if (!data) return;
+  var ctx = _chatCtx();
+  if (ctx && data.chatType === ctx.chatType && String(data.chatId) === ctx.chatId) {
+    _hidePin();
+  }
+  showToast('Откреплено');
+});
 
-// Загружаем закреп при получении истории чата
-socket.on('messageHistory', function() { setTimeout(_loadPin, 200); });
-socket.on('privateHistory', function() { setTimeout(_loadPin, 200); });
-socket.on('roomData',        function() { setTimeout(_loadPin, 200); });
+// Загружаем закреп при открытии чата
+socket.on('messageHistory', function() { setTimeout(_loadPin, 300); });
+socket.on('privateHistory', function() { setTimeout(_loadPin, 300); });
+socket.on('roomData',        function() { setTimeout(_loadPin, 300); });
 
 
 // ═══════════════════════════════════════════════════════════════════════
 // 2. УПОМИНАНИЯ @nickname 🔔
-// Проблема: socket.on добавлялся повторно; openGeneralChat не существует
-// Решение: один флаг, правильные имена функций
+// Исправлено: слушаем mentionReceived от сервера (он уже делает проверку)
 // ═══════════════════════════════════════════════════════════════════════
 var _mentions = [];
 var _mentionOpen = false;
@@ -5236,10 +5244,10 @@ function _renderMentions() {
     return;
   }
   list.innerHTML = _mentions.slice(0, 40).map(function(m, i) {
-    return '<div class="mention-item" onclick="_goMention(' + i + ')" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
+    return '<div onclick="_goMention(' + i + ')" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
       '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:2px;">' + escHtml(m.from) + ' в ' + escHtml(m.chatName) + '</div>' +
-      '<div style="font-size:13px;color:var(--text-primary);">' + escHtml(m.text.slice(0, 80)) + '</div>' +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + formatTime(m.ts) + '</div>' +
+      '<div style="font-size:13px;color:var(--text-primary);">' + escHtml((m.text||'').slice(0, 80)) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + (m.ts ? new Date(m.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '') + '</div>' +
       '</div>';
   }).join('');
 }
@@ -5249,15 +5257,10 @@ function _goMention(i) {
   if (!m) return;
   document.getElementById('mentionPanel').classList.remove('show');
   _mentionOpen = false;
-  // Navigate to correct chat
-  if (m.chatType === 'general') {
-    if (typeof openGeneral === 'function') openGeneral();
-  } else if (m.chatType === 'pm') {
-    if (typeof openPM === 'function') openPM(m.chatId, m.chatName);
-  } else if (m.chatType === 'room') {
-    if (typeof openRoom === 'function') openRoom(Number(m.chatId));
-  }
-  setTimeout(function() { _scrollToMsg(m.msgId); }, 700);
+  if (m.chatType === 'general') { if (typeof openGeneral === 'function') openGeneral(); }
+  else if (m.chatType === 'pm') { if (typeof openPM === 'function') openPM(m.chatId, m.chatName); }
+  else if (m.chatType === 'room') { if (typeof openRoom === 'function') openRoom(Number(m.chatId)); }
+  setTimeout(function() { if (m.msgId) _scrollToMsg(m.msgId); }, 700);
 }
 window._goMention = _goMention;
 
@@ -5268,54 +5271,34 @@ function clearMentions() {
 }
 window.clearMentions = clearMentions;
 
-// Проверяем входящее сообщение на упоминание
-function _checkMention(msg, chatType, chatId, chatName) {
-  if (!myLogin) return;
-  var senderLogin = msg.user_login || msg.from_login || '';
-  if (senderLogin === myLogin) return; // свои сообщения не считаем
-  var text = (msg.text || '').toLowerCase();
-  var matchLogin = myLogin && text.indexOf('@' + myLogin.toLowerCase()) !== -1;
-  var matchNick  = myNickname && text.indexOf('@' + myNickname.toLowerCase().replace(/\s+/g, '')) !== -1;
-  if (!matchLogin && !matchNick) return;
-  var entry = {
-    from: msg.username || msg.from_nickname || senderLogin || '?',
-    chatType: chatType, chatId: String(chatId), chatName: chatName,
-    msgId: msg.id, text: msg.text || '', ts: msg.timestamp || Date.now()
-  };
-  _mentions.unshift(entry);
-  if (_mentions.length > 60) _mentions.pop();
-  _mentionBadge();
-  showToast('🔔 ' + entry.from + ' упомянул тебя');
-}
-
-// Перехват входящих сообщений — ДОБАВЛЯЕМ ОДИН РАЗ через флаг
-if (!window._mentionListenersAdded) {
-  window._mentionListenersAdded = true;
-  socket.on('chatMessage',    function(msg) { _checkMention(msg, 'general', 'general', 'Общий чат'); });
-  socket.on('newPrivateMessage', function(msg) {
-    if (msg.from_login !== myLogin)
-      _checkMention(msg, 'pm', msg.from_login, msg.from_nickname || msg.from_login);
-  });
-  socket.on('roomNewMessage', function(msg) {
-    _checkMention(msg, 'room', msg.room_id, currentRoomData ? currentRoomData.room.name : 'Группа');
+// Сервер уже ищет @упоминания и шлёт mentionReceived — просто слушаем
+if (!window._mentionSocketAdded) {
+  window._mentionSocketAdded = true;
+  socket.on('mentionReceived', function(data) {
+    if (!data) return;
+    var chatNameMap = { general: 'Общий чат' };
+    var entry = {
+      from: data.from || '?',
+      chatType: data.chatType || 'general',
+      chatId: String(data.chatId || 'general'),
+      chatName: data.chatType === 'general' ? 'Общий чат' : (data.chatType === 'pm' ? (data.from || '?') : 'Группа'),
+      msgId: data.msgId,
+      text: data.text || '',
+      ts: data.ts || Date.now()
+    };
+    _mentions.unshift(entry);
+    if (_mentions.length > 60) _mentions.pop();
+    _mentionBadge();
+    showToast('🔔 ' + entry.from + ' упомянул тебя');
   });
 }
 
-// Закрытие панели при клике вне
-document.addEventListener('click', function(e) {
-  if (!_mentionOpen) return;
-  var panel = document.getElementById('mentionPanel');
-  var btn   = document.getElementById('mentionBtn');
-  if (panel && !panel.contains(e.target) && btn && !btn.contains(e.target)) {
-    panel.classList.remove('show');
-    _mentionOpen = false;
-  }
-});
-
-// Подсветка @упоминаний в тексте (только себя — жёлтым, остальных — акцентным)
+// Подсветка @упоминаний в тексте
 (function() {
+  if (window._formatTextPatched) return;
+  window._formatTextPatched = true;
   var orig = window.formatText;
-  if (!orig) return;
+  if (!orig) { setTimeout(arguments.callee || function(){}, 500); return; }
   window.formatText = function(text) {
     var html = orig(text);
     html = html.replace(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g, function(match, name) {
@@ -5329,28 +5312,30 @@ document.addEventListener('click', function(e) {
   };
 })();
 
+document.addEventListener('click', function(e) {
+  if (!_mentionOpen) return;
+  var panel = document.getElementById('mentionPanel');
+  var btn   = document.getElementById('mentionBtn');
+  if (panel && !panel.contains(e.target) && btn && !btn.contains(e.target)) {
+    panel.classList.remove('show');
+    _mentionOpen = false;
+  }
+});
+
 
 // ═══════════════════════════════════════════════════════════════════════
 // 3. ГЛОБАЛЬНЫЙ ПОИСК 🔍
-// Проблема: кэш не заполнялся (добавляли listener после основного,
-//           у socket нет гарантии порядка для одного события)
-// Решение: используем MutationObserver + храним данные при roomData/privateHistory
+// Исправлено: кэш заполняется через отдельные флаги, не дублируется
 // ═══════════════════════════════════════════════════════════════════════
-var _gsCache = {
-  general: [],       // [{id,text,username,timestamp}]
-  pm: {},            // login → {nick, msgs:[]}
-  room: {}           // roomId → {name, msgs:[]}
-};
+var _gsCache = { general: [], pm: {}, room: {} };
 var _gsTimer = null;
 
-// Заполняем кэш из истории — используем флаг чтобы не дублировать
-if (!window._gsCacheListenersAdded) {
-  window._gsCacheListenersAdded = true;
+if (!window._gsCacheAdded) {
+  window._gsCacheAdded = true;
 
   socket.on('messageHistory', function(msgs) {
-    if (Array.isArray(msgs)) {
+    if (Array.isArray(msgs))
       _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
-    }
   });
   socket.on('privateHistory', function(d) {
     if (!d || !d.otherLogin) return;
@@ -5362,9 +5347,8 @@ if (!window._gsCacheListenersAdded) {
     _gsCache.room[rid] = { name: data.room.name, msgs: (data.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; }) };
   });
 
-  // Также обновляем кэш при новых сообщениях в реальном времени
   socket.on('chatMessage', function(msg) {
-    if (msg.id && msg.text) _gsCache.general.push({id:msg.id,text:msg.text,from:msg.username||'',ts:msg.timestamp});
+    if (msg && msg.id && msg.text) _gsCache.general.push({id:msg.id,text:msg.text,from:msg.username||'',ts:msg.timestamp});
   });
   socket.on('newPrivateMessage', function(msg) {
     var key = msg.from_login === myLogin ? msg.to_login : msg.from_login;
@@ -5389,8 +5373,8 @@ function openGlobalSearch() {
   var res = document.getElementById('globalSearchResults');
   if (res) {
     var total = _gsCache.general.length +
-      Object.values(_gsCache.pm).reduce(function(s,v){return s+v.msgs.length;},0) +
-      Object.values(_gsCache.room).reduce(function(s,v){return s+v.msgs.length;},0);
+      Object.keys(_gsCache.pm).reduce(function(s,k){return s+_gsCache.pm[k].msgs.length;},0) +
+      Object.keys(_gsCache.room).reduce(function(s,k){return s+_gsCache.room[k].msgs.length;},0);
     res.innerHTML = '<div class="gs-empty">В кэше ' + total + ' сообщений. Начни вводить...</div>';
   }
 }
@@ -5408,14 +5392,13 @@ function globalSearchQuery() {
   var res = document.getElementById('globalSearchResults');
   if (q.length < 2) { if(res) res.innerHTML = '<div class="gs-empty">Минимум 2 символа</div>'; return; }
   if (res) res.innerHTML = '<div class="gs-empty">🔍 Ищем...</div>';
-  _gsTimer = setTimeout(function() { _doSearch(q); }, 300);
+  _gsTimer = setTimeout(function() { _doGsSearch(q); }, 300);
 }
 window.globalSearchQuery = globalSearchQuery;
 
-function _doSearch(q) {
+function _doGsSearch(q) {
   var ql = q.toLowerCase();
   var results = [];
-
   _gsCache.general.forEach(function(m) {
     if (m.text && m.text.toLowerCase().indexOf(ql) !== -1)
       results.push({ chatType:'general', chatId:'general', chatName:'💬 Общий чат', msgId:m.id, from:m.from, text:m.text, ts:m.ts });
@@ -5434,7 +5417,6 @@ function _doSearch(q) {
         results.push({ chatType:'room', chatId:rid, chatName:'👥 ' + (e.name||'Группа'), msgId:m.id, from:m.from, text:m.text, ts:m.ts });
     });
   });
-
   results.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
 
   var el = document.getElementById('globalSearchResults');
@@ -5445,7 +5427,7 @@ function _doSearch(q) {
   var html = results.slice(0, 60).map(function(r, i) {
     var hi = escHtml(r.text.slice(0,150)).replace(re, '<mark style="background:rgba(92,160,220,0.4);border-radius:3px;padding:0 2px;">$1</mark>');
     return '<div class="gs-result" data-idx="' + i + '" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
-      '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px;">' + r.chatName + (r.from ? ' · ' + escHtml(r.from) : '') + '<span style="float:right;color:var(--text-muted);">' + (r.ts ? formatTime(r.ts) : '') + '</span></div>' +
+      '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px;">' + r.chatName + (r.from ? ' · ' + escHtml(r.from) : '') + '<span style="float:right;color:var(--text-muted);">' + (r.ts ? new Date(r.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '') + '</span></div>' +
       '<div style="font-size:13px;color:var(--text-primary);">' + hi + '</div>' +
       '</div>';
   }).join('');
@@ -5465,14 +5447,14 @@ function _doSearch(q) {
 
 document.addEventListener('keydown', function(e) {
   if ((e.ctrlKey||e.metaKey) && e.key === 'k') { e.preventDefault(); openGlobalSearch(); }
-  if (e.key === 'Escape') closeGlobalSearch();
+  if (e.key === 'Escape') { closeGlobalSearch(); }
 });
 
 
 // ═══════════════════════════════════════════════════════════════════════
 // 4. ПЕРЕВОД СООБЩЕНИЙ 🌍
-// Проблема: MyMemory API не принимает 'auto'; короткие слова дают пустой ответ
-// Решение: определяем язык по скрипту, используем LibreTranslate как fallback
+// Исправлено: используем Google Translate неофициальный endpoint (бесплатно, без ключей)
+// Fallback: MyMemory с правильными параметрами
 // ═══════════════════════════════════════════════════════════════════════
 var _tCache = {};
 
@@ -5485,48 +5467,51 @@ function translateMessage(msgId, origText) {
   var existing = el.querySelector('.msg-translation');
   if (existing) { existing.remove(); return; }
 
-  // Берём текст из DOM — он точнее
   var textEl = el.querySelector('.text');
   var text = textEl ? textEl.textContent.trim() : (origText || '');
-  if (!text || text.length < 2) { showToast('Нечего переводить'); return; }
+  if (!text || text.length < 1) { showToast('Нечего переводить'); return; }
 
   if (_tCache[msgId]) { _insertTranslation(el, _tCache[msgId]); return; }
 
   showToast('🌍 Переводим...');
 
-  // Определяем язык источника по символам
+  // Определяем язык по символам
   var hasCyrillic = /[а-яёА-ЯЁ]/.test(text);
-  var hasLatin    = /[a-zA-Z]/.test(text);
-  var src, tgt;
-  if (hasCyrillic && !hasLatin)  { src = 'ru'; tgt = 'en'; }
-  else if (hasLatin && !hasCyrillic) { src = 'en'; tgt = 'ru'; }
-  else if (hasCyrillic)          { src = 'ru'; tgt = 'en'; }
-  else                           { src = 'en'; tgt = 'ru'; }
+  var src = hasCyrillic ? 'ru' : 'en';
+  var tgt = hasCyrillic ? 'en' : 'ru';
 
-  // MyMemory с корректным langpair и email для увеличения лимита
-  var url = 'https://api.mymemory.translated.net/get?q=' +
-    encodeURIComponent(text.slice(0, 500)) +
-    '&langpair=' + src + '|' + tgt +
-    '&de=translate@mychat.app';
+  // Используем lingva.ml — бесплатный Google Translate proxy без ключей
+  var apiUrl = 'https://lingva.ml/api/v1/' + src + '/' + tgt + '/' + encodeURIComponent(text.slice(0, 500));
 
-  fetch(url)
-    .then(function(r) { return r.json(); })
+  fetch(apiUrl)
+    .then(function(r) {
+      if (!r.ok) throw new Error('lingva ' + r.status);
+      return r.json();
+    })
     .then(function(data) {
-      var t = data.responseData && data.responseData.translatedText;
-      // MyMemory возвращает ошибку в поле translatedText
-      if (!t || t.indexOf('MYMEMORY WARNING') !== -1 || t.indexOf('INVALID') !== -1 || data.responseStatus !== 200) {
-        showToast('⚠️ Лимит переводов. Попробуй чуть позже.');
-        return;
-      }
-      // Иногда возвращает тот же текст
-      if (t.toLowerCase().trim() === text.toLowerCase().trim()) {
-        showToast('Перевод совпадает с оригиналом');
-        return;
-      }
+      var t = data && data.translation;
+      if (!t || t.trim() === '') throw new Error('empty');
       _tCache[msgId] = '(' + tgt.toUpperCase() + ') ' + t;
       _insertTranslation(el, _tCache[msgId]);
     })
-    .catch(function() { showToast('Ошибка перевода — нет сети'); });
+    .catch(function() {
+      // Fallback: MyMemory
+      var mmUrl = 'https://api.mymemory.translated.net/get?q=' +
+        encodeURIComponent(text.slice(0, 500)) +
+        '&langpair=' + src + '%7C' + tgt;
+      fetch(mmUrl)
+        .then(function(r){ return r.json(); })
+        .then(function(data) {
+          var t = data && data.responseData && data.responseData.translatedText;
+          if (!t || t.indexOf('MYMEMORY WARNING') !== -1 || t.indexOf('INVALID') !== -1) {
+            showToast('⚠️ Перевод временно недоступен');
+            return;
+          }
+          _tCache[msgId] = '(' + tgt.toUpperCase() + ') ' + t;
+          _insertTranslation(el, _tCache[msgId]);
+        })
+        .catch(function(){ showToast('⚠️ Ошибка перевода'); });
+    });
 }
 window.translateMessage = translateMessage;
 
@@ -5536,7 +5521,10 @@ function _insertTranslation(el, text) {
   div.style.cssText = 'font-size:12px;color:var(--text-secondary);font-style:italic;margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.1);line-height:1.5;cursor:pointer;';
   div.title = 'Нажми чтобы скрыть';
   div.textContent = '🌍 ' + text;
-  el.appendChild(div);
+  div.addEventListener('click', function(){ div.remove(); });
+  var textEl = el.querySelector('.text');
+  if (textEl) textEl.appendChild(div);
+  else el.appendChild(div);
 }
 
 
@@ -5575,19 +5563,20 @@ window.previewSound = previewSound;
 
 if (!window._sndListenerAdded) {
   window._sndListenerAdded = true;
-  socket.on('unreadNotification', playNotifSound);
+  socket.on('chatMessage', function(msg) { if (msg && msg.user_login !== myLogin) playNotifSound(); });
+  socket.on('newPrivateMessage', function(msg) { if (msg && msg.from_login !== myLogin) playNotifSound(); });
+  socket.on('roomNewMessage', function(msg) { if (msg && msg.user_login !== myLogin) playNotifSound(); });
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════
 // 6. НОЧНОЙ РЕЖИМ ПО РАСПИСАНИЮ 🌙 + НАСТРОЙКИ ЗВУКОВ
-// Проблема: openSoundNightSettings вызывается из уже существующей кнопки
-// Решение: просто реализуем эту функцию корректно
+// Исправлено: openSoundNightSettings больше не вызывает openSettings() (который перезаписывал body)
+//             Вместо этого открываем оверлей напрямую
 // ═══════════════════════════════════════════════════════════════════════
-var _nightOn    = localStorage.getItem('nightScheduleEnabled') === 'true';
-var _nightFrom  = localStorage.getItem('nightFrom') || '22:00';
-var _nightTo    = localStorage.getItem('nightTo')   || '08:00';
-var _savedTheme = null;
+var _nightOn   = localStorage.getItem('nightScheduleEnabled') === 'true';
+var _nightFrom = localStorage.getItem('nightFrom') || '22:00';
+var _nightTo   = localStorage.getItem('nightTo')   || '08:00';
 
 function _isNight() {
   if (!_nightOn) return false;
@@ -5600,23 +5589,14 @@ function _isNight() {
 }
 function _applyNight() {
   if (_isNight()) {
-    if (!document.body.classList.contains('_nigh')) {
-      _savedTheme = document.body.className;
-      // Remove light class, add dark
+    if (!document.body.classList.contains('_nightAuto')) {
+      document.body.classList.add('_nightAuto');
       document.body.classList.remove('theme-light');
-      document.body.classList.add('_nigh');
-      // Also apply dark vars via class
-      if (!document.body.classList.contains('theme-dark')) {
-        document.body.classList.add('theme-dark');
-      }
+      document.body.classList.add('theme-dark');
     }
   } else {
-    if (document.body.classList.contains('_nigh')) {
-      document.body.classList.remove('_nigh', 'theme-dark');
-      if (_savedTheme) {
-        document.body.className = _savedTheme;
-        _savedTheme = null;
-      }
+    if (document.body.classList.contains('_nightAuto')) {
+      document.body.classList.remove('_nightAuto', 'theme-dark');
     }
   }
 }
@@ -5624,6 +5604,7 @@ setInterval(_applyNight, 30000);
 setTimeout(_applyNight, 1500);
 
 function openSoundNightSettings() {
+  // Заполняем body СНАЧАЛА, потом открываем оверлей напрямую (не через openSettings())
   var body = document.getElementById('settingsBody');
   if (!body) return;
 
@@ -5634,36 +5615,37 @@ function openSoundNightSettings() {
   _sndType   = localStorage.getItem('notifSound') || 'ding';
 
   var sndLabels = { default:'🔔 Стандартный', ding:'🔔 Дзинь', ping:'🔔 Пинг', pop:'🔔 Мягкий', chime:'🔔 Звон колокольчика' };
-  var now = new Date();
-  var nowStr = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
 
-  function mkToggle(id, checked, onchange) {
-    return '<div id="' + id + '" onclick="' + onchange + '" style="position:relative;width:44px;height:24px;min-width:44px;background:' + (checked ? 'var(--accent)' : 'rgba(255,255,255,0.15)') + ';border-radius:12px;cursor:pointer;transition:background 0.2s;">' +
-      '<div style="position:absolute;top:2px;left:' + (checked ? '22px' : '2px') + ';width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
+  function mkToggle(id, checked, fn) {
+    return '<div id="' + id + '" onclick="' + fn + '" style="position:relative;width:44px;height:24px;min-width:44px;background:' +
+      (checked ? 'var(--accent)' : 'rgba(255,255,255,0.15)') +
+      ';border-radius:12px;cursor:pointer;transition:background 0.2s;">' +
+      '<div style="position:absolute;top:2px;left:' + (checked ? '22px' : '2px') +
+      ';width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
       '</div>';
   }
 
+  var now = new Date();
+  var nowStr = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
+
   body.innerHTML =
     '<div style="padding-bottom:24px;">' +
-    // Back header
     '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);">' +
       '<button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:22px;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;">←</button>' +
       '<h3 style="font-size:16px;font-weight:700;margin:0;">🔔 Звук и ночной режим</h3>' +
     '</div>' +
 
-    // Sound section
     '<div style="padding:16px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Звуки уведомлений</div>' +
     '<div style="padding:0 20px;">' +
-      // Toggle
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
         '<span style="font-size:14px;">Включить звуки</span>' +
-        mkToggle('_sndToggle', _sndEnabled, '_toggleSnd(this)') +
+        mkToggle('_sndToggleEl', _sndEnabled, 'window._toggleSnd(this)') +
       '</div>' +
-      // Sound types
       ['default','ding','ping','pop','chime'].map(function(s) {
+        var active = _sndType === s;
         return '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);">' +
-          '<div onclick="_setSnd(\'' + s + '\')" id="_sr_' + s + '" style="width:20px;height:20px;border-radius:50%;border:2px solid ' + (_sndType===s ? 'var(--accent)' : 'var(--border)') + ';background:' + (_sndType===s ? 'var(--accent)' : 'transparent') + ';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
-            (_sndType===s ? '<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>' : '') +
+          '<div onclick="_setSnd(\'' + s + '\')" id="_sr_' + s + '" style="width:20px;height:20px;border-radius:50%;border:2px solid ' + (active?'var(--accent)':'var(--border)') + ';background:' + (active?'var(--accent)':'transparent') + ';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
+            (active ? '<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>' : '') +
           '</div>' +
           '<span style="flex:1;font-size:14px;">' + (sndLabels[s]||s) + '</span>' +
           '<button onclick="previewSound(\'' + s + '\')" style="background:var(--bg-input);border:none;color:var(--text-primary);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">▶ Тест</button>' +
@@ -5671,41 +5653,44 @@ function openSoundNightSettings() {
       }).join('') +
     '</div>' +
 
-    // Night mode section
     '<div style="padding:20px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Ночной режим по расписанию</div>' +
     '<div style="padding:0 20px;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
-        '<div><div style="font-size:14px;">Авто тёмная тема</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Сейчас ' + nowStr + ' — режим ' + (_isNight() ? '🌙 активен' : '☀️ не активен') + '</div></div>' +
-        mkToggle('_nightToggle', _nightOn, '_toggleNight(this)') +
+        '<div>' +
+          '<div style="font-size:14px;">Авто тёмная тема</div>' +
+          '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Сейчас ' + nowStr + ' — режим ' + (_isNight() ? '🌙 активен' : '☀️ не активен') + '</div>' +
+        '</div>' +
+        mkToggle('_nightToggleEl', _nightOn, 'window._toggleNight(this)') +
       '</div>' +
       '<div style="display:flex;gap:16px;margin-top:16px;">' +
         '<div style="flex:1;">' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Включить с</div>' +
-          '<input type="time" id="_nFrom" value="' + _nightFrom + '" oninput="_saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;">' +
+          '<input type="time" id="_nFrom" value="' + _nightFrom + '" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;">' +
         '</div>' +
         '<div style="flex:1;">' +
           '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Выключить в</div>' +
-          '<input type="time" id="_nTo" value="' + _nightTo + '" oninput="_saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;">' +
+          '<input type="time" id="_nTo" value="' + _nightTo + '" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;">' +
         '</div>' +
       '</div>' +
     '</div>' +
     '</div>';
 
-  openSettings();
+  // ИСПРАВЛЕНИЕ: открываем оверлей напрямую БЕЗ вызова openSettings() который перезаписал бы body
+  var overlay = document.getElementById('settingsOverlay');
+  if (overlay) overlay.classList.add('show');
 }
 window.openSoundNightSettings = openSoundNightSettings;
 
-// Helper functions called from inline HTML
 window._toggleSnd = function(el) {
   _sndEnabled = !_sndEnabled;
-  localStorage.setItem('notifSoundEnabled', _sndEnabled);
+  localStorage.setItem('notifSoundEnabled', String(_sndEnabled));
   el.style.background = _sndEnabled ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
-  el.querySelector('div').style.left = _sndEnabled ? '22px' : '2px';
+  var dot = el.querySelector('div');
+  if (dot) dot.style.left = _sndEnabled ? '22px' : '2px';
 };
 window._setSnd = function(type) {
   _sndType = type;
   localStorage.setItem('notifSound', type);
-  // Update radio visuals
   ['default','ding','ping','pop','chime'].forEach(function(s) {
     var el = document.getElementById('_sr_' + s);
     if (!el) return;
@@ -5718,9 +5703,10 @@ window._setSnd = function(type) {
 };
 window._toggleNight = function(el) {
   _nightOn = !_nightOn;
-  localStorage.setItem('nightScheduleEnabled', _nightOn);
+  localStorage.setItem('nightScheduleEnabled', String(_nightOn));
   el.style.background = _nightOn ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
-  el.querySelector('div').style.left = _nightOn ? '22px' : '2px';
+  var dot = el.querySelector('div');
+  if (dot) dot.style.left = _nightOn ? '22px' : '2px';
   _applyNight();
   showToast(_nightOn ? '🌙 Ночной режим включён' : '☀️ Ночной режим выключен');
 };
@@ -5734,11 +5720,8 @@ window._saveNightTimes = function() {
 
 // ═══════════════════════════════════════════════════════════════════════
 // 7. АНАЛИТИКА ГРУПП 📊
-// Проблема: кнопка добавлялась дважды — в roomData handler (существующий код)
-//           И в нашем listener. Существующий код УЖЕ добавляет кнопку через innerHTML.
-// Решение: НЕ добавляем кнопку сами — она уже есть в roomData handler строка 2310:
-//          btns+='<button onclick="openRoomAnalytics('+data.room.id+')" title="Аналитика">📊</button>'
-// Нам нужно только реализовать функции openRoomAnalytics и closeAnalytics
+// Кнопка уже добавляется существующим кодом в roomData handler
+// Нам нужно только реализовать openRoomAnalytics / closeAnalytics
 // ═══════════════════════════════════════════════════════════════════════
 function openRoomAnalytics(roomId) {
   var modal = document.getElementById('analyticsModal');
@@ -5774,13 +5757,12 @@ if (!window._analyticsListenerAdded) {
           '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">👥 Участников</div>' +
         '</div>' +
       '</div>';
-
     if (data.dailyMessages && data.dailyMessages.length) {
       var maxD = Math.max.apply(null, data.dailyMessages.map(function(d){ return d.count; })) || 1;
       html += '<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">📈 Активность 7 дней</div>' +
-        '<div style="display:flex;align-items:flex-end;gap:4px;height:72px;">';
+        '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;">';
       data.dailyMessages.forEach(function(d) {
-        var h = Math.max(3, Math.round((d.count / maxD) * 62));
+        var h = Math.max(3, Math.round((d.count / maxD) * 64));
         html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">' +
           '<div style="font-size:10px;color:var(--text-muted);">' + d.count + '</div>' +
           '<div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:' + h + 'px;"></div>' +
@@ -5788,7 +5770,6 @@ if (!window._analyticsListenerAdded) {
       });
       html += '</div></div>';
     }
-
     if (topUsers.length) {
       html += '<div><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px;">🏆 Топ участников</div>';
       topUsers.forEach(function(u, i) {
@@ -5808,8 +5789,8 @@ if (!window._analyticsListenerAdded) {
 
 // ═══════════════════════════════════════════════════════════════════════
 // 8. ФОТО С ПРОСМОТРОМ 1 РАЗ 👁️
-// Проблема: кнопка не находила панель ввода, MutationObserver не работал
-// Решение: кнопку добавляем в #inputArea напрямую
+// Исправлено: не используем MutationObserver для патча — вместо этого
+//             сообщение type='view_once' отображается правильно через перехват рендера
 // ═══════════════════════════════════════════════════════════════════════
 var _voViewed = {};
 var _voImages = {};
@@ -5823,10 +5804,13 @@ function sendViewOncePhoto() {
     if (file.size > 15 * 1024 * 1024) { showToast('Максимум 15 МБ'); return; }
     var reader = new FileReader();
     reader.onload = function(ev) {
-      var payload = { type: 'view_once', image: ev.target.result, text: '👁 Фото · 1 просмотр' };
-      if (currentView === 'pm'   && currentPrivateLogin) socket.emit('privateMessage', Object.assign({ toLogin: currentPrivateLogin }, payload));
-      else if (currentView === 'room'  && currentRoomId)     socket.emit('roomMessage',    Object.assign({ roomId: currentRoomId }, payload));
-      else if (currentView === 'general')                     socket.emit('chatMessage',    payload);
+      var payload = { type: 'view_once', image: ev.target.result, text: '' };
+      if (currentView === 'pm' && currentPrivateLogin)
+        socket.emit('privateMessage', Object.assign({ toLogin: currentPrivateLogin }, payload));
+      else if (currentView === 'room' && currentRoomId)
+        socket.emit('roomMessage', Object.assign({ roomId: currentRoomId }, payload));
+      else if (currentView === 'general')
+        socket.emit('chatMessage', payload);
       showToast('👁 Отправлено — доступно 1 раз');
     };
     reader.readAsDataURL(file);
@@ -5846,7 +5830,7 @@ function openViewOnce(msgId) {
 
   var sec = 10;
   var timerEl = document.createElement('div');
-  timerEl.style.cssText = 'color:rgba(255,255,255,0.6);font-size:14px;font-weight:600;';
+  timerEl.style.cssText = 'color:rgba(255,255,255,0.7);font-size:14px;font-weight:600;';
   timerEl.textContent = '🔒 Закроется через ' + sec + ' сек';
 
   var img = document.createElement('img');
@@ -5886,84 +5870,143 @@ function _updateVoUI(msgId) {
   });
 }
 
-// Добавляем кнопку 👁 в #inputArea после загрузки
+// Перехватываем добавление сообщений через MutationObserver
+// Патчим view_once сообщения — скрываем img, показываем кнопку
+(function() {
+  function _patchVo(node) {
+    if (!node || node.nodeType !== 1) return;
+    // Ищем элемент сообщения с правильным ID
+    var msgEl = (node.id && /^(msg|pm|rmsg)-\d+$/.test(node.id)) ? node : null;
+    if (!msgEl) {
+      var found = node.querySelectorAll && node.querySelectorAll('[id^="msg-"],[id^="pm-"],[id^="rmsg-"]');
+      if (found && found.length) found.forEach(_patchVo);
+      return;
+    }
+    // Ищем признак view_once: data-type='view_once' или специфичный класс/атрибут
+    // Сервер сохраняет type='view_once' и возвращает в поле type
+    // Нам нужно проверить dataset или признак в DOM
+    var isVo = msgEl.getAttribute('data-type') === 'view_once' ||
+               msgEl.querySelector('[data-msgtype="view_once"]') !== null;
+
+    if (!isVo) {
+      // Проверяем наличие img + пустой текст (признак view_once)
+      var textDiv = msgEl.querySelector('.text');
+      var imgEl = msgEl.querySelector('.msg-image, .photo-img-wrap img, .msg-img');
+      if (!imgEl) return;
+      // Если текст пустой и есть изображение — возможно view_once
+      // Проверяем класс сообщения или другой маркер
+      // Надёжнее: слушать socket события отдельно
+      return;
+    }
+
+    var idMatch = msgEl.id.match(/(\d+)$/);
+    if (!idMatch) return;
+    var msgId = parseInt(idMatch[1]);
+
+    var imgEl = msgEl.querySelector('img');
+    if (imgEl && imgEl.src) _voImages[msgId] = imgEl.src;
+
+    var isMine = msgEl.classList.contains('mine');
+    var textDiv = msgEl.querySelector('.text');
+
+    // Скрываем картинку
+    var photoWrap = imgEl ? (imgEl.closest('.photo-img-wrap') || imgEl.closest('.msg-image') || imgEl.parentElement) : null;
+    if (photoWrap) photoWrap.style.display = 'none';
+
+    if (textDiv) {
+      if (isMine) {
+        textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
+      } else {
+        textDiv.innerHTML = '<div data-vo="1" onclick="openViewOnce(' + msgId + ')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 секунд · только 1 раз</div></div></div>';
+      }
+    }
+  }
+
+  // Вместо MutationObserver — перехватываем socket-события для view_once
+  if (!window._voSocketAdded) {
+    window._voSocketAdded = true;
+
+    function _handleVoMsg(msg, prefix) {
+      if (!msg || msg.type !== 'view_once') return;
+      // Сохраняем изображение
+      if (msg.image) _voImages[msg.id] = msg.image;
+      // Патчим DOM через небольшую задержку (после рендера)
+      setTimeout(function() {
+        var el = document.getElementById(prefix + msg.id);
+        if (!el) return;
+        var imgEl = el.querySelector('img');
+        if (imgEl && imgEl.src && !_voImages[msg.id]) _voImages[msg.id] = imgEl.src;
+
+        var isMine = el.classList.contains('mine');
+        var photoWrap = imgEl ? (imgEl.closest('.photo-img-wrap') || imgEl.closest('.msg-image') || imgEl.parentElement) : null;
+        if (photoWrap) photoWrap.style.display = 'none';
+
+        var textDiv = el.querySelector('.text');
+        if (!textDiv) return;
+        if (isMine) {
+          textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
+        } else {
+          if (_voViewed[msg.id]) {
+            textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;opacity:0.5;padding:10px 14px;border-radius:10px;background:var(--bg-input);">👁️ <span style="font-size:13px;">Просмотрено</span></div>';
+          } else {
+            textDiv.innerHTML = '<div data-vo="1" onclick="openViewOnce(' + msg.id + ')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 секунд · только 1 раз</div></div></div>';
+          }
+        }
+      }, 150);
+    }
+
+    socket.on('chatMessage',       function(msg) { _handleVoMsg(msg, 'msg-'); });
+    socket.on('newPrivateMessage', function(msg) { _handleVoMsg(msg, 'pm-'); });
+    socket.on('roomNewMessage',    function(msg) { _handleVoMsg(msg, 'rmsg-'); });
+
+    // Также патчим историю при загрузке
+    socket.on('messageHistory', function(msgs) {
+      if (!Array.isArray(msgs)) return;
+      msgs.forEach(function(msg) {
+        if (msg.type === 'view_once') {
+          if (msg.image) _voImages[msg.id] = msg.image;
+          setTimeout(function() { _handleVoMsg(msg, 'msg-'); }, 400);
+        }
+      });
+    });
+    socket.on('privateHistory', function(d) {
+      if (!d || !d.messages) return;
+      d.messages.forEach(function(msg) {
+        if (msg.type === 'view_once') {
+          if (msg.image) _voImages[msg.id] = msg.image;
+          setTimeout(function() { _handleVoMsg(msg, 'pm-'); }, 400);
+        }
+      });
+    });
+    socket.on('roomData', function(data) {
+      if (!data || !data.messages) return;
+      data.messages.forEach(function(msg) {
+        if (msg.type === 'view_once') {
+          if (msg.image) _voImages[msg.id] = msg.image;
+          setTimeout(function() { _handleVoMsg(msg, 'rmsg-'); }, 400);
+        }
+      });
+    });
+  }
+})();
+
+// Добавляем кнопку 👁 в панель ввода
 window.addEventListener('load', function() {
   setTimeout(function() {
     var inputArea = document.getElementById('inputArea');
-    if (!inputArea || inputArea.querySelector('[data-vo-add]')) return;
+    if (!inputArea || inputArea.querySelector('[data-vo-btn]')) return;
     var btn = document.createElement('button');
-    btn.setAttribute('data-vo-add', '1');
+    btn.setAttribute('data-vo-btn', '1');
     btn.className = 'ia-btn';
     btn.title = 'Фото (1 просмотр)';
     btn.textContent = '👁';
     btn.style.cssText = 'font-size:17px;';
     btn.addEventListener('click', sendViewOncePhoto);
-    // Вставляем перед кнопкой отправки
     var sendBtn = document.getElementById('sendBtn');
     if (sendBtn) inputArea.insertBefore(btn, sendBtn);
     else inputArea.appendChild(btn);
   }, 800);
 });
-
-// Перехватываем рендер сообщений через патч addMsg / addPM / addRoomMsg
-// Используем MutationObserver на контейнер #messages
-(function() {
-  function _checkAndPatchVo(node) {
-    if (!node || node.nodeType !== 1) return;
-    // Ищем элемент сообщения
-    var msgEl = node;
-    if (!msgEl.id || !/^(msg|pm|rmsg)-\d+$/.test(msgEl.id)) return;
-    // Проверяем есть ли текст view_once
-    var textDiv = msgEl.querySelector('.text');
-    if (!textDiv) return;
-    var txt = textDiv.textContent || '';
-    if (txt.indexOf('1 просмотр') === -1 && txt.indexOf('view_once') === -1 && txt.indexOf('👁') === -1) return;
-
-    // Ищем картинку внутри сообщения
-    var imgEl = msgEl.querySelector('img');
-    if (!imgEl) return;
-    var idMatch = msgEl.id.match(/(\d+)$/);
-    if (!idMatch) return;
-    var msgId = parseInt(idMatch[1]);
-
-    // Сохраняем изображение
-    if (imgEl.src && imgEl.src.indexOf('data:') === 0) {
-      _voImages[msgId] = imgEl.src;
-    } else if (imgEl.src) {
-      _voImages[msgId] = imgEl.src;
-    }
-
-    var isMine = msgEl.classList.contains('mine');
-    // Скрываем оригинальное изображение
-    var photoWrap = imgEl.closest('.photo-img-wrap') || imgEl.parentElement;
-    if (photoWrap) photoWrap.style.display = 'none';
-
-    // Заменяем текст на кнопку
-    textDiv.innerHTML = '';
-    if (isMine) {
-      textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
-    } else {
-      textDiv.innerHTML = '<div data-vo="1" onclick="openViewOnce(' + msgId + ')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 секунд · только 1 раз</div></div></div>';
-    }
-  }
-
-  function _observeMessages() {
-    var container = document.getElementById('messages');
-    if (!container) { setTimeout(_observeMessages, 500); return; }
-    new MutationObserver(function(muts) {
-      muts.forEach(function(m) {
-        m.addedNodes.forEach(function(node) {
-          _checkAndPatchVo(node);
-          // Может быть wrapper
-          if (node.querySelectorAll) {
-            node.querySelectorAll('[id^="msg-"],[id^="pm-"],[id^="rmsg-"]').forEach(_checkAndPatchVo);
-          }
-        });
-      });
-    }).observe(container, { childList: true, subtree: true });
-  }
-  window.addEventListener('load', _observeMessages);
-})();
 
 </script>
 </body>
