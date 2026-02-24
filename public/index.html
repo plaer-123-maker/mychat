@@ -965,6 +965,11 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       </div>
       <button class="msg-search-close" onclick="closeMsgSearch()" title="Закрыть">✕</button>
     </div>
+    <div id="pinnedMsgBar" onclick="_onPinBarClick(event)">
+      <span class="pm-icon">📌</span>
+      <div class="pm-text"><span class="pm-label">Закреплённое</span><span id="pinnedMsgText"></span></div>
+      <button class="pm-close" onclick="_onPinClose(event)">×</button>
+    </div>
     <div class="messages" id="messages"></div>
     <!-- Video Note Recorder -->
     <div class="vn-modal-overlay" id="videoNoteModal">
@@ -5074,9 +5079,10 @@ window.leaveRoomFromList = leaveRoomFromList;
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
-// FEATURES BLOCK v5 — все баги исправлены
+// FEATURES BLOCK v6
 // ═══════════════════════════════════════════════════════════════════════
 
+// Toast helper
 window.showToast = function(msg, ms) {
   var e = document.getElementById('chatError');
   if (!e) return;
@@ -5086,9 +5092,9 @@ window.showToast = function(msg, ms) {
   e._tt = setTimeout(function(){ e.classList.remove('show'); }, ms || 2800);
 };
 
-// ═══════════════════════════════════════════════════════════════════════
-// ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
-// ═══════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────
 function _chatCtx() {
   if (currentView === 'general') return { chatType: 'general', chatId: 'general' };
   if (currentView === 'room')    return { chatType: 'room',    chatId: String(currentRoomId) };
@@ -5096,73 +5102,44 @@ function _chatCtx() {
   return null;
 }
 function _scrollToMsg(id) {
-  var el = document.getElementById('msg-' + id) ||
-           document.getElementById('pm-'  + id) ||
-           document.getElementById('rmsg-'+ id);
+  var el = document.getElementById('msg-'  + id) ||
+           document.getElementById('pm-'   + id) ||
+           document.getElementById('rmsg-' + id);
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  var prev = el.style.background;
+  var orig = el.style.background;
   el.style.transition = 'background 0.3s';
-  el.style.background = 'rgba(92,160,220,0.3)';
-  setTimeout(function(){ el.style.background = prev || ''; }, 1500);
+  el.style.background = 'rgba(92,160,220,0.35)';
+  setTimeout(function(){ el.style.background = orig || ''; }, 1600);
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// 1. ЗАКРЕП СООБЩЕНИЙ 📌
-// Исправлено: создаётся один раз, правильно вставляется, правильные поля сравнения
+// 1. ЗАКРЕП 📌  —  использует #pinnedMsgBar уже вставленный в HTML
 // ═══════════════════════════════════════════════════════════════════════
-var _pinData = null;
+var _pinMsgId = null;
 
-(function() {
-  var bar = document.createElement('div');
-  bar.id = '_pinBar';
-  bar.style.cssText = 'display:none;align-items:center;gap:10px;padding:7px 16px;background:rgba(92,160,220,0.13);border-bottom:2px solid var(--accent);cursor:pointer;position:relative;z-index:10;flex-shrink:0;';
-  bar.innerHTML =
-    '<span style="font-size:16px;flex-shrink:0;">📌</span>' +
-    '<div style="flex:1;min-width:0;">' +
-      '<div style="font-size:10px;color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Закреплённое</div>' +
-      '<div id="_pinText" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-primary);"></div>' +
-    '</div>' +
-    '<button id="_pinClose" style="background:transparent;border:none;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px;flex-shrink:0;">×</button>';
+window._onPinBarClick = function(e) {
+  if (e && e.target && e.target.classList.contains('pm-close')) return;
+  if (_pinMsgId) _scrollToMsg(_pinMsgId);
+};
+window._onPinClose = function(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  var ctx = _chatCtx();
+  if (ctx) socket.emit('unpinMessage', ctx);
+};
 
-  bar.addEventListener('click', function(e) {
-    if (e.target.id === '_pinClose') return;
-    if (_pinData && _pinData.msg_id) _scrollToMsg(_pinData.msg_id);
-  });
-
-  window.addEventListener('load', function() {
-    // Вставляем в mainChat после chat-header — ждём чуть дольше
-    setTimeout(function() {
-      var mainChat = document.getElementById('mainChat');
-      if (!mainChat) return;
-      var header = mainChat.querySelector('.chat-header');
-      if (header) header.insertAdjacentElement('afterend', bar);
-      else mainChat.insertBefore(bar, mainChat.firstChild);
-
-      var closeBtn = document.getElementById('_pinClose');
-      if (closeBtn) {
-        closeBtn.addEventListener('click', function(e) {
-          e.stopPropagation();
-          var ctx = _chatCtx();
-          if (ctx) socket.emit('unpinMessage', ctx);
-        });
-      }
-    }, 300);
-  });
-})();
-
-function _showPin(msgId, msgText) {
-  _pinData = { msg_id: msgId, msg_text: msgText };
-  var bar = document.getElementById('_pinBar');
-  var txt = document.getElementById('_pinText');
-  if (!bar || !txt) return;
-  txt.textContent = (msgText || 'Сообщение').slice(0, 90);
-  bar.style.display = 'flex';
+function _showPinBar(msgId, msgText) {
+  _pinMsgId = msgId;
+  var bar  = document.getElementById('pinnedMsgBar');
+  var txt  = document.getElementById('pinnedMsgText');
+  if (!bar) return;
+  if (txt) txt.textContent = (msgText || 'Сообщение').slice(0, 90);
+  bar.classList.add('show');
 }
-function _hidePin() {
-  _pinData = null;
-  var bar = document.getElementById('_pinBar');
-  if (bar) bar.style.display = 'none';
+function _hidePinBar() {
+  _pinMsgId = null;
+  var bar = document.getElementById('pinnedMsgBar');
+  if (bar) bar.classList.remove('show');
 }
 function _loadPin() {
   var ctx = _chatCtx();
@@ -5172,46 +5149,53 @@ function _loadPin() {
 function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   var ctx = _chatCtx();
   if (!ctx) return;
-  socket.emit('pinMessage', { chatType: ctx.chatType, chatId: ctx.chatId, msgId: msgId, msgText: msgText || '', msgUser: msgUser || '' });
+  socket.emit('pinMessage', {
+    chatType: ctx.chatType, chatId: ctx.chatId,
+    msgId: msgId, msgText: msgText || '', msgUser: msgUser || ''
+  });
 }
 window.pinMessageInChat = pinMessageInChat;
 
-socket.on('pinnedMessage', function(data) {
-  if (!data) return;
+// Сервер → pinnedMessage (ответ на getPinnedMessage) — поля: chat_type, chat_id, msg_id, msg_text
+socket.on('pinnedMessage', function(d) {
+  if (!d) return;
   var ctx = _chatCtx();
   if (!ctx) return;
-  // Сервер возвращает data.chat_type, data.chat_id, data.msg_id, data.msg_text
-  if (data.chat_type === ctx.chatType && String(data.chat_id) === ctx.chatId) {
-    if (data.msg_id) _showPin(data.msg_id, data.msg_text);
-    else _hidePin();
+  if (d.chat_type === ctx.chatType && String(d.chat_id) === ctx.chatId) {
+    if (d.msg_id) _showPinBar(d.msg_id, d.msg_text);
+    else _hidePinBar();
   }
 });
-socket.on('messagePinned', function(data) {
-  if (!data) return;
+// Сервер → messagePinned (broadcast) — поля: chatType, chatId, msgId, msgText
+socket.on('messagePinned', function(d) {
+  if (!d) return;
   var ctx = _chatCtx();
-  if (ctx && data.chatType === ctx.chatType && String(data.chatId) === ctx.chatId) {
-    _showPin(data.msgId, data.msgText);
+  if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
+    _showPinBar(d.msgId, d.msgText);
   }
   showToast('📌 Сообщение закреплено');
 });
-socket.on('messageUnpinned', function(data) {
-  if (!data) return;
+// Сервер → messageUnpinned
+socket.on('messageUnpinned', function(d) {
+  if (!d) return;
   var ctx = _chatCtx();
-  if (ctx && data.chatType === ctx.chatType && String(data.chatId) === ctx.chatId) {
-    _hidePin();
+  if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
+    _hidePinBar();
   }
   showToast('Откреплено');
 });
 
-// Загружаем закреп при открытии чата
-socket.on('messageHistory', function() { setTimeout(_loadPin, 300); });
-socket.on('privateHistory', function() { setTimeout(_loadPin, 300); });
-socket.on('roomData',        function() { setTimeout(_loadPin, 300); });
+// Загружаем закреп при открытии каждого чата
+if (!window._pinHistoryListeners) {
+  window._pinHistoryListeners = true;
+  socket.on('messageHistory', function() { setTimeout(_loadPin, 200); });
+  socket.on('privateHistory', function() { setTimeout(_loadPin, 200); });
+  socket.on('roomData',        function() { setTimeout(_loadPin, 200); });
+}
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// 2. УПОМИНАНИЯ @nickname 🔔
-// Исправлено: слушаем mentionReceived от сервера (он уже делает проверку)
+// 2. УПОМИНАНИЯ 🔔  —  слушаем mentionReceived от сервера
 // ═══════════════════════════════════════════════════════════════════════
 var _mentions = [];
 var _mentionOpen = false;
@@ -5226,12 +5210,11 @@ function _mentionBadge() {
     b.style.display = 'none';
   }
 }
-
 function toggleMentionPanel() {
   _mentionOpen = !_mentionOpen;
-  var panel = document.getElementById('mentionPanel');
-  if (!panel) return;
-  panel.classList.toggle('show', _mentionOpen);
+  var p = document.getElementById('mentionPanel');
+  if (!p) return;
+  p.classList.toggle('show', _mentionOpen);
   if (_mentionOpen) _renderMentions();
 }
 window.toggleMentionPanel = toggleMentionPanel;
@@ -5245,46 +5228,38 @@ function _renderMentions() {
   }
   list.innerHTML = _mentions.slice(0, 40).map(function(m, i) {
     return '<div onclick="_goMention(' + i + ')" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
-      '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:2px;">' + escHtml(m.from) + ' в ' + escHtml(m.chatName) + '</div>' +
-      '<div style="font-size:13px;color:var(--text-primary);">' + escHtml((m.text||'').slice(0, 80)) + '</div>' +
+      '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:2px;">' + escHtml(m.from) + ' · ' + escHtml(m.chatName) + '</div>' +
+      '<div style="font-size:13px;">' + escHtml((m.text||'').slice(0,80)) + '</div>' +
       '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + (m.ts ? new Date(m.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '') + '</div>' +
       '</div>';
   }).join('');
 }
-
 function _goMention(i) {
-  var m = _mentions[i];
-  if (!m) return;
+  var m = _mentions[i]; if (!m) return;
   document.getElementById('mentionPanel').classList.remove('show');
   _mentionOpen = false;
-  if (m.chatType === 'general') { if (typeof openGeneral === 'function') openGeneral(); }
-  else if (m.chatType === 'pm') { if (typeof openPM === 'function') openPM(m.chatId, m.chatName); }
-  else if (m.chatType === 'room') { if (typeof openRoom === 'function') openRoom(Number(m.chatId)); }
-  setTimeout(function() { if (m.msgId) _scrollToMsg(m.msgId); }, 700);
+  if      (m.chatType==='general') { if(typeof openGeneral==='function') openGeneral(); }
+  else if (m.chatType==='pm')      { if(typeof openPM==='function') openPM(m.chatId, m.chatName); }
+  else if (m.chatType==='room')    { if(typeof openRoom==='function') openRoom(Number(m.chatId)); }
+  setTimeout(function(){ if(m.msgId) _scrollToMsg(m.msgId); }, 700);
 }
 window._goMention = _goMention;
-
-function clearMentions() {
-  _mentions = [];
-  _mentionBadge();
-  _renderMentions();
-}
+function clearMentions() { _mentions = []; _mentionBadge(); _renderMentions(); }
 window.clearMentions = clearMentions;
 
-// Сервер уже ищет @упоминания и шлёт mentionReceived — просто слушаем
+// Сервер уже ищет @имена и шлёт mentionReceived
 if (!window._mentionSocketAdded) {
   window._mentionSocketAdded = true;
-  socket.on('mentionReceived', function(data) {
-    if (!data) return;
-    var chatNameMap = { general: 'Общий чат' };
+  socket.on('mentionReceived', function(d) {
+    if (!d) return;
     var entry = {
-      from: data.from || '?',
-      chatType: data.chatType || 'general',
-      chatId: String(data.chatId || 'general'),
-      chatName: data.chatType === 'general' ? 'Общий чат' : (data.chatType === 'pm' ? (data.from || '?') : 'Группа'),
-      msgId: data.msgId,
-      text: data.text || '',
-      ts: data.ts || Date.now()
+      from:     d.from || '?',
+      chatType: d.chatType || 'general',
+      chatId:   String(d.chatId || 'general'),
+      chatName: d.chatType==='general' ? 'Общий чат' : (d.chatType==='pm' ? (d.from||'?') : 'Группа'),
+      msgId:    d.msgId,
+      text:     d.text || '',
+      ts:       d.ts || Date.now()
     };
     _mentions.unshift(entry);
     if (_mentions.length > 60) _mentions.pop();
@@ -5293,75 +5268,57 @@ if (!window._mentionSocketAdded) {
   });
 }
 
-// Подсветка @упоминаний в тексте
-(function() {
-  if (window._formatTextPatched) return;
-  window._formatTextPatched = true;
-  var orig = window.formatText;
-  if (!orig) { setTimeout(arguments.callee || function(){}, 500); return; }
-  window.formatText = function(text) {
-    var html = orig(text);
-    html = html.replace(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g, function(match, name) {
-      var nl = name.toLowerCase();
-      var isMe = (myLogin && nl === myLogin.toLowerCase()) ||
-                 (myNickname && nl === myNickname.toLowerCase().replace(/\s+/g,''));
-      if (isMe) return '<span style="background:rgba(255,200,50,0.3);color:#ffd700;border-radius:4px;padding:0 3px;font-weight:700;">' + match + '</span>';
-      return '<span style="color:var(--accent);font-weight:600;">' + match + '</span>';
-    });
-    return html;
-  };
-})();
-
+// Закрытие панели по клику вне
 document.addEventListener('click', function(e) {
   if (!_mentionOpen) return;
-  var panel = document.getElementById('mentionPanel');
-  var btn   = document.getElementById('mentionBtn');
-  if (panel && !panel.contains(e.target) && btn && !btn.contains(e.target)) {
-    panel.classList.remove('show');
-    _mentionOpen = false;
+  var p = document.getElementById('mentionPanel');
+  var b = document.getElementById('mentionBtn');
+  if (p && !p.contains(e.target) && b && !b.contains(e.target)) {
+    p.classList.remove('show'); _mentionOpen = false;
   }
 });
+
+// Подсветка @упоминаний
+(function patchFormatText() {
+  if (window._ftPatched) return;
+  var orig = window.formatText;
+  if (!orig) { setTimeout(patchFormatText, 400); return; }
+  window._ftPatched = true;
+  window.formatText = function(text) {
+    return orig(text).replace(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g, function(match, name) {
+      var nl = name.toLowerCase();
+      var isMe = (myLogin    && nl === myLogin.toLowerCase()) ||
+                 (myNickname && nl === myNickname.toLowerCase().replace(/\s+/g,''));
+      return isMe
+        ? '<span style="background:rgba(255,200,50,0.3);color:#ffd700;border-radius:4px;padding:0 3px;font-weight:700;">' + match + '</span>'
+        : '<span style="color:var(--accent);font-weight:600;">' + match + '</span>';
+    });
+  };
+})();
 
 
 // ═══════════════════════════════════════════════════════════════════════
 // 3. ГЛОБАЛЬНЫЙ ПОИСК 🔍
-// Исправлено: кэш заполняется через отдельные флаги, не дублируется
 // ═══════════════════════════════════════════════════════════════════════
 var _gsCache = { general: [], pm: {}, room: {} };
 var _gsTimer = null;
 
 if (!window._gsCacheAdded) {
   window._gsCacheAdded = true;
-
   socket.on('messageHistory', function(msgs) {
-    if (Array.isArray(msgs))
-      _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
+    if (Array.isArray(msgs)) _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
   });
   socket.on('privateHistory', function(d) {
-    if (!d || !d.otherLogin) return;
-    _gsCache.pm[d.otherLogin] = { nick: d.otherNickname || d.otherLogin, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.from_nickname||m.from_login||'',ts:m.timestamp}; }) };
+    if (!d||!d.otherLogin) return;
+    _gsCache.pm[d.otherLogin] = { nick: d.otherNickname||d.otherLogin, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.from_nickname||m.from_login||'',ts:m.timestamp}; }) };
   });
-  socket.on('roomData', function(data) {
-    if (!data || !data.room) return;
-    var rid = data.room.id;
-    _gsCache.room[rid] = { name: data.room.name, msgs: (data.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; }) };
+  socket.on('roomData', function(d) {
+    if (!d||!d.room) return;
+    _gsCache.room[d.room.id] = { name: d.room.name, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; }) };
   });
-
-  socket.on('chatMessage', function(msg) {
-    if (msg && msg.id && msg.text) _gsCache.general.push({id:msg.id,text:msg.text,from:msg.username||'',ts:msg.timestamp});
-  });
-  socket.on('newPrivateMessage', function(msg) {
-    var key = msg.from_login === myLogin ? msg.to_login : msg.from_login;
-    if (!key) return;
-    if (!_gsCache.pm[key]) _gsCache.pm[key] = { nick: msg.from_nickname || key, msgs: [] };
-    if (msg.id && msg.text) _gsCache.pm[key].msgs.push({id:msg.id,text:msg.text,from:msg.from_nickname||'',ts:msg.timestamp});
-  });
-  socket.on('roomNewMessage', function(msg) {
-    var rid = msg.room_id;
-    if (!rid) return;
-    if (!_gsCache.room[rid]) _gsCache.room[rid] = { name: 'Группа', msgs: [] };
-    if (msg.id && msg.text) _gsCache.room[rid].msgs.push({id:msg.id,text:msg.text,from:msg.username||'',ts:msg.timestamp});
-  });
+  socket.on('chatMessage',       function(m){ if(m&&m.id&&m.text) _gsCache.general.push({id:m.id,text:m.text,from:m.username||'',ts:m.timestamp}); });
+  socket.on('newPrivateMessage', function(m){ var k=m.from_login===myLogin?m.to_login:m.from_login; if(!k) return; if(!_gsCache.pm[k]) _gsCache.pm[k]={nick:m.from_nickname||k,msgs:[]}; if(m.id&&m.text) _gsCache.pm[k].msgs.push({id:m.id,text:m.text,from:m.from_nickname||'',ts:m.timestamp}); });
+  socket.on('roomNewMessage',    function(m){ var r=m.room_id; if(!r) return; if(!_gsCache.room[r]) _gsCache.room[r]={name:'Группа',msgs:[]}; if(m.id&&m.text) _gsCache.room[r].msgs.push({id:m.id,text:m.text,from:m.username||'',ts:m.timestamp}); });
 }
 
 function openGlobalSearch() {
@@ -5375,142 +5332,87 @@ function openGlobalSearch() {
     var total = _gsCache.general.length +
       Object.keys(_gsCache.pm).reduce(function(s,k){return s+_gsCache.pm[k].msgs.length;},0) +
       Object.keys(_gsCache.room).reduce(function(s,k){return s+_gsCache.room[k].msgs.length;},0);
-    res.innerHTML = '<div class="gs-empty">В кэше ' + total + ' сообщений. Начни вводить...</div>';
+    res.innerHTML = '<div class="gs-empty">Кэш: ' + total + ' сообщений. Начни вводить...</div>';
   }
 }
 window.openGlobalSearch = openGlobalSearch;
-
-function closeGlobalSearch() {
-  var m = document.getElementById('globalSearchModal');
-  if (m) m.classList.remove('show');
-}
+function closeGlobalSearch() { var m=document.getElementById('globalSearchModal'); if(m) m.classList.remove('show'); }
 window.closeGlobalSearch = closeGlobalSearch;
-
 function globalSearchQuery() {
-  var q = (document.getElementById('globalSearchInput').value || '').trim();
+  var q = (document.getElementById('globalSearchInput').value||'').trim();
   clearTimeout(_gsTimer);
   var res = document.getElementById('globalSearchResults');
-  if (q.length < 2) { if(res) res.innerHTML = '<div class="gs-empty">Минимум 2 символа</div>'; return; }
-  if (res) res.innerHTML = '<div class="gs-empty">🔍 Ищем...</div>';
-  _gsTimer = setTimeout(function() { _doGsSearch(q); }, 300);
+  if (q.length < 2) { if(res) res.innerHTML='<div class="gs-empty">Минимум 2 символа</div>'; return; }
+  if (res) res.innerHTML='<div class="gs-empty">🔍 Ищем...</div>';
+  _gsTimer = setTimeout(function(){ _doGsSearch(q); }, 300);
 }
 window.globalSearchQuery = globalSearchQuery;
-
 function _doGsSearch(q) {
-  var ql = q.toLowerCase();
-  var results = [];
-  _gsCache.general.forEach(function(m) {
-    if (m.text && m.text.toLowerCase().indexOf(ql) !== -1)
-      results.push({ chatType:'general', chatId:'general', chatName:'💬 Общий чат', msgId:m.id, from:m.from, text:m.text, ts:m.ts });
-  });
-  Object.keys(_gsCache.pm).forEach(function(login) {
-    var e = _gsCache.pm[login];
-    (e.msgs||[]).forEach(function(m) {
-      if (m.text && m.text.toLowerCase().indexOf(ql) !== -1)
-        results.push({ chatType:'pm', chatId:login, chatName:'👤 ' + (e.nick||login), msgId:m.id, from:m.from, text:m.text, ts:m.ts });
-    });
-  });
-  Object.keys(_gsCache.room).forEach(function(rid) {
-    var e = _gsCache.room[rid];
-    (e.msgs||[]).forEach(function(m) {
-      if (m.text && m.text.toLowerCase().indexOf(ql) !== -1)
-        results.push({ chatType:'room', chatId:rid, chatName:'👥 ' + (e.name||'Группа'), msgId:m.id, from:m.from, text:m.text, ts:m.ts });
-    });
-  });
+  var ql = q.toLowerCase(), results = [];
+  _gsCache.general.forEach(function(m){ if(m.text&&m.text.toLowerCase().indexOf(ql)!==-1) results.push({chatType:'general',chatId:'general',chatName:'💬 Общий чат',msgId:m.id,from:m.from,text:m.text,ts:m.ts}); });
+  Object.keys(_gsCache.pm).forEach(function(l){ var e=_gsCache.pm[l]; (e.msgs||[]).forEach(function(m){ if(m.text&&m.text.toLowerCase().indexOf(ql)!==-1) results.push({chatType:'pm',chatId:l,chatName:'👤 '+(e.nick||l),msgId:m.id,from:m.from,text:m.text,ts:m.ts}); }); });
+  Object.keys(_gsCache.room).forEach(function(r){ var e=_gsCache.room[r]; (e.msgs||[]).forEach(function(m){ if(m.text&&m.text.toLowerCase().indexOf(ql)!==-1) results.push({chatType:'room',chatId:r,chatName:'👥 '+(e.name||'Группа'),msgId:m.id,from:m.from,text:m.text,ts:m.ts}); }); });
   results.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
-
   var el = document.getElementById('globalSearchResults');
   if (!el) return;
-  if (!results.length) { el.innerHTML = '<div class="gs-empty">Ничего не найдено</div>'; return; }
-
-  var re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')', 'gi');
-  var html = results.slice(0, 60).map(function(r, i) {
-    var hi = escHtml(r.text.slice(0,150)).replace(re, '<mark style="background:rgba(92,160,220,0.4);border-radius:3px;padding:0 2px;">$1</mark>');
-    return '<div class="gs-result" data-idx="' + i + '" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
-      '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px;">' + r.chatName + (r.from ? ' · ' + escHtml(r.from) : '') + '<span style="float:right;color:var(--text-muted);">' + (r.ts ? new Date(r.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '') + '</span></div>' +
-      '<div style="font-size:13px;color:var(--text-primary);">' + hi + '</div>' +
-      '</div>';
+  if (!results.length) { el.innerHTML='<div class="gs-empty">Ничего не найдено</div>'; return; }
+  var re = new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
+  el.innerHTML = results.slice(0,60).map(function(r,i){
+    var hi = escHtml(r.text.slice(0,150)).replace(re,'<mark style="background:rgba(92,160,220,0.4);border-radius:3px;padding:0 2px;">$1</mark>');
+    return '<div data-gsi="'+i+'" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
+      '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px;">'+r.chatName+(r.from?' · '+escHtml(r.from):'')+'<span style="float:right;color:var(--text-muted);">'+(r.ts?new Date(r.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+' </span></div>'+
+      '<div style="font-size:13px;">'+hi+'</div></div>';
   }).join('');
-  el.innerHTML = html;
-
-  el.querySelectorAll('.gs-result').forEach(function(div, i) {
-    var r = results[i];
-    div.addEventListener('click', function() {
+  el.querySelectorAll('[data-gsi]').forEach(function(div){
+    var r = results[parseInt(div.getAttribute('data-gsi'))];
+    div.addEventListener('click', function(){
       closeGlobalSearch();
-      if (r.chatType === 'general') { if(typeof openGeneral==='function') openGeneral(); }
-      else if (r.chatType === 'pm') { if(typeof openPM==='function') openPM(r.chatId, r.chatName.replace('👤 ','')); }
-      else if (r.chatType === 'room') { if(typeof openRoom==='function') openRoom(Number(r.chatId)); }
+      if      (r.chatType==='general') { if(typeof openGeneral==='function') openGeneral(); }
+      else if (r.chatType==='pm')      { if(typeof openPM==='function') openPM(r.chatId, r.chatName.replace('👤 ','')); }
+      else if (r.chatType==='room')    { if(typeof openRoom==='function') openRoom(Number(r.chatId)); }
       setTimeout(function(){ _scrollToMsg(r.msgId); }, 500);
     });
   });
 }
-
-document.addEventListener('keydown', function(e) {
-  if ((e.ctrlKey||e.metaKey) && e.key === 'k') { e.preventDefault(); openGlobalSearch(); }
-  if (e.key === 'Escape') { closeGlobalSearch(); }
-});
+document.addEventListener('keydown', function(e){ if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openGlobalSearch();} if(e.key==='Escape') closeGlobalSearch(); });
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// 4. ПЕРЕВОД СООБЩЕНИЙ 🌍
-// Исправлено: используем Google Translate неофициальный endpoint (бесплатно, без ключей)
-// Fallback: MyMemory с правильными параметрами
+// 4. ПЕРЕВОД 🌍  —  Google Translate unofficial API (надёжнее всего)
 // ═══════════════════════════════════════════════════════════════════════
 var _tCache = {};
 
 function translateMessage(msgId, origText) {
-  var el = document.getElementById('msg-' + msgId) ||
-           document.getElementById('pm-'  + msgId) ||
-           document.getElementById('rmsg-'+ msgId);
+  var el = document.getElementById('msg-'+msgId) || document.getElementById('pm-'+msgId) || document.getElementById('rmsg-'+msgId);
   if (!el) return;
-
   var existing = el.querySelector('.msg-translation');
   if (existing) { existing.remove(); return; }
-
   var textEl = el.querySelector('.text');
-  var text = textEl ? textEl.textContent.trim() : (origText || '');
+  var text = textEl ? (textEl.innerText||textEl.textContent).trim() : (origText||'');
+  // Убираем переводы и метки
+  text = text.replace(/🌍.*$/gm,'').trim();
   if (!text || text.length < 1) { showToast('Нечего переводить'); return; }
-
   if (_tCache[msgId]) { _insertTranslation(el, _tCache[msgId]); return; }
-
   showToast('🌍 Переводим...');
-
-  // Определяем язык по символам
   var hasCyrillic = /[а-яёА-ЯЁ]/.test(text);
   var src = hasCyrillic ? 'ru' : 'en';
   var tgt = hasCyrillic ? 'en' : 'ru';
-
-  // Используем lingva.ml — бесплатный Google Translate proxy без ключей
-  var apiUrl = 'https://lingva.ml/api/v1/' + src + '/' + tgt + '/' + encodeURIComponent(text.slice(0, 500));
-
-  fetch(apiUrl)
-    .then(function(r) {
-      if (!r.ok) throw new Error('lingva ' + r.status);
-      return r.json();
-    })
+  // Google Translate unofficial free endpoint
+  var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + src + '&tl=' + tgt + '&dt=t&q=' + encodeURIComponent(text.slice(0,500));
+  fetch(url)
+    .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(data) {
-      var t = data && data.translation;
-      if (!t || t.trim() === '') throw new Error('empty');
-      _tCache[msgId] = '(' + tgt.toUpperCase() + ') ' + t;
-      _insertTranslation(el, _tCache[msgId]);
+      // Ответ: [[["перевод","оригинал",null,null,10],...],null,"ru"]
+      if (!data || !data[0]) throw new Error('empty');
+      var translated = data[0].map(function(part){ return part[0]||''; }).join('');
+      if (!translated.trim()) throw new Error('empty result');
+      var result = '(' + tgt.toUpperCase() + ') ' + translated;
+      _tCache[msgId] = result;
+      _insertTranslation(el, result);
     })
-    .catch(function() {
-      // Fallback: MyMemory
-      var mmUrl = 'https://api.mymemory.translated.net/get?q=' +
-        encodeURIComponent(text.slice(0, 500)) +
-        '&langpair=' + src + '%7C' + tgt;
-      fetch(mmUrl)
-        .then(function(r){ return r.json(); })
-        .then(function(data) {
-          var t = data && data.responseData && data.responseData.translatedText;
-          if (!t || t.indexOf('MYMEMORY WARNING') !== -1 || t.indexOf('INVALID') !== -1) {
-            showToast('⚠️ Перевод временно недоступен');
-            return;
-          }
-          _tCache[msgId] = '(' + tgt.toUpperCase() + ') ' + t;
-          _insertTranslation(el, _tCache[msgId]);
-        })
-        .catch(function(){ showToast('⚠️ Ошибка перевода'); });
+    .catch(function(err) {
+      console.warn('translate error', err);
+      showToast('⚠️ Ошибка перевода. Попробуй позже.');
     });
 }
 window.translateMessage = translateMessage;
@@ -5523,13 +5425,12 @@ function _insertTranslation(el, text) {
   div.textContent = '🌍 ' + text;
   div.addEventListener('click', function(){ div.remove(); });
   var textEl = el.querySelector('.text');
-  if (textEl) textEl.appendChild(div);
-  else el.appendChild(div);
+  if (textEl) textEl.appendChild(div); else el.appendChild(div);
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// 5. ЗВУКИ УВЕДОМЛЕНИЙ 🔔
+// 5. ЗВУКИ 🔔
 // ═══════════════════════════════════════════════════════════════════════
 var _sndType    = localStorage.getItem('notifSound') || 'ding';
 var _sndEnabled = localStorage.getItem('notifSoundEnabled') !== 'false';
@@ -5537,42 +5438,33 @@ var _sndEnabled = localStorage.getItem('notifSoundEnabled') !== 'false';
 function playNotifSound() {
   if (!_sndEnabled) return;
   try {
-    var Ctx = window.AudioContext || window.webkitAudioContext;
-    if (!Ctx) return;
-    var ctx  = new Ctx();
-    var osc  = ctx.createOscillator();
-    var gain = ctx.createGain();
+    var Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+    var ctx=new Ctx(), osc=ctx.createOscillator(), gain=ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
-    var freqMap = { default:880, ding:1318, ping:1760, pop:523, chime:1047 };
-    osc.frequency.value = freqMap[_sndType] || 1318;
-    osc.type = _sndType === 'pop' ? 'triangle' : 'sine';
-    var dur = _sndType === 'chime' ? 0.7 : 0.35;
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-    osc.start(); osc.stop(ctx.currentTime + dur);
+    var freqMap={default:880,ding:1318,ping:1760,pop:523,chime:1047};
+    osc.frequency.value = freqMap[_sndType]||1318;
+    osc.type = _sndType==='pop'?'triangle':'sine';
+    var dur = _sndType==='chime'?0.7:0.35;
+    gain.gain.setValueAtTime(0.3,ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
+    osc.start(); osc.stop(ctx.currentTime+dur);
   } catch(e) {}
 }
 window.playNotifSound = playNotifSound;
-
-function previewSound(type) {
-  _sndType = type;
-  localStorage.setItem('notifSound', type);
-  playNotifSound();
-}
+function previewSound(type){ _sndType=type; localStorage.setItem('notifSound',type); playNotifSound(); }
 window.previewSound = previewSound;
 
 if (!window._sndListenerAdded) {
   window._sndListenerAdded = true;
-  socket.on('chatMessage', function(msg) { if (msg && msg.user_login !== myLogin) playNotifSound(); });
-  socket.on('newPrivateMessage', function(msg) { if (msg && msg.from_login !== myLogin) playNotifSound(); });
-  socket.on('roomNewMessage', function(msg) { if (msg && msg.user_login !== myLogin) playNotifSound(); });
+  socket.on('chatMessage',       function(m){ if(m&&m.user_login!==myLogin) playNotifSound(); });
+  socket.on('newPrivateMessage', function(m){ if(m&&m.from_login!==myLogin) playNotifSound(); });
+  socket.on('roomNewMessage',    function(m){ if(m&&m.user_login!==myLogin) playNotifSound(); });
 }
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// 6. НОЧНОЙ РЕЖИМ ПО РАСПИСАНИЮ 🌙 + НАСТРОЙКИ ЗВУКОВ
-// Исправлено: openSoundNightSettings больше не вызывает openSettings() (который перезаписывал body)
-//             Вместо этого открываем оверлей напрямую
+// 6. НОЧНОЙ РЕЖИМ 🌙
+// Исправлено: патчим applyTheme чтобы он сохранял наш ночной режим
 // ═══════════════════════════════════════════════════════════════════════
 var _nightOn   = localStorage.getItem('nightScheduleEnabled') === 'true';
 var _nightFrom = localStorage.getItem('nightFrom') || '22:00';
@@ -5581,52 +5473,70 @@ var _nightTo   = localStorage.getItem('nightTo')   || '08:00';
 function _isNight() {
   if (!_nightOn) return false;
   var now = new Date();
-  var cur = now.getHours() * 60 + now.getMinutes();
-  var f = _nightFrom.split(':'), t = _nightTo.split(':');
-  var fmin = +f[0] * 60 + +f[1];
-  var tmin = +t[0] * 60 + +t[1];
-  return fmin > tmin ? (cur >= fmin || cur < tmin) : (cur >= fmin && cur < tmin);
+  var cur = now.getHours()*60 + now.getMinutes();
+  var f=_nightFrom.split(':'), t=_nightTo.split(':');
+  var fmin=+f[0]*60+ +f[1], tmin=+t[0]*60+ +t[1];
+  return fmin>tmin ? (cur>=fmin||cur<tmin) : (cur>=fmin&&cur<tmin);
 }
+
 function _applyNight() {
+  var body = document.body;
   if (_isNight()) {
-    if (!document.body.classList.contains('_nightAuto')) {
-      document.body.classList.add('_nightAuto');
-      document.body.classList.remove('theme-light');
-      document.body.classList.add('theme-dark');
+    // Только переключаем если не уже в ночном
+    if (!body.classList.contains('_nightAuto')) {
+      body.classList.add('_nightAuto');
+      // Запоминаем текущую тему
+      body._savedNightClass = body.className.replace('_nightAuto','').trim();
+      // Убираем светлую тему, добавляем тёмную
+      body.classList.remove('theme-light');
+      if (!body.classList.contains('theme-dark')) body.classList.add('theme-dark');
     }
   } else {
-    if (document.body.classList.contains('_nightAuto')) {
-      document.body.classList.remove('_nightAuto', 'theme-dark');
+    if (body.classList.contains('_nightAuto')) {
+      // Восстанавливаем сохранённую тему
+      body.className = (body._savedNightClass || '').replace('theme-dark','').trim();
+      body._savedNightClass = null;
     }
   }
 }
+
+// Патчим applyTheme: когда ночной режим активен, он должен игнорироваться
+(function patchApplyTheme() {
+  if (window._applyThemePatched) return;
+  var orig = window.applyTheme;
+  if (!orig) { setTimeout(patchApplyTheme, 300); return; }
+  window._applyThemePatched = true;
+  window.applyTheme = function(key) {
+    orig(key);
+    // После applyTheme восстанавливаем ночной режим если он активен
+    if (_isNight()) {
+      document.body.classList.add('_nightAuto');
+      document.body.classList.remove('theme-light');
+      if (!document.body.classList.contains('theme-dark')) document.body.classList.add('theme-dark');
+    }
+  };
+})();
+
 setInterval(_applyNight, 30000);
 setTimeout(_applyNight, 1500);
 
 function openSoundNightSettings() {
-  // Заполняем body СНАЧАЛА, потом открываем оверлей напрямую (не через openSettings())
   var body = document.getElementById('settingsBody');
   if (!body) return;
 
-  _nightOn   = localStorage.getItem('nightScheduleEnabled') === 'true';
-  _nightFrom = localStorage.getItem('nightFrom') || '22:00';
-  _nightTo   = localStorage.getItem('nightTo') || '08:00';
+  _nightOn    = localStorage.getItem('nightScheduleEnabled') === 'true';
+  _nightFrom  = localStorage.getItem('nightFrom') || '22:00';
+  _nightTo    = localStorage.getItem('nightTo')   || '08:00';
   _sndEnabled = localStorage.getItem('notifSoundEnabled') !== 'false';
-  _sndType   = localStorage.getItem('notifSound') || 'ding';
+  _sndType    = localStorage.getItem('notifSound') || 'ding';
 
-  var sndLabels = { default:'🔔 Стандартный', ding:'🔔 Дзинь', ping:'🔔 Пинг', pop:'🔔 Мягкий', chime:'🔔 Звон колокольчика' };
+  var sndLabels = {default:'🔔 Стандартный',ding:'🔔 Дзинь',ping:'🔔 Пинг',pop:'🔔 Мягкий',chime:'🔔 Колокольчик'};
+  var nowStr = new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
 
   function mkToggle(id, checked, fn) {
-    return '<div id="' + id + '" onclick="' + fn + '" style="position:relative;width:44px;height:24px;min-width:44px;background:' +
-      (checked ? 'var(--accent)' : 'rgba(255,255,255,0.15)') +
-      ';border-radius:12px;cursor:pointer;transition:background 0.2s;">' +
-      '<div style="position:absolute;top:2px;left:' + (checked ? '22px' : '2px') +
-      ';width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>' +
-      '</div>';
+    return '<div id="'+id+'" onclick="'+fn+'" style="position:relative;width:44px;height:24px;min-width:44px;background:'+(checked?'var(--accent)':'rgba(255,255,255,0.15)')+';border-radius:12px;cursor:pointer;transition:background 0.2s;">' +
+      '<div style="position:absolute;top:2px;left:'+(checked?'22px':'2px')+';width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div></div>';
   }
-
-  var now = new Date();
-  var nowStr = now.getHours() + ':' + String(now.getMinutes()).padStart(2,'0');
 
   body.innerHTML =
     '<div style="padding-bottom:24px;">' +
@@ -5638,44 +5548,31 @@ function openSoundNightSettings() {
     '<div style="padding:16px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Звуки уведомлений</div>' +
     '<div style="padding:0 20px;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
-        '<span style="font-size:14px;">Включить звуки</span>' +
-        mkToggle('_sndToggleEl', _sndEnabled, 'window._toggleSnd(this)') +
+        '<span style="font-size:14px;">Включить звуки</span>' + mkToggle('_sndTgl', _sndEnabled, 'window._toggleSnd(this)') +
       '</div>' +
-      ['default','ding','ping','pop','chime'].map(function(s) {
-        var active = _sndType === s;
+      ['default','ding','ping','pop','chime'].map(function(s){
+        var a=_sndType===s;
         return '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);">' +
-          '<div onclick="_setSnd(\'' + s + '\')" id="_sr_' + s + '" style="width:20px;height:20px;border-radius:50%;border:2px solid ' + (active?'var(--accent)':'var(--border)') + ';background:' + (active?'var(--accent)':'transparent') + ';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
-            (active ? '<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>' : '') +
-          '</div>' +
-          '<span style="flex:1;font-size:14px;">' + (sndLabels[s]||s) + '</span>' +
-          '<button onclick="previewSound(\'' + s + '\')" style="background:var(--bg-input);border:none;color:var(--text-primary);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">▶ Тест</button>' +
-          '</div>';
+          '<div onclick="_setSnd(\''+s+'\')" id="_sr_'+s+'" style="width:20px;height:20px;border-radius:50%;border:2px solid '+(a?'var(--accent)':'var(--border)')+';background:'+(a?'var(--accent)':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(a?'<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>':'')+'</div>' +
+          '<span style="flex:1;font-size:14px;">'+(sndLabels[s]||s)+'</span>' +
+          '<button onclick="previewSound(\''+s+'\')" style="background:var(--bg-input);border:none;color:var(--text-primary);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">▶ Тест</button></div>';
       }).join('') +
     '</div>' +
 
     '<div style="padding:20px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Ночной режим по расписанию</div>' +
     '<div style="padding:0 20px;">' +
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
-        '<div>' +
-          '<div style="font-size:14px;">Авто тёмная тема</div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Сейчас ' + nowStr + ' — режим ' + (_isNight() ? '🌙 активен' : '☀️ не активен') + '</div>' +
-        '</div>' +
-        mkToggle('_nightToggleEl', _nightOn, 'window._toggleNight(this)') +
+        '<div><div style="font-size:14px;">Авто тёмная тема</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Сейчас '+nowStr+' — '+(_isNight()?'🌙 активен':'☀️ не активен')+'</div></div>' +
+        mkToggle('_nightTgl', _nightOn, 'window._toggleNight(this)') +
       '</div>' +
       '<div style="display:flex;gap:16px;margin-top:16px;">' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Включить с</div>' +
-          '<input type="time" id="_nFrom" value="' + _nightFrom + '" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;">' +
-        '</div>' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Выключить в</div>' +
-          '<input type="time" id="_nTo" value="' + _nightTo + '" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;">' +
-        '</div>' +
+        '<div style="flex:1;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Включить с</div><input type="time" id="_nFrom" value="'+_nightFrom+'" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;"></div>' +
+        '<div style="flex:1;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Выключить в</div><input type="time" id="_nTo" value="'+_nightTo+'" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;"></div>' +
       '</div>' +
     '</div>' +
     '</div>';
 
-  // ИСПРАВЛЕНИЕ: открываем оверлей напрямую БЕЗ вызова openSettings() который перезаписал бы body
+  // Открываем оверлей НАПРЯМУЮ — не через openSettings() который перезапишет body!
   var overlay = document.getElementById('settingsOverlay');
   if (overlay) overlay.classList.add('show');
 }
@@ -5684,59 +5581,48 @@ window.openSoundNightSettings = openSoundNightSettings;
 window._toggleSnd = function(el) {
   _sndEnabled = !_sndEnabled;
   localStorage.setItem('notifSoundEnabled', String(_sndEnabled));
-  el.style.background = _sndEnabled ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
-  var dot = el.querySelector('div');
-  if (dot) dot.style.left = _sndEnabled ? '22px' : '2px';
+  el.style.background = _sndEnabled?'var(--accent)':'rgba(255,255,255,0.15)';
+  var d=el.querySelector('div'); if(d) d.style.left=_sndEnabled?'22px':'2px';
 };
 window._setSnd = function(type) {
-  _sndType = type;
-  localStorage.setItem('notifSound', type);
-  ['default','ding','ping','pop','chime'].forEach(function(s) {
-    var el = document.getElementById('_sr_' + s);
-    if (!el) return;
-    var active = s === type;
-    el.style.border = '2px solid ' + (active ? 'var(--accent)' : 'var(--border)');
-    el.style.background = active ? 'var(--accent)' : 'transparent';
-    el.innerHTML = active ? '<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>' : '';
+  _sndType=type; localStorage.setItem('notifSound',type);
+  ['default','ding','ping','pop','chime'].forEach(function(s){
+    var e=document.getElementById('_sr_'+s); if(!e) return;
+    var a=s===type;
+    e.style.border='2px solid '+(a?'var(--accent)':'var(--border)');
+    e.style.background=a?'var(--accent)':'transparent';
+    e.innerHTML=a?'<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>':'';
   });
   playNotifSound();
 };
 window._toggleNight = function(el) {
-  _nightOn = !_nightOn;
-  localStorage.setItem('nightScheduleEnabled', String(_nightOn));
-  el.style.background = _nightOn ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
-  var dot = el.querySelector('div');
-  if (dot) dot.style.left = _nightOn ? '22px' : '2px';
+  _nightOn=!_nightOn; localStorage.setItem('nightScheduleEnabled',String(_nightOn));
+  el.style.background=_nightOn?'var(--accent)':'rgba(255,255,255,0.15)';
+  var d=el.querySelector('div'); if(d) d.style.left=_nightOn?'22px':'2px';
   _applyNight();
-  showToast(_nightOn ? '🌙 Ночной режим включён' : '☀️ Ночной режим выключен');
+  showToast(_nightOn?'🌙 Ночной режим включён':'☀️ Ночной режим выключен');
 };
 window._saveNightTimes = function() {
-  var f = document.getElementById('_nFrom'), t = document.getElementById('_nTo');
-  if (f) { _nightFrom = f.value; localStorage.setItem('nightFrom', _nightFrom); }
-  if (t) { _nightTo   = t.value; localStorage.setItem('nightTo',   _nightTo); }
+  var f=document.getElementById('_nFrom'), t=document.getElementById('_nTo');
+  if(f){_nightFrom=f.value; localStorage.setItem('nightFrom',_nightFrom);}
+  if(t){_nightTo=t.value;   localStorage.setItem('nightTo',  _nightTo);}
   _applyNight();
 };
 
 
 // ═══════════════════════════════════════════════════════════════════════
 // 7. АНАЛИТИКА ГРУПП 📊
-// Кнопка уже добавляется существующим кодом в roomData handler
-// Нам нужно только реализовать openRoomAnalytics / closeAnalytics
 // ═══════════════════════════════════════════════════════════════════════
 function openRoomAnalytics(roomId) {
   var modal = document.getElementById('analyticsModal');
   if (!modal) return;
   modal.classList.add('show');
-  var content = document.getElementById('analyticsContent');
-  if (content) content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">⏳ Загрузка...</div>';
+  var c = document.getElementById('analyticsContent');
+  if (c) c.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">⏳ Загрузка...</div>';
   socket.emit('getRoomAnalytics', { roomId: Number(roomId) });
 }
 window.openRoomAnalytics = openRoomAnalytics;
-
-function closeAnalytics() {
-  var m = document.getElementById('analyticsModal');
-  if (m) m.classList.remove('show');
-}
+function closeAnalytics() { var m=document.getElementById('analyticsModal'); if(m) m.classList.remove('show'); }
 window.closeAnalytics = closeAnalytics;
 
 if (!window._analyticsListenerAdded) {
@@ -5744,43 +5630,22 @@ if (!window._analyticsListenerAdded) {
   socket.on('roomAnalytics', function(data) {
     var content = document.getElementById('analyticsContent');
     if (!content) return;
-    var topUsers = data.topUsers || [];
-    var maxCount = topUsers.length ? Math.max.apply(null, topUsers.map(function(u){ return u.msg_count; })) : 1;
-    var html =
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">' +
-        '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;">' +
-          '<div style="font-size:30px;font-weight:800;color:var(--accent);">' + (data.totalMessages||0) + '</div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">📨 Сообщений</div>' +
-        '</div>' +
-        '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;">' +
-          '<div style="font-size:30px;font-weight:800;color:var(--accent);">' + (data.totalMembers||0) + '</div>' +
-          '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">👥 Участников</div>' +
-        '</div>' +
+    var topUsers = data.topUsers||[];
+    var maxCount = topUsers.length ? Math.max.apply(null,topUsers.map(function(u){return u.msg_count;})) : 1;
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">' +
+      '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;"><div style="font-size:30px;font-weight:800;color:var(--accent);">'+(data.totalMessages||0)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">📨 Сообщений</div></div>' +
+      '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;"><div style="font-size:30px;font-weight:800;color:var(--accent);">'+(data.totalMembers||0)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">👥 Участников</div></div>' +
       '</div>';
-    if (data.dailyMessages && data.dailyMessages.length) {
-      var maxD = Math.max.apply(null, data.dailyMessages.map(function(d){ return d.count; })) || 1;
-      html += '<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">📈 Активность 7 дней</div>' +
-        '<div style="display:flex;align-items:flex-end;gap:4px;height:80px;">';
-      data.dailyMessages.forEach(function(d) {
-        var h = Math.max(3, Math.round((d.count / maxD) * 64));
-        html += '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;">' +
-          '<div style="font-size:10px;color:var(--text-muted);">' + d.count + '</div>' +
-          '<div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:' + h + 'px;"></div>' +
-          '<div style="font-size:9px;color:var(--text-muted);">' + escHtml(d.day) + '</div></div>';
-      });
-      html += '</div></div>';
+    if (data.dailyMessages&&data.dailyMessages.length) {
+      var maxD=Math.max.apply(null,data.dailyMessages.map(function(d){return d.count;}))||1;
+      html+='<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">📈 Активность 7 дней</div><div style="display:flex;align-items:flex-end;gap:4px;height:80px;">';
+      data.dailyMessages.forEach(function(d){ var h=Math.max(3,Math.round((d.count/maxD)*64)); html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:10px;color:var(--text-muted);">'+d.count+'</div><div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:'+h+'px;"></div><div style="font-size:9px;color:var(--text-muted);">'+escHtml(d.day)+'</div></div>'; });
+      html+='</div></div>';
     }
     if (topUsers.length) {
-      html += '<div><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px;">🏆 Топ участников</div>';
-      topUsers.forEach(function(u, i) {
-        var pct = Math.round((u.msg_count / maxCount) * 100);
-        var medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
-        html += '<div style="margin-bottom:10px;">' +
-          '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>' + medal + ' ' + escHtml(u.username) + '</span><span style="color:var(--text-muted);">' + u.msg_count + '</span></div>' +
-          '<div style="height:5px;background:var(--bg-input);border-radius:3px;overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:var(--accent);border-radius:3px;"></div></div>' +
-          '</div>';
-      });
-      html += '</div>';
+      html+='<div><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px;">🏆 Топ участников</div>';
+      topUsers.forEach(function(u,i){ var pct=Math.round((u.msg_count/maxCount)*100); var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1); html+='<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>'+medal+' '+escHtml(u.username)+'</span><span style="color:var(--text-muted);">'+u.msg_count+'</span></div><div style="height:5px;background:var(--bg-input);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;"></div></div></div>'; });
+      html+='</div>';
     }
     content.innerHTML = html;
   });
@@ -5788,29 +5653,24 @@ if (!window._analyticsListenerAdded) {
 
 
 // ═══════════════════════════════════════════════════════════════════════
-// 8. ФОТО С ПРОСМОТРОМ 1 РАЗ 👁️
-// Исправлено: не используем MutationObserver для патча — вместо этого
-//             сообщение type='view_once' отображается правильно через перехват рендера
+// 8. ФОТО 1 ПРОСМОТР 👁
 // ═══════════════════════════════════════════════════════════════════════
 var _voViewed = {};
 var _voImages = {};
 
 function sendViewOncePhoto() {
   var inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = 'image/*';
+  inp.type='file'; inp.accept='image/*';
   inp.addEventListener('change', function() {
-    var file = inp.files && inp.files[0];
+    var file = inp.files&&inp.files[0];
     if (!file) return;
-    if (file.size > 15 * 1024 * 1024) { showToast('Максимум 15 МБ'); return; }
+    if (file.size > 15*1024*1024) { showToast('Максимум 15 МБ'); return; }
     var reader = new FileReader();
     reader.onload = function(ev) {
-      var payload = { type: 'view_once', image: ev.target.result, text: '' };
-      if (currentView === 'pm' && currentPrivateLogin)
-        socket.emit('privateMessage', Object.assign({ toLogin: currentPrivateLogin }, payload));
-      else if (currentView === 'room' && currentRoomId)
-        socket.emit('roomMessage', Object.assign({ roomId: currentRoomId }, payload));
-      else if (currentView === 'general')
-        socket.emit('chatMessage', payload);
+      var payload = { type:'view_once', image:ev.target.result, text:'' };
+      if      (currentView==='pm'   && currentPrivateLogin) socket.emit('privateMessage', Object.assign({toLogin:currentPrivateLogin}, payload));
+      else if (currentView==='room' && currentRoomId)       socket.emit('roomMessage',    Object.assign({roomId:currentRoomId},          payload));
+      else if (currentView==='general')                      socket.emit('chatMessage',    payload);
       showToast('👁 Отправлено — доступно 1 раз');
     };
     reader.readAsDataURL(file);
@@ -5824,187 +5684,88 @@ function openViewOnce(msgId) {
   var imgSrc = _voImages[msgId];
   if (!imgSrc) { showToast('Изображение недоступно'); return; }
   _voViewed[msgId] = true;
-
   var overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.97);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
-
-  var sec = 10;
+  var sec=10;
   var timerEl = document.createElement('div');
-  timerEl.style.cssText = 'color:rgba(255,255,255,0.7);font-size:14px;font-weight:600;';
-  timerEl.textContent = '🔒 Закроется через ' + sec + ' сек';
-
-  var img = document.createElement('img');
-  img.src = imgSrc;
-  img.style.cssText = 'max-width:88vw;max-height:74vh;border-radius:12px;object-fit:contain;';
-
-  var closeBtn = document.createElement('button');
-  closeBtn.textContent = '✕ Закрыть';
-  closeBtn.style.cssText = 'background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:10px 28px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;';
-
+  timerEl.style.cssText='color:rgba(255,255,255,0.7);font-size:14px;font-weight:600;';
+  timerEl.textContent='🔒 Закроется через '+sec+' сек';
+  var img=document.createElement('img');
+  img.src=imgSrc; img.style.cssText='max-width:88vw;max-height:74vh;border-radius:12px;object-fit:contain;';
+  var closeBtn=document.createElement('button');
+  closeBtn.textContent='✕ Закрыть';
+  closeBtn.style.cssText='background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:10px 28px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;';
   overlay.appendChild(timerEl); overlay.appendChild(img); overlay.appendChild(closeBtn);
   document.body.appendChild(overlay);
-
-  var tick = setInterval(function() {
-    sec--;
-    timerEl.textContent = '🔒 Закроется через ' + sec + ' сек';
-    if (sec <= 0) { clearInterval(tick); done(); }
-  }, 1000);
-
-  function done() {
-    clearInterval(tick);
-    overlay.remove();
-    _updateVoUI(msgId);
-  }
-  closeBtn.onclick = done;
+  var tick=setInterval(function(){ sec--; timerEl.textContent='🔒 Закроется через '+sec+' сек'; if(sec<=0){clearInterval(tick);done();} },1000);
+  function done(){ clearInterval(tick); overlay.remove(); _updateVoUI(msgId); }
+  closeBtn.onclick=done;
 }
 window.openViewOnce = openViewOnce;
 
 function _updateVoUI(msgId) {
-  ['msg-','pm-','rmsg-'].forEach(function(p) {
-    var el = document.getElementById(p + msgId);
-    if (!el) return;
-    var btn = el.querySelector('[data-vo]');
-    if (btn) {
-      btn.outerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;opacity:0.5;padding:10px 14px;border-radius:10px;background:var(--bg-input);">👁️ <span style="font-size:13px;">Просмотрено</span></div>';
-    }
+  ['msg-','pm-','rmsg-'].forEach(function(p){
+    var el=document.getElementById(p+msgId); if(!el) return;
+    var btn=el.querySelector('[data-vo]');
+    if(btn) btn.outerHTML='<div style="display:inline-flex;align-items:center;gap:8px;opacity:0.5;padding:10px 14px;border-radius:10px;background:var(--bg-input);">👁️ <span style="font-size:13px;">Просмотрено</span></div>';
   });
 }
 
-// Перехватываем добавление сообщений через MutationObserver
-// Патчим view_once сообщения — скрываем img, показываем кнопку
-(function() {
-  function _patchVo(node) {
-    if (!node || node.nodeType !== 1) return;
-    // Ищем элемент сообщения с правильным ID
-    var msgEl = (node.id && /^(msg|pm|rmsg)-\d+$/.test(node.id)) ? node : null;
-    if (!msgEl) {
-      var found = node.querySelectorAll && node.querySelectorAll('[id^="msg-"],[id^="pm-"],[id^="rmsg-"]');
-      if (found && found.length) found.forEach(_patchVo);
-      return;
-    }
-    // Ищем признак view_once: data-type='view_once' или специфичный класс/атрибут
-    // Сервер сохраняет type='view_once' и возвращает в поле type
-    // Нам нужно проверить dataset или признак в DOM
-    var isVo = msgEl.getAttribute('data-type') === 'view_once' ||
-               msgEl.querySelector('[data-msgtype="view_once"]') !== null;
+// Перехват socket-событий для view_once сообщений
+if (!window._voSocketAdded) {
+  window._voSocketAdded = true;
 
-    if (!isVo) {
-      // Проверяем наличие img + пустой текст (признак view_once)
-      var textDiv = msgEl.querySelector('.text');
-      var imgEl = msgEl.querySelector('.msg-image, .photo-img-wrap img, .msg-img');
-      if (!imgEl) return;
-      // Если текст пустой и есть изображение — возможно view_once
-      // Проверяем класс сообщения или другой маркер
-      // Надёжнее: слушать socket события отдельно
-      return;
-    }
-
-    var idMatch = msgEl.id.match(/(\d+)$/);
-    if (!idMatch) return;
-    var msgId = parseInt(idMatch[1]);
-
-    var imgEl = msgEl.querySelector('img');
-    if (imgEl && imgEl.src) _voImages[msgId] = imgEl.src;
-
-    var isMine = msgEl.classList.contains('mine');
-    var textDiv = msgEl.querySelector('.text');
-
-    // Скрываем картинку
-    var photoWrap = imgEl ? (imgEl.closest('.photo-img-wrap') || imgEl.closest('.msg-image') || imgEl.parentElement) : null;
-    if (photoWrap) photoWrap.style.display = 'none';
-
-    if (textDiv) {
+  function _handleVoMsg(msg, prefix) {
+    if (!msg || msg.type !== 'view_once') return;
+    if (msg.image) _voImages[msg.id] = msg.image;
+    setTimeout(function() {
+      var el = document.getElementById(prefix + msg.id);
+      if (!el) return;
+      var imgEl = el.querySelector('img');
+      if (imgEl && imgEl.src && !_voImages[msg.id]) _voImages[msg.id] = imgEl.src;
+      var isMine = el.classList.contains('mine');
+      var photoWrap = imgEl ? (imgEl.closest('.photo-img-wrap') || imgEl.closest('.msg-image') || imgEl.parentElement) : null;
+      if (photoWrap) photoWrap.style.display='none';
+      var textDiv = el.querySelector('.text');
+      if (!textDiv) return;
       if (isMine) {
-        textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
+        textDiv.innerHTML='<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
       } else {
-        textDiv.innerHTML = '<div data-vo="1" onclick="openViewOnce(' + msgId + ')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 секунд · только 1 раз</div></div></div>';
+        textDiv.innerHTML='<div data-vo="1" onclick="openViewOnce('+msg.id+')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 сек · только 1 раз</div></div></div>';
       }
-    }
+    }, 200);
   }
 
-  // Вместо MutationObserver — перехватываем socket-события для view_once
-  if (!window._voSocketAdded) {
-    window._voSocketAdded = true;
+  socket.on('chatMessage',       function(m){ _handleVoMsg(m,'msg-'); });
+  socket.on('newPrivateMessage', function(m){ _handleVoMsg(m,'pm-'); });
+  socket.on('roomNewMessage',    function(m){ _handleVoMsg(m,'rmsg-'); });
 
-    function _handleVoMsg(msg, prefix) {
-      if (!msg || msg.type !== 'view_once') return;
-      // Сохраняем изображение
-      if (msg.image) _voImages[msg.id] = msg.image;
-      // Патчим DOM через небольшую задержку (после рендера)
-      setTimeout(function() {
-        var el = document.getElementById(prefix + msg.id);
-        if (!el) return;
-        var imgEl = el.querySelector('img');
-        if (imgEl && imgEl.src && !_voImages[msg.id]) _voImages[msg.id] = imgEl.src;
-
-        var isMine = el.classList.contains('mine');
-        var photoWrap = imgEl ? (imgEl.closest('.photo-img-wrap') || imgEl.closest('.msg-image') || imgEl.parentElement) : null;
-        if (photoWrap) photoWrap.style.display = 'none';
-
-        var textDiv = el.querySelector('.text');
-        if (!textDiv) return;
-        if (isMine) {
-          textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
-        } else {
-          if (_voViewed[msg.id]) {
-            textDiv.innerHTML = '<div style="display:inline-flex;align-items:center;gap:8px;opacity:0.5;padding:10px 14px;border-radius:10px;background:var(--bg-input);">👁️ <span style="font-size:13px;">Просмотрено</span></div>';
-          } else {
-            textDiv.innerHTML = '<div data-vo="1" onclick="openViewOnce(' + msg.id + ')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 секунд · только 1 раз</div></div></div>';
-          }
-        }
-      }, 150);
-    }
-
-    socket.on('chatMessage',       function(msg) { _handleVoMsg(msg, 'msg-'); });
-    socket.on('newPrivateMessage', function(msg) { _handleVoMsg(msg, 'pm-'); });
-    socket.on('roomNewMessage',    function(msg) { _handleVoMsg(msg, 'rmsg-'); });
-
-    // Также патчим историю при загрузке
-    socket.on('messageHistory', function(msgs) {
-      if (!Array.isArray(msgs)) return;
-      msgs.forEach(function(msg) {
-        if (msg.type === 'view_once') {
-          if (msg.image) _voImages[msg.id] = msg.image;
-          setTimeout(function() { _handleVoMsg(msg, 'msg-'); }, 400);
-        }
-      });
-    });
-    socket.on('privateHistory', function(d) {
-      if (!d || !d.messages) return;
-      d.messages.forEach(function(msg) {
-        if (msg.type === 'view_once') {
-          if (msg.image) _voImages[msg.id] = msg.image;
-          setTimeout(function() { _handleVoMsg(msg, 'pm-'); }, 400);
-        }
-      });
-    });
-    socket.on('roomData', function(data) {
-      if (!data || !data.messages) return;
-      data.messages.forEach(function(msg) {
-        if (msg.type === 'view_once') {
-          if (msg.image) _voImages[msg.id] = msg.image;
-          setTimeout(function() { _handleVoMsg(msg, 'rmsg-'); }, 400);
-        }
-      });
+  function _patchVoHistory(msgs, prefix) {
+    if (!Array.isArray(msgs)) return;
+    msgs.forEach(function(msg){
+      if (msg.type==='view_once') {
+        if (msg.image) _voImages[msg.id]=msg.image;
+        setTimeout(function(){ _handleVoMsg(msg, prefix); }, 500);
+      }
     });
   }
-})();
+  socket.on('messageHistory', function(msgs){ _patchVoHistory(msgs,'msg-'); });
+  socket.on('privateHistory', function(d){ if(d&&d.messages) _patchVoHistory(d.messages,'pm-'); });
+  socket.on('roomData',       function(d){ if(d&&d.messages) _patchVoHistory(d.messages,'rmsg-'); });
+}
 
-// Добавляем кнопку 👁 в панель ввода
+// Кнопка 👁 в панели ввода
 window.addEventListener('load', function() {
   setTimeout(function() {
     var inputArea = document.getElementById('inputArea');
     if (!inputArea || inputArea.querySelector('[data-vo-btn]')) return;
-    var btn = document.createElement('button');
-    btn.setAttribute('data-vo-btn', '1');
-    btn.className = 'ia-btn';
-    btn.title = 'Фото (1 просмотр)';
-    btn.textContent = '👁';
-    btn.style.cssText = 'font-size:17px;';
+    var btn=document.createElement('button');
+    btn.setAttribute('data-vo-btn','1');
+    btn.className='ia-btn'; btn.title='Фото (1 просмотр)';
+    btn.textContent='👁'; btn.style.cssText='font-size:17px;';
     btn.addEventListener('click', sendViewOncePhoto);
-    var sendBtn = document.getElementById('sendBtn');
-    if (sendBtn) inputArea.insertBefore(btn, sendBtn);
-    else inputArea.appendChild(btn);
+    var sendBtn=document.getElementById('sendBtn');
+    if (sendBtn) inputArea.insertBefore(btn,sendBtn); else inputArea.appendChild(btn);
   }, 800);
 });
 
