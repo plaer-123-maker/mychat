@@ -518,10 +518,72 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 
 /* ═══════════════ RESPONSIVE ═══════════════ */
 @media(max-width:640px){
+  /* Layout */
   .sidebar{width:100%;position:fixed;top:0;left:0;height:100%;z-index:50;}
-  .main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;}
-  .message{max-width:86%;}
+  .main-chat.show{position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;display:flex;flex-direction:column;}
+  .message{max-width:88%;}
   .settings-panel{width:100%;}
+
+  /* Header — чуть компактнее на мобиле */
+  .sidebar-header{padding:8px 12px;}
+  .sidebar-logo{font-size:15px;}
+  .hdr-btn{width:34px;height:34px;font-size:17px;}
+  .hdr-btns{gap:2px;}
+
+  /* Chat header кнопки */
+  .chat-header{padding:0 10px;height:52px;}
+  .chat-header-btns button{width:34px;height:34px;font-size:17px;}
+
+  /* Input area — адаптируем для телефона */
+  .input-area{padding:6px 8px;gap:3px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .input-area::-webkit-scrollbar{display:none;}
+  .ia-btn{width:36px;height:36px;font-size:16px;flex-shrink:0;}
+  .ia-btn.send{width:40px;height:40px;}
+  #msgInput{font-size:15px;padding:8px 12px;}
+
+  /* Форматирование — скрываем на мобиле по умолчанию */
+  .fmt-toolbar{display:none!important;}
+
+  /* Messages */
+  .messages{padding:8px 6px;}
+
+  /* Mention panel — полноширинный на мобиле */
+  #mentionPanel{width:100%;left:0;top:52px;border-radius:0;}
+
+  /* Global search modal */
+  #globalSearchModal .gs-box{width:100%!important;max-width:100%!important;border-radius:0!important;height:100vh;max-height:100vh;}
+
+  /* Analytics modal */
+  #analyticsModal > div{width:100%!important;max-width:100%!important;border-radius:0!important;height:100vh;max-height:100vh;overflow-y:auto;}
+
+  /* AI panel */
+  .ai-panel{width:calc(100vw - 16px);right:8px;bottom:70px;}
+
+  /* Reaction panel */
+  .reaction-panel{flex-wrap:wrap;max-width:280px;}
+
+  /* Settings */
+  .settings-overlay{z-index:2000;}
+
+  /* Stories bar — горизонтальная прокрутка */
+  #storiesBar{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  #storiesRow{flex-wrap:nowrap;}
+
+  /* Pinnedbar */
+  #pinnedMsgBar{font-size:12px;}
+
+  /* Poll modal */
+  .poll-modal-box{width:94vw!important;}
+
+  /* Profile/avatar modal */
+  .profile-modal-box{width:94vw!important;}
+}
+
+/* Очень маленькие экраны (iPhone SE и подобные) */
+@media(max-width:375px){
+  .ia-btn{width:32px;height:32px;font-size:14px;}
+  .ia-btn.send{width:36px;height:36px;}
+  .hdr-btn{width:30px;height:30px;font-size:15px;}
 }
 
 
@@ -1209,6 +1271,11 @@ function renderSettingsMain() {
       <div class="sr-icon" style="background:rgba(46,169,223,0.15)">✓</div>
       <div class="sr-info"><div class="sr-label">Верификация</div><div class="sr-desc">${myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации'}</div></div>
       <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="_toggleAiBtn()" style="cursor:pointer;">
+      <div class="sr-icon" style="background:rgba(108,63,255,0.15)">🤖</div>
+      <div class="sr-info"><div class="sr-label">AI Ассистент</div><div class="sr-desc" id="aiSettingsDesc">${localStorage.getItem('aiChatVisible')==='true'?'Кнопка показана':'Кнопка скрыта'}</div></div>
+      <div id="aiSettingsToggle" style="position:relative;width:44px;height:24px;min-width:44px;background:${localStorage.getItem('aiChatVisible')==='true'?'var(--accent)':'rgba(255,255,255,0.15)'};border-radius:12px;cursor:pointer;transition:background 0.2s;"><div style="position:absolute;top:2px;left:${localStorage.getItem('aiChatVisible')==='true'?'22px':'2px'};width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div></div>
     </div>
     <div class="settings-row" onclick="doLogout()" style="color:#ff6b6b">
       <div class="sr-icon" style="background:rgba(255,59,48,0.15)">🚪</div>
@@ -5063,7 +5130,7 @@ window.leaveRoomFromList = leaveRoomFromList;
 </div>
 
 <!-- AI Bot Panel -->
-<button class="ai-chat-btn" onclick="toggleAiPanel()" title="AI Ассистент">🤖</button>
+<button class="ai-chat-btn" id="aiChatBtn" onclick="toggleAiPanel()" title="AI Ассистент" style="display:none;">🤖</button>
 <div class="ai-panel" id="aiPanel">
   <div class="ai-panel-header">
     <span>🤖 AI Ассистент</span>
@@ -5090,6 +5157,33 @@ window.showToast = function(msg, ms) {
   e.classList.add('show');
   clearTimeout(e._tt);
   e._tt = setTimeout(function(){ e.classList.remove('show'); }, ms || 2800);
+};
+
+// ─────────────────────────────────────────────────────────────────────
+// AI кнопка — показывать/скрывать из настроек
+// ─────────────────────────────────────────────────────────────────────
+(function initAiBtn() {
+  var show = localStorage.getItem('aiChatVisible') === 'true';
+  var btn = document.getElementById('aiChatBtn');
+  if (btn) btn.style.display = show ? 'flex' : 'none';
+})();
+
+window._toggleAiBtn = function() {
+  var current = localStorage.getItem('aiChatVisible') === 'true';
+  var next = !current;
+  localStorage.setItem('aiChatVisible', next);
+  var btn = document.getElementById('aiChatBtn');
+  if (btn) btn.style.display = next ? 'flex' : 'none';
+  // Обновляем UI в настройках
+  var desc = document.getElementById('aiSettingsDesc');
+  var tgl  = document.getElementById('aiSettingsToggle');
+  if (desc) desc.textContent = next ? 'Кнопка показана' : 'Кнопка скрыта';
+  if (tgl) {
+    tgl.style.background = next ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
+    var dot = tgl.querySelector('div');
+    if (dot) dot.style.left = next ? '22px' : '2px';
+  }
+  showToast(next ? '🤖 AI кнопка показана' : '🤖 AI кнопка скрыта');
 };
 
 // ─────────────────────────────────────────────────────────────────────
