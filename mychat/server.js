@@ -375,6 +375,35 @@ async function initDB() {
 }
 initDB();
 
+// Helper: extract @mentions from text and save to DB
+async function saveMentions(text, fromNickname, chatType, chatId, chatName, pool) {
+  if (!text || typeof text !== 'string') return;
+  const mentions = text.match(/@([a-zA-Z0-9_а-яёА-ЯЁ]+)/g);
+  if (!mentions) return;
+  const now = Date.now();
+  for (const mention of mentions) {
+    const nick = mention.slice(1).toLowerCase();
+    try {
+      // find user by nickname (case-insensitive) or login
+      const u = await pool.query(
+        'SELECT login FROM users WHERE LOWER(nickname)=$1 OR LOWER(login)=$1 LIMIT 1',
+        [nick]
+      );
+      if (u.rows[0]) {
+        await pool.query(
+          'INSERT INTO mentions (to_login, from_nickname, chat_type, chat_id, chat_name, msg_text, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+          [u.rows[0].login, fromNickname, chatType, chatId, chatName, text.slice(0, 200), now]
+        );
+        // notify if online
+        const s = findSocketByLogin(u.rows[0].login);
+        if (s) s.emit('newMention', { fromNickname, chatType, chatId, chatName, msgText: text.slice(0, 200) });
+      }
+    } catch(e) {}
+  }
+}
+
+
+
 const onlineUsers = new Map();
 const socketUsers = new Map();
 const activeCalls = new Map();   // callerLogin -> { calleeLogin, callType, answered }
@@ -978,6 +1007,8 @@ io.on('connection', (socket) => {
         [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       io.emit('chatMessage', fixMsgImages({...msg}));
+      // Save mentions
+      if (msg.text) saveMentions(msg.text, msg.username, 'general', 'general', 'Общий чат', pool);
     } catch (e) { console.error(e); }
   });
 
@@ -1176,6 +1207,8 @@ io.on('connection', (socket) => {
         var target = findSocketByLogin(data.toLogin);
         if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
       }
+      // Save mentions in PM
+      if (msg.text) saveMentions(msg.text, msg.from_nickname, 'pm', data.toLogin, msg.from_nickname, pool);
     } catch(e) { console.error(e); }
   });
 
@@ -1286,6 +1319,14 @@ io.on('connection', (socket) => {
         [msg.room_id, msg.user_login, msg.username, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       io.to('room_' + roomId).emit('roomNewMessage', fixMsgImages({...msg}));
+      // Analytics + mentions
+      pool.query(`INSERT INTO room_analytics (room_id, user_login, msg_count, last_active) VALUES ($1,$2,1,$3)
+        ON CONFLICT (room_id, user_login) DO UPDATE SET msg_count=room_analytics.msg_count+1, last_active=$3`,
+        [roomId, socket.userLogin, Date.now()]).catch(()=>{});
+      if (msg.text) {
+        const roomInfo = await pool.query('SELECT name FROM rooms WHERE id=$1', [roomId]).catch(()=>({rows:[]}));
+        saveMentions(msg.text, msg.username, 'room', String(roomId), roomInfo.rows[0]?.name || 'Группа', pool);
+      }
     } catch(e) { console.error(e); }
   });
 
@@ -2045,7 +2086,172 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  socket.on('disconnect', () => {
+
+  // ── PIN MESSAGE ──────────────────────────────────────────
+  socket.on('pinMessage', async ({ chatType, chatId, msgId, msgType }) => {
+    if (!socket.userLogin) return;
+    try {
+      let text = '', fromNick = '';
+      if (msgType === 'general') {
+        const r = await pool.query('SELECT text, from_nickname FROM messages WHERE id=$1', [msgId]);
+        if (r.rows[0]) { text = r.rows[0].text; fromNick = r.rows[0].from_nickname; }
+      } else if (msgType === 'pm') {
+        const r = await pool.query('SELECT text, from_nickname FROM private_messages WHERE id=$1', [msgId]);
+        if (r.rows[0]) { text = r.rows[0].text; fromNick = r.rows[0].from_nickname; }
+      } else if (msgType === 'room') {
+        const r = await pool.query('SELECT text, from_nickname FROM room_messages WHERE id=$1', [msgId]);
+        if (r.rows[0]) { text = r.rows[0].text; fromNick = r.rows[0].from_nickname; }
+      }
+      await pool.query(
+        `INSERT INTO pinned_messages (chat_type, chat_id, msg_id, msg_type, msg_text, msg_from_nickname, pinned_by, pinned_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (chat_type, chat_id) DO UPDATE SET msg_id=$3, msg_type=$4, msg_text=$5, msg_from_nickname=$6, pinned_by=$7, pinned_at=$8`,
+        [chatType, chatId, msgId, msgType, text, fromNick, socket.userLogin, Date.now()]
+      );
+      const pin = { chatType, chatId, msgId, msgType, msgText: text, fromNick };
+      // Broadcast to all in the chat
+      if (chatType === 'room') socket.to('room_' + chatId).emit('messagePinned', pin);
+      else if (chatType === 'general') socket.broadcast.emit('messagePinned', pin);
+      else {
+        const other = findSocketByLogin(chatId);
+        if (other) other.emit('messagePinned', pin);
+      }
+      socket.emit('messagePinned', pin);
+    } catch(e) { console.error('pinMessage error:', e); }
+  });
+
+  socket.on('unpinMessage', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    try {
+      await pool.query('DELETE FROM pinned_messages WHERE chat_type=$1 AND chat_id=$2', [chatType, chatId]);
+      const data = { chatType, chatId };
+      if (chatType === 'room') socket.to('room_' + chatId).emit('messageUnpinned', data);
+      else if (chatType === 'general') socket.broadcast.emit('messageUnpinned', data);
+      else { const other = findSocketByLogin(chatId); if (other) other.emit('messageUnpinned', data); }
+      socket.emit('messageUnpinned', data);
+    } catch(e) { console.error('unpinMessage error:', e); }
+  });
+
+  socket.on('getPinnedMessage', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const r = await pool.query('SELECT * FROM pinned_messages WHERE chat_type=$1 AND chat_id=$2', [chatType, chatId]);
+      socket.emit('pinnedMessage', r.rows[0] || null);
+    } catch(e) {}
+  });
+
+  // ── MENTIONS ─────────────────────────────────────────────
+  socket.on('getMentions', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const r = await pool.query(
+        'SELECT * FROM mentions WHERE to_login=$1 ORDER BY created_at DESC LIMIT 50',
+        [socket.userLogin]
+      );
+      socket.emit('mentionsList', r.rows);
+    } catch(e) {}
+  });
+
+  socket.on('markMentionsRead', async () => {
+    if (!socket.userLogin) return;
+    try {
+      await pool.query('UPDATE mentions SET read=true WHERE to_login=$1', [socket.userLogin]);
+    } catch(e) {}
+  });
+
+  // ── GLOBAL SEARCH ─────────────────────────────────────────
+  socket.on('globalSearch', async ({ query }) => {
+    if (!socket.userLogin || !query || query.length < 2) return;
+    try {
+      const q = '%' + query.toLowerCase() + '%';
+      // Search in general messages
+      const gen = await pool.query(
+        "SELECT 'general' as chat_type, 'Общий чат' as chat_name, id, text, from_nickname, timestamp FROM messages WHERE LOWER(text) LIKE $1 LIMIT 10",
+        [q]
+      );
+      // Search in PM where user is participant
+      const pm = await pool.query(
+        `SELECT 'pm' as chat_type, 
+          CASE WHEN from_login=$1 THEN to_login ELSE from_login END as chat_id,
+          id, text, from_nickname, timestamp
+         FROM private_messages 
+         WHERE (from_login=$1 OR to_login=$1) AND LOWER(text) LIKE $2 AND type='text'
+         LIMIT 10`,
+        [socket.userLogin, q]
+      );
+      // Search in rooms the user is member of
+      const rooms = await pool.query(
+        `SELECT 'room' as chat_type, r.name as chat_name, rm.id, rm.text, rm.from_nickname, rm.timestamp, rm.room_id as chat_id
+         FROM room_messages rm
+         JOIN room_members mb ON mb.room_id=rm.room_id AND mb.user_login=$1
+         JOIN rooms r ON r.id=rm.room_id
+         WHERE LOWER(rm.text) LIKE $2
+         LIMIT 10`,
+        [socket.userLogin, q]
+      );
+      socket.emit('globalSearchResults', {
+        query,
+        results: [
+          ...gen.rows.map(r => ({ ...r, chat_name: 'Общий чат', chat_id: 'general' })),
+          ...pm.rows,
+          ...rooms.rows
+        ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 30)
+      });
+    } catch(e) { console.error('globalSearch error:', e); }
+  });
+
+  // ── ROOM ANALYTICS ────────────────────────────────────────
+  socket.on('getRoomAnalytics', async ({ roomId }) => {
+    if (!socket.userLogin) return;
+    try {
+      // check if admin
+      const me = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (!me.rows[0]) return;
+      // total messages
+      const total = await pool.query('SELECT COUNT(*) as cnt FROM room_messages WHERE room_id=$1', [roomId]);
+      // messages per day last 7 days
+      const perDay = await pool.query(
+        `SELECT to_char(to_timestamp(timestamp/1000), 'DD.MM') as day, COUNT(*) as cnt
+         FROM room_messages WHERE room_id=$1 AND timestamp > $2
+         GROUP BY day ORDER BY day`,
+        [roomId, Date.now() - 7 * 86400000]
+      );
+      // top members
+      const topMembers = await pool.query(
+        `SELECT rm.from_nickname, COUNT(*) as cnt
+         FROM room_messages rm WHERE rm.room_id=$1
+         GROUP BY rm.from_nickname ORDER BY cnt DESC LIMIT 10`,
+        [roomId]
+      );
+      // member count
+      const memberCount = await pool.query('SELECT COUNT(*) as cnt FROM room_members WHERE room_id=$1', [roomId]);
+      socket.emit('roomAnalyticsData', {
+        roomId,
+        totalMessages: parseInt(total.rows[0].cnt),
+        memberCount: parseInt(memberCount.rows[0].cnt),
+        messagesPerDay: perDay.rows,
+        topMembers: topMembers.rows
+      });
+    } catch(e) { console.error('getRoomAnalytics error:', e); }
+  });
+
+  // ── VIEW-ONCE PHOTOS ─────────────────────────────────────
+  socket.on('markViewOnce', async ({ msgType, msgId }) => {
+    if (!socket.userLogin) return;
+    try {
+      if (msgType === 'pm') {
+        await pool.query("UPDATE private_messages SET type='view_once_viewed' WHERE id=$1 AND to_login=$2", [msgId, socket.userLogin]);
+        // Notify sender
+        const msg = await pool.query('SELECT from_login FROM private_messages WHERE id=$1', [msgId]);
+        if (msg.rows[0]) {
+          const senderSocket = findSocketByLogin(msg.rows[0].from_login);
+          if (senderSocket) senderSocket.emit('viewOnceViewed', { msgId });
+        }
+      }
+    } catch(e) {}
+  });
+
+    socket.on('disconnect', () => {
     if (socket.username) addLog('logout', socket.username, 'Logout', ip);
     if (socket.userLogin) {
       pool.query('UPDATE users SET last_seen=$1 WHERE login=$2', [Date.now(), socket.userLogin]).catch(()=>{});
@@ -2207,3 +2413,53 @@ async function initPollTables(pool) {
   )`);
 }
 initPollTables(pool).catch(console.error);
+
+// ═══════════════════════════════════════════════
+// 1. ЗАКРЕП СООБЩЕНИЙ (PIN MESSAGE)
+// ═══════════════════════════════════════════════
+(async () => {
+  await pool.query(`CREATE TABLE IF NOT EXISTS pinned_messages (
+    id SERIAL PRIMARY KEY,
+    chat_type VARCHAR(10) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    msg_id BIGINT NOT NULL,
+    msg_type VARCHAR(10) NOT NULL,
+    msg_text TEXT,
+    msg_from_nickname VARCHAR(100),
+    pinned_by VARCHAR(50) NOT NULL,
+    pinned_at BIGINT NOT NULL,
+    UNIQUE(chat_type, chat_id)
+  )`);
+})().catch(console.error);
+
+// ═══════════════════════════════════════════════
+// 2. УПОМИНАНИЯ @nickname
+// ═══════════════════════════════════════════════
+(async () => {
+  await pool.query(`CREATE TABLE IF NOT EXISTS mentions (
+    id SERIAL PRIMARY KEY,
+    to_login VARCHAR(50) NOT NULL,
+    from_nickname VARCHAR(100) NOT NULL,
+    chat_type VARCHAR(10) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    chat_name VARCHAR(100),
+    msg_text TEXT,
+    created_at BIGINT NOT NULL,
+    read BOOLEAN DEFAULT false
+  )`);
+})().catch(console.error);
+
+// ═══════════════════════════════════════════════
+// 3. АНАЛИТИКА ГРУПП/КАНАЛОВ
+// ═══════════════════════════════════════════════
+(async () => {
+  await pool.query(`CREATE TABLE IF NOT EXISTS room_analytics (
+    id SERIAL PRIMARY KEY,
+    room_id INT NOT NULL,
+    user_login VARCHAR(50) NOT NULL,
+    msg_count INT DEFAULT 0,
+    last_active BIGINT DEFAULT 0,
+    UNIQUE(room_id, user_login)
+  )`);
+})().catch(console.error);
+
