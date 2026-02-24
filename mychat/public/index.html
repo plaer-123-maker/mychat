@@ -167,6 +167,58 @@ input,button,select,textarea{font-family:inherit;}
 .messages{flex:1;overflow-y:auto;padding:10px 16px 6px;display:flex;flex-direction:column;gap:2px;background:var(--bg-base);}
 .date-divider{align-self:center;background:rgba(0,0,0,0.4);color:rgba(255,255,255,0.75);font-size:12px;font-weight:500;padding:5px 14px;border-radius:16px;margin:8px 0;pointer-events:none;}
 body.theme-light .date-divider{background:rgba(0,0,0,0.12);color:#555;}
+/* ── СВЕТЛАЯ ТЕМА: исправление цветов сообщений ── */
+body.theme-light .message.mine{color:#1a1a1a !important;}
+body.theme-light .message.mine .text{color:#1a1a1a !important;}
+body.theme-light .message.mine .msg-time{color:rgba(0,0,0,0.4) !important;}
+body.theme-light .message.mine .name{color:rgba(0,0,0,0.5) !important;}
+body.theme-light .message.mine .del-btn{color:rgba(0,0,0,0.3) !important;}
+body.theme-light .message.mine .reply-quote{background:rgba(0,0,0,0.06);border-left-color:var(--accent);}
+body.theme-light .message.mine .reply-quote .rq-name{color:var(--accent);}
+body.theme-light .message.mine .reply-quote .rq-text{color:#555;}
+body.theme-light .message.mine .msg-checks{color:rgba(0,0,0,0.4) !important;}
+body.theme-light .message.mine .msg-code{background:rgba(0,0,0,0.07);color:#222;}
+body.theme-light .message.mine .msg-code-block{background:rgba(0,0,0,0.05);color:#222;border-color:rgba(0,0,0,0.08);}
+body.theme-light .message.mine .msg-link{color:#0a6fa8;}
+body.theme-light .message.mine .msg-spoiler{background:#aaa;color:#aaa;}
+body.theme-light .message.mine .msg-spoiler.revealed{background:transparent;color:#1a1a1a;}
+body.theme-light .message.mine .msg-translation{color:#444;border-top-color:rgba(0,0,0,0.1);}
+body.theme-light .message.system{background:rgba(0,0,0,0.08);color:#444;}
+body.theme-light .reaction-btn{background:rgba(0,0,0,0.05);border-color:rgba(0,0,0,0.1);color:#333;}
+body.theme-light .reaction-btn.mine{background:rgba(65,159,217,0.15);border-color:var(--accent);}
+body.theme-light .msg-code-block{border-color:rgba(0,0,0,0.1);}
+body.theme-light .message.other .msg-code{background:rgba(0,0,0,0.06);color:#222;}
+/* Светлая тема — исправление цветов сообщений */
+body.theme-light .message.mine{color:#1a1a1a;}
+body.theme-light .message.mine .text{color:#1a1a1a;}
+body.theme-light .message.mine .msg-time{color:rgba(0,0,0,0.5);}
+body.theme-light .message.mine .name{color:rgba(0,0,0,0.55);}
+body.theme-light .message.mine .del-btn{color:rgba(0,0,0,0.35);}
+body.theme-light .message.mine .reply-quote{background:rgba(0,0,0,0.06);border-left-color:var(--accent);}
+body.theme-light .message.mine .reply-quote .rq-name{color:var(--accent);}
+body.theme-light .message.mine .reply-quote .rq-text{color:#555;}
+body.theme-light .message.mine .msg-checks{color:rgba(0,0,0,0.45);}
+body.theme-light .message.mine .msg-code{background:rgba(0,0,0,0.08);color:#222;}
+body.theme-light .message.mine .msg-code-block{background:rgba(0,0,0,0.06);color:#222;border-color:rgba(0,0,0,0.1);}
+body.theme-light .message.mine .msg-link{color:#0a6fa8;}
+body.theme-light .message.mine .msg-translation{color:#555;border-top-color:rgba(0,0,0,0.1);}
+/* Чужие сообщения в светлой теме */
+body.theme-light .message.other{color:#1a1a1a;}
+body.theme-light .message.other .text{color:#1a1a1a;}
+body.theme-light .message.other .msg-time{color:rgba(0,0,0,0.45);}
+body.theme-light .message.other .del-btn{color:rgba(0,0,0,0.35);}
+body.theme-light .message.other .msg-code{background:rgba(0,0,0,0.07);color:#222;}
+body.theme-light .message.other .msg-code-block{background:rgba(0,0,0,0.05);color:#222;}
+body.theme-light .message.other .msg-link{color:#0a6fa8;}
+body.theme-light .message.other .msg-translation{color:#555;}
+body.theme-light .message.system{background:rgba(0,0,0,0.08);color:#444;}
+/* Общий текст в светлой теме */
+body.theme-light .text{color:#1a1a1a;}
+body.theme-light .msg-time{color:rgba(0,0,0,0.45);}
+body.theme-light #pinnedMsgBar{background:rgba(65,159,217,0.1);border-bottom-color:var(--accent);}
+body.theme-light #pinnedMsgBar .pm-text{color:#1a1a1a;}
+body.theme-light .reaction-chip{background:rgba(0,0,0,0.07);color:#333;}
+body.theme-light .reaction-chip.mine{background:rgba(65,159,217,0.2);}
 .msg-wrapper{display:flex;align-items:flex-end;padding:1px 0;}
 .msg-wrapper.mine{justify-content:flex-end;padding-right:2px;}
 .msg-wrapper.other{justify-content:flex-start;padding-left:2px;}
@@ -178,6 +230,10 @@ body.theme-light .date-divider{background:rgba(0,0,0,0.12);color:#555;}
 .message.system{align-self:center;background:rgba(0,0,0,0.3);color:rgba(255,255,255,0.8);text-align:center;font-style:italic;font-size:12px;padding:5px 16px;border-radius:14px;max-width:80%;}
 body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 .message .name{font-size:11px;font-weight:700;color:var(--accent2);margin-bottom:3px;}
+.message .name.msg-nick{cursor:pointer;transition:opacity 0.15s;}
+.message .name.msg-nick:hover{opacity:0.7;}
+.message .name.msg-nick{cursor:pointer;}
+.message .name.msg-nick:hover{opacity:0.75;}
 .message.mine .name{color:rgba(255,255,255,0.7);}
 .message .text{line-height:1.5;font-size:14px;}
 .msg-code-block{background:var(--bg-input);border-radius:8px;padding:8px 12px;font-family:monospace;font-size:12px;overflow-x:auto;white-space:pre;margin:4px 0;display:block;border:1px solid rgba(255,255,255,0.08);}
@@ -2293,6 +2349,14 @@ socket.on('userProfile', function(p){
     var titleEl = document.getElementById('chatTitle');
     if(titleEl) titleEl.innerHTML = getNickWithEmoji(p.login, p.nickname);
   }
+  // Refresh profile modal if it's open for this user
+  var overlay = document.getElementById('profileModalOverlay');
+  if (overlay && overlay.classList.contains('show')) {
+    var loginEl = document.getElementById('profileModalLogin');
+    if (loginEl && loginEl.textContent === 'логин: ' + p.login) {
+      showProfileModal(p.login, p);
+    }
+  }
 });
 
 function openPM(login,nickname){
@@ -2403,7 +2467,7 @@ function addRoomMsg(msg){
   var div=document.createElement('div');var isMine=msg.user_login===myLogin;
   div.className='message '+(isMine?'mine':'other');div.id='rmsg-'+msg.id;div.setAttribute('data-msg-id',msg.id||'');
   if(msg.user_login&&msg.vip_emoji)vipEmojiCache[msg.user_login]=msg.vip_emoji;
-  var html='<div class="name msg-nick">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
+  var html='<div class="name msg-nick" data-login="'+escHtml(msg.user_login||'')+'" onclick="onMsgNickClick(this)">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
     var imgs=(function(){var p=parseImgField(msg.image);return Array.isArray(p)?p:[p];})();
@@ -2581,7 +2645,7 @@ function addPM(msg){
   div.className='message '+(isMine?'mine':'other');div.id='pm-'+msg.id;div.setAttribute('data-msg-id',msg.id||'');
   var html='';
   if(msg.from_login&&msg.vip_emoji)vipEmojiCache[msg.from_login]=msg.vip_emoji;
-  if(!isMine)html+='<div class="name msg-nick">'+getNickWithEmoji(msg.from_login||'',msg.from_nickname,msg.vip_emoji)+'</div>';
+  if(!isMine)html+='<div class="name msg-nick" data-login="'+escHtml(msg.from_login||'')+'" onclick="onMsgNickClick(this)">'+getNickWithEmoji(msg.from_login||'',msg.from_nickname,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
     var imgs=(function(){var p=parseImgField(msg.image);return Array.isArray(p)?p:[p];})();
@@ -2794,7 +2858,7 @@ function attachMsgEvents(div,msgId,msgType,authorName,textContent){
   var clickTimer=null;
   div.addEventListener('click',function(e){
     if(swiping||swipeDone)return;
-    if(e.target.closest('.del-btn,.reply-quote,.reaction-btn,.reactions-row'))return;
+    if(e.target.closest('.del-btn,.reply-quote,.reaction-btn,.reactions-row,.msg-nick'))return;
     clearTimeout(clickTimer);
     clickTimer=setTimeout(function(){showReactionPanel(msgId,msgType,div,authorName,textContent,canDelete());},160);
   });
@@ -2808,7 +2872,7 @@ function addMsg(msg){
   div.className='message '+(isS?'system':(isM?'mine':'other'));div.id='msg-'+msg.id;
   var html='';
   if(msg.user_login&&msg.vip_emoji)vipEmojiCache[msg.user_login]=msg.vip_emoji;
-  if(!isM&&!isS)html+='<div class="name msg-nick">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
+  if(!isM&&!isS)html+='<div class="name msg-nick" data-login="'+escHtml(msg.user_login||'')+'" onclick="onMsgNickClick(this)">'+getNickWithEmoji(msg.user_login||'',msg.username,msg.vip_emoji)+'</div>';
   html+=buildReplyQuote(msg);
   if(msg.type==='image'&&msg.image){
     var imgs=(function(){var p=parseImgField(msg.image);return Array.isArray(p)?p:[p];})();
@@ -5146,10 +5210,10 @@ window.leaveRoomFromList = leaveRoomFromList;
 </div>
 <script>
 // ═══════════════════════════════════════════════════════════════════════
-// FEATURES BLOCK v6
+// FEATURES BLOCK v7 — fixes pins, mentions, nick click, light theme
 // ═══════════════════════════════════════════════════════════════════════
 
-// Toast helper
+// ── Toast ───────────────────────────────────────────────────────────────
 window.showToast = function(msg, ms) {
   var e = document.getElementById('chatError');
   if (!e) return;
@@ -5159,36 +5223,25 @@ window.showToast = function(msg, ms) {
   e._tt = setTimeout(function(){ e.classList.remove('show'); }, ms || 2800);
 };
 
-// ─────────────────────────────────────────────────────────────────────
-// AI кнопка — показывать/скрывать из настроек
-// ─────────────────────────────────────────────────────────────────────
-(function initAiBtn() {
+// ── AI кнопка (скрыть/показать из настроек) ────────────────────────────
+(function(){
   var show = localStorage.getItem('aiChatVisible') === 'true';
   var btn = document.getElementById('aiChatBtn');
   if (btn) btn.style.display = show ? 'flex' : 'none';
 })();
-
 window._toggleAiBtn = function() {
-  var current = localStorage.getItem('aiChatVisible') === 'true';
-  var next = !current;
+  var next = localStorage.getItem('aiChatVisible') !== 'true';
   localStorage.setItem('aiChatVisible', next);
   var btn = document.getElementById('aiChatBtn');
   if (btn) btn.style.display = next ? 'flex' : 'none';
-  // Обновляем UI в настройках
   var desc = document.getElementById('aiSettingsDesc');
   var tgl  = document.getElementById('aiSettingsToggle');
   if (desc) desc.textContent = next ? 'Кнопка показана' : 'Кнопка скрыта';
-  if (tgl) {
-    tgl.style.background = next ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
-    var dot = tgl.querySelector('div');
-    if (dot) dot.style.left = next ? '22px' : '2px';
-  }
+  if (tgl) { tgl.style.background = next ? 'var(--accent)' : 'rgba(255,255,255,0.15)'; var d=tgl.querySelector('div'); if(d) d.style.left = next?'22px':'2px'; }
   showToast(next ? '🤖 AI кнопка показана' : '🤖 AI кнопка скрыта');
 };
 
-// ─────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────
 function _chatCtx() {
   if (currentView === 'general') return { chatType: 'general', chatId: 'general' };
   if (currentView === 'room')    return { chatType: 'room',    chatId: String(currentRoomId) };
@@ -5196,20 +5249,58 @@ function _chatCtx() {
   return null;
 }
 function _scrollToMsg(id) {
-  var el = document.getElementById('msg-'  + id) ||
-           document.getElementById('pm-'   + id) ||
-           document.getElementById('rmsg-' + id);
+  var el = document.getElementById('msg-' + id)   ||
+           document.getElementById('pm-'  + id)   ||
+           document.getElementById('rmsg-'+ id);
   if (!el) return;
   el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   var orig = el.style.background;
-  el.style.transition = 'background 0.3s';
+  el.style.transition = 'background 0.4s';
   el.style.background = 'rgba(92,160,220,0.35)';
-  setTimeout(function(){ el.style.background = orig || ''; }, 1600);
+  setTimeout(function(){ el.style.background = orig || ''; }, 1800);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 1. ЗАКРЕП 📌  —  использует #pinnedMsgBar уже вставленный в HTML
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// 0. КЛИК НА НИК → открыть профиль пользователя
+// ══════════════════════════════════════════════════════════════════════════
+window.onMsgNickClick = function(el) {
+  // Prevent triggering reaction panel
+  event && event.stopPropagation && event.stopPropagation();
+  var login = el.getAttribute('data-login');
+  if (!login) return;
+  var nick = el.textContent.trim().replace(/^\s*[^\s]+\s+/, '').trim() || login;
+  // Show modal immediately with cached data, then refresh from server
+  showProfileModal(login, {
+    login:    login,
+    nickname: nick,
+    username: null,
+    avatar:   avatarCache[login] || null
+  });
+  socket.emit('getProfile', { login: login });
+};
+
+// Patch userProfile event to update open modal
+(function(){
+  var origHandler = null;
+  socket.on('userProfile', function(p) {
+    if (p.avatar) avatarCache[p.login] = p.avatar;
+    if (p.verified) verifiedCache[p.login] = true;
+    if (p.vip_emoji && p.vip_until > Date.now()) vipEmojiCache[p.login] = p.vip_emoji;
+    // Update open profile modal if it's showing this user
+    var overlay = document.getElementById('profileModalOverlay');
+    if (overlay && overlay.classList.contains('show')) {
+      var loginEl = document.getElementById('profileModalLogin');
+      if (loginEl && loginEl.textContent === 'логин: ' + p.login) {
+        showProfileModal(p.login, p);
+      }
+    }
+  });
+})();
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 1. ЗАКРЕП СООБЩЕНИЙ 📌
+// ══════════════════════════════════════════════════════════════════════════
 var _pinMsgId = null;
 
 window._onPinBarClick = function(e) {
@@ -5224,8 +5315,8 @@ window._onPinClose = function(e) {
 
 function _showPinBar(msgId, msgText) {
   _pinMsgId = msgId;
-  var bar  = document.getElementById('pinnedMsgBar');
-  var txt  = document.getElementById('pinnedMsgText');
+  var bar = document.getElementById('pinnedMsgBar');
+  var txt = document.getElementById('pinnedMsgText');
   if (!bar) return;
   if (txt) txt.textContent = (msgText || 'Сообщение').slice(0, 90);
   bar.classList.add('show');
@@ -5237,30 +5328,44 @@ function _hidePinBar() {
 }
 function _loadPin() {
   var ctx = _chatCtx();
-  if (ctx) socket.emit('getPinnedMessage', ctx);
+  if (!ctx) return;
+  socket.emit('getPinnedMessage', ctx);
 }
 
+// pinMessageInChat вызывается из reaction panel
+// msgId — число, msgType — строка типа чата, msgText — текст, msgUser — ник автора
 function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   var ctx = _chatCtx();
-  if (!ctx) return;
+  if (!ctx) { showToast('⚠️ Открой чат чтобы закрепить'); return; }
   socket.emit('pinMessage', {
-    chatType: ctx.chatType, chatId: ctx.chatId,
-    msgId: msgId, msgText: msgText || '', msgUser: msgUser || ''
+    chatType: ctx.chatType,
+    chatId:   ctx.chatId,
+    msgId:    Number(msgId),
+    msgText:  (msgText || '').slice(0, 200),
+    msgUser:  msgUser || ''
   });
 }
 window.pinMessageInChat = pinMessageInChat;
 
-// Сервер → pinnedMessage (ответ на getPinnedMessage) — поля: chat_type, chat_id, msg_id, msg_text
+// pinnedMessage — ответ на getPinnedMessage
+// Сервер шлёт: { chatType, chatId, ...DB_row }
+// DB_row содержит: chat_type, chat_id, msg_id, msg_text, ...
 socket.on('pinnedMessage', function(d) {
   if (!d) return;
   var ctx = _chatCtx();
   if (!ctx) return;
-  if (d.chat_type === ctx.chatType && String(d.chat_id) === ctx.chatId) {
-    if (d.msg_id) _showPinBar(d.msg_id, d.msg_text);
-    else _hidePinBar();
+  // Сервер шлёт ОБА варианта: camelCase (из параметров) и snake_case (из DB spread)
+  var dChatType = d.chatType || d.chat_type;
+  var dChatId   = String(d.chatId  || d.chat_id || '');
+  var dMsgId    = d.msg_id;
+  var dMsgText  = d.msg_text;
+  if (dChatType === ctx.chatType && dChatId === ctx.chatId) {
+    if (dMsgId) _showPinBar(dMsgId, dMsgText);
+    else        _hidePinBar();
   }
 });
-// Сервер → messagePinned (broadcast) — поля: chatType, chatId, msgId, msgText
+
+// messagePinned — broadcast когда кто-то закрепил
 socket.on('messagePinned', function(d) {
   if (!d) return;
   var ctx = _chatCtx();
@@ -5269,35 +5374,33 @@ socket.on('messagePinned', function(d) {
   }
   showToast('📌 Сообщение закреплено');
 });
-// Сервер → messageUnpinned
+
+// messageUnpinned — broadcast
 socket.on('messageUnpinned', function(d) {
   if (!d) return;
   var ctx = _chatCtx();
   if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
     _hidePinBar();
   }
-  showToast('Откреплено');
+  showToast('📌 Откреплено');
 });
 
 // Загружаем закреп при открытии каждого чата
-if (!window._pinHistoryListeners) {
-  window._pinHistoryListeners = true;
-  socket.on('messageHistory', function() { setTimeout(_loadPin, 200); });
-  socket.on('privateHistory', function() { setTimeout(_loadPin, 200); });
-  socket.on('roomData',        function() { setTimeout(_loadPin, 200); });
-}
+socket.on('messageHistory', function() { setTimeout(_loadPin, 300); });
+socket.on('privateHistory', function() { setTimeout(_loadPin, 300); });
+socket.on('roomData',        function() { setTimeout(_loadPin, 300); });
 
 
-// ═══════════════════════════════════════════════════════════════════════
-// 2. УПОМИНАНИЯ 🔔  —  слушаем mentionReceived от сервера
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// 2. УПОМИНАНИЯ 🔔
+// ══════════════════════════════════════════════════════════════════════════
 var _mentions = [];
 var _mentionOpen = false;
 
 function _mentionBadge() {
   var b = document.getElementById('mentionBadge');
   if (!b) return;
-  if (_mentions.length) {
+  if (_mentions.length > 0) {
     b.textContent = _mentions.length > 9 ? '9+' : _mentions.length;
     b.style.display = 'flex';
   } else {
@@ -5321,62 +5424,65 @@ function _renderMentions() {
     return;
   }
   list.innerHTML = _mentions.slice(0, 40).map(function(m, i) {
-    return '<div onclick="_goMention(' + i + ')" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
-      '<div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:2px;">' + escHtml(m.from) + ' · ' + escHtml(m.chatName) + '</div>' +
-      '<div style="font-size:13px;">' + escHtml((m.text||'').slice(0,80)) + '</div>' +
-      '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + (m.ts ? new Date(m.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '') + '</div>' +
-      '</div>';
+    var chatLabel = m.chatType === 'general' ? '💬 Общий' : m.chatType === 'pm' ? ('👤 ' + escHtml(m.chatName||m.from)) : ('👥 ' + escHtml(m.chatName||'Группа'));
+    var timeStr   = m.ts ? new Date(m.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}) : '';
+    return '<div onclick="_goMention(' + i + ')" style="padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">'
+      +   '<span style="font-size:12px;font-weight:700;color:var(--accent);">' + escHtml(m.from) + '</span>'
+      +   '<span style="font-size:11px;color:var(--text-muted);">' + chatLabel + ' · ' + timeStr + '</span>'
+      + '</div>'
+      + '<div style="font-size:13px;line-height:1.4;color:var(--text-primary);">' + escHtml((m.text||'').slice(0,120)) + '</div>'
+      + '</div>';
   }).join('');
 }
-function _goMention(i) {
-  var m = _mentions[i]; if (!m) return;
-  document.getElementById('mentionPanel').classList.remove('show');
+window._goMention = function(i) {
+  var m = _mentions[i];
+  if (!m) return;
+  var p = document.getElementById('mentionPanel');
+  if (p) p.classList.remove('show');
   _mentionOpen = false;
-  if      (m.chatType==='general') { if(typeof openGeneral==='function') openGeneral(); }
-  else if (m.chatType==='pm')      { if(typeof openPM==='function') openPM(m.chatId, m.chatName); }
-  else if (m.chatType==='room')    { if(typeof openRoom==='function') openRoom(Number(m.chatId)); }
-  setTimeout(function(){ if(m.msgId) _scrollToMsg(m.msgId); }, 700);
-}
-window._goMention = _goMention;
+  if      (m.chatType === 'general') { if (typeof openGeneral === 'function') openGeneral(); }
+  else if (m.chatType === 'pm')      { if (typeof openPM      === 'function') openPM(m.chatId, m.chatName || m.from); }
+  else if (m.chatType === 'room')    { if (typeof openRoom     === 'function') openRoom(Number(m.chatId)); }
+  setTimeout(function(){ if (m.msgId) _scrollToMsg(m.msgId); }, 700);
+};
 function clearMentions() { _mentions = []; _mentionBadge(); _renderMentions(); }
 window.clearMentions = clearMentions;
 
-// Сервер уже ищет @имена и шлёт mentionReceived
-if (!window._mentionSocketAdded) {
-  window._mentionSocketAdded = true;
-  socket.on('mentionReceived', function(d) {
-    if (!d) return;
-    var entry = {
-      from:     d.from || '?',
-      chatType: d.chatType || 'general',
-      chatId:   String(d.chatId || 'general'),
-      chatName: d.chatType==='general' ? 'Общий чат' : (d.chatType==='pm' ? (d.from||'?') : 'Группа'),
-      msgId:    d.msgId,
-      text:     d.text || '',
-      ts:       d.ts || Date.now()
-    };
-    _mentions.unshift(entry);
-    if (_mentions.length > 60) _mentions.pop();
-    _mentionBadge();
-    showToast('🔔 ' + entry.from + ' упомянул тебя');
+// mentionReceived — сервер шлёт этот ивент только упоминаемому пользователю
+socket.on('mentionReceived', function(d) {
+  if (!d) return;
+  _mentions.unshift({
+    from:     d.from || '?',
+    chatType: d.chatType || 'general',
+    chatId:   String(d.chatId || 'general'),
+    chatName: d.chatName || (d.chatType === 'general' ? 'Общий чат' : d.chatType === 'pm' ? (d.from || '?') : 'Группа'),
+    msgId:    d.msgId,
+    text:     d.text || '',
+    ts:       d.ts || Date.now()
   });
-}
+  if (_mentions.length > 60) _mentions.pop();
+  _mentionBadge();
+  showToast('🔔 ' + (d.from || '?') + ' упомянул тебя');
+  if (_mentionOpen) _renderMentions();
+});
 
-// Закрытие панели по клику вне
+// Закрытие панели при клике вне
 document.addEventListener('click', function(e) {
   if (!_mentionOpen) return;
   var p = document.getElementById('mentionPanel');
   var b = document.getElementById('mentionBtn');
-  if (p && !p.contains(e.target) && b && !b.contains(e.target)) {
-    p.classList.remove('show'); _mentionOpen = false;
+  if (p && b && !p.contains(e.target) && !b.contains(e.target)) {
+    p.classList.remove('show');
+    _mentionOpen = false;
   }
 });
 
-// Подсветка @упоминаний
-(function patchFormatText() {
+// Подсветка @упоминаний в тексте
+(function patchFmtText(){
   if (window._ftPatched) return;
   var orig = window.formatText;
-  if (!orig) { setTimeout(patchFormatText, 400); return; }
+  if (!orig) { setTimeout(patchFmtText, 500); return; }
   window._ftPatched = true;
   window.formatText = function(text) {
     return orig(text).replace(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g, function(match, name) {
@@ -5384,36 +5490,31 @@ document.addEventListener('click', function(e) {
       var isMe = (myLogin    && nl === myLogin.toLowerCase()) ||
                  (myNickname && nl === myNickname.toLowerCase().replace(/\s+/g,''));
       return isMe
-        ? '<span style="background:rgba(255,200,50,0.3);color:#ffd700;border-radius:4px;padding:0 3px;font-weight:700;">' + match + '</span>'
+        ? '<span style="background:rgba(255,200,50,0.25);color:#e6b800;border-radius:4px;padding:0 3px;font-weight:700;">' + match + '</span>'
         : '<span style="color:var(--accent);font-weight:600;">' + match + '</span>';
     });
   };
 })();
 
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 // 3. ГЛОБАЛЬНЫЙ ПОИСК 🔍
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 var _gsCache = { general: [], pm: {}, room: {} };
-var _gsTimer = null;
-
-if (!window._gsCacheAdded) {
-  window._gsCacheAdded = true;
-  socket.on('messageHistory', function(msgs) {
-    if (Array.isArray(msgs)) _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
-  });
-  socket.on('privateHistory', function(d) {
-    if (!d||!d.otherLogin) return;
-    _gsCache.pm[d.otherLogin] = { nick: d.otherNickname||d.otherLogin, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.from_nickname||m.from_login||'',ts:m.timestamp}; }) };
-  });
-  socket.on('roomData', function(d) {
-    if (!d||!d.room) return;
-    _gsCache.room[d.room.id] = { name: d.room.name, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; }) };
-  });
-  socket.on('chatMessage',       function(m){ if(m&&m.id&&m.text) _gsCache.general.push({id:m.id,text:m.text,from:m.username||'',ts:m.timestamp}); });
-  socket.on('newPrivateMessage', function(m){ var k=m.from_login===myLogin?m.to_login:m.from_login; if(!k) return; if(!_gsCache.pm[k]) _gsCache.pm[k]={nick:m.from_nickname||k,msgs:[]}; if(m.id&&m.text) _gsCache.pm[k].msgs.push({id:m.id,text:m.text,from:m.from_nickname||'',ts:m.timestamp}); });
-  socket.on('roomNewMessage',    function(m){ var r=m.room_id; if(!r) return; if(!_gsCache.room[r]) _gsCache.room[r]={name:'Группа',msgs:[]}; if(m.id&&m.text) _gsCache.room[r].msgs.push({id:m.id,text:m.text,from:m.username||'',ts:m.timestamp}); });
-}
+socket.on('messageHistory', function(msgs) {
+  if (Array.isArray(msgs)) _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
+});
+socket.on('privateHistory', function(d) {
+  if (!d || !d.otherLogin) return;
+  _gsCache.pm[d.otherLogin] = { nick: d.otherNickname||d.otherLogin, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.from_nickname||m.from_login||'',ts:m.timestamp}; }) };
+});
+socket.on('roomData', function(d) {
+  if (!d || !d.room) return;
+  _gsCache.room[d.room.id] = { name: d.room.name, msgs: (d.messages||[]).map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; }) };
+});
+socket.on('chatMessage',       function(m){ if(m&&m.id&&m.text) _gsCache.general.push({id:m.id,text:m.text,from:m.username||'',ts:m.timestamp}); });
+socket.on('newPrivateMessage', function(m){ var k=m&&(m.from_login===myLogin?m.to_login:m.from_login); if(!k) return; if(!_gsCache.pm[k]) _gsCache.pm[k]={nick:m.from_nickname||k,msgs:[]}; if(m.id&&m.text) _gsCache.pm[k].msgs.push({id:m.id,text:m.text,from:m.from_nickname||'',ts:m.timestamp}); });
+socket.on('roomNewMessage',    function(m){ var r=m&&m.room_id; if(!r) return; if(!_gsCache.room[r]) _gsCache.room[r]={name:'Группа',msgs:[]}; if(m.id&&m.text) _gsCache.room[r].msgs.push({id:m.id,text:m.text,from:m.username||'',ts:m.timestamp}); });
 
 function openGlobalSearch() {
   var modal = document.getElementById('globalSearchModal');
@@ -5421,17 +5522,16 @@ function openGlobalSearch() {
   modal.classList.add('show');
   var inp = document.getElementById('globalSearchInput');
   if (inp) { inp.value = ''; inp.focus(); }
+  var total = _gsCache.general.length
+    + Object.keys(_gsCache.pm).reduce(function(s,k){return s+_gsCache.pm[k].msgs.length;},0)
+    + Object.keys(_gsCache.room).reduce(function(s,k){return s+_gsCache.room[k].msgs.length;},0);
   var res = document.getElementById('globalSearchResults');
-  if (res) {
-    var total = _gsCache.general.length +
-      Object.keys(_gsCache.pm).reduce(function(s,k){return s+_gsCache.pm[k].msgs.length;},0) +
-      Object.keys(_gsCache.room).reduce(function(s,k){return s+_gsCache.room[k].msgs.length;},0);
-    res.innerHTML = '<div class="gs-empty">Кэш: ' + total + ' сообщений. Начни вводить...</div>';
-  }
+  if (res) res.innerHTML = '<div class="gs-empty">📦 Кэш: ' + total + ' сообщений. Начни вводить...</div>';
 }
 window.openGlobalSearch = openGlobalSearch;
 function closeGlobalSearch() { var m=document.getElementById('globalSearchModal'); if(m) m.classList.remove('show'); }
 window.closeGlobalSearch = closeGlobalSearch;
+var _gsTimer = null;
 function globalSearchQuery() {
   var q = (document.getElementById('globalSearchInput').value||'').trim();
   clearTimeout(_gsTimer);
@@ -5443,78 +5543,73 @@ function globalSearchQuery() {
 window.globalSearchQuery = globalSearchQuery;
 function _doGsSearch(q) {
   var ql = q.toLowerCase(), results = [];
-  _gsCache.general.forEach(function(m){ if(m.text&&m.text.toLowerCase().indexOf(ql)!==-1) results.push({chatType:'general',chatId:'general',chatName:'💬 Общий чат',msgId:m.id,from:m.from,text:m.text,ts:m.ts}); });
-  Object.keys(_gsCache.pm).forEach(function(l){ var e=_gsCache.pm[l]; (e.msgs||[]).forEach(function(m){ if(m.text&&m.text.toLowerCase().indexOf(ql)!==-1) results.push({chatType:'pm',chatId:l,chatName:'👤 '+(e.nick||l),msgId:m.id,from:m.from,text:m.text,ts:m.ts}); }); });
-  Object.keys(_gsCache.room).forEach(function(r){ var e=_gsCache.room[r]; (e.msgs||[]).forEach(function(m){ if(m.text&&m.text.toLowerCase().indexOf(ql)!==-1) results.push({chatType:'room',chatId:r,chatName:'👥 '+(e.name||'Группа'),msgId:m.id,from:m.from,text:m.text,ts:m.ts}); }); });
+  _gsCache.general.forEach(function(m){ if(m.text&&m.text.toLowerCase().includes(ql)) results.push({chatType:'general',chatId:'general',chatName:'💬 Общий чат',msgId:m.id,from:m.from,text:m.text,ts:m.ts}); });
+  Object.keys(_gsCache.pm).forEach(function(l){ var e=_gsCache.pm[l]; (e.msgs||[]).forEach(function(m){ if(m.text&&m.text.toLowerCase().includes(ql)) results.push({chatType:'pm',chatId:l,chatName:'👤 '+(e.nick||l),msgId:m.id,from:m.from,text:m.text,ts:m.ts}); }); });
+  Object.keys(_gsCache.room).forEach(function(r){ var e=_gsCache.room[r]; (e.msgs||[]).forEach(function(m){ if(m.text&&m.text.toLowerCase().includes(ql)) results.push({chatType:'room',chatId:r,chatName:'👥 '+(e.name||'Группа'),msgId:m.id,from:m.from,text:m.text,ts:m.ts}); }); });
   results.sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
   var el = document.getElementById('globalSearchResults');
   if (!el) return;
   if (!results.length) { el.innerHTML='<div class="gs-empty">Ничего не найдено</div>'; return; }
   var re = new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');
   el.innerHTML = results.slice(0,60).map(function(r,i){
-    var hi = escHtml(r.text.slice(0,150)).replace(re,'<mark style="background:rgba(92,160,220,0.4);border-radius:3px;padding:0 2px;">$1</mark>');
-    return '<div data-gsi="'+i+'" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">' +
-      '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px;">'+r.chatName+(r.from?' · '+escHtml(r.from):'')+'<span style="float:right;color:var(--text-muted);">'+(r.ts?new Date(r.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+' </span></div>'+
-      '<div style="font-size:13px;">'+hi+'</div></div>';
+    var hi = escHtml(r.text.slice(0,150)).replace(re,'<mark style="background:rgba(92,160,220,0.4);border-radius:2px;padding:0 1px;">$1</mark>');
+    return '<div data-gsi="'+i+'" style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);transition:background 0.15s;" onmouseover="this.style.background=\'var(--bg-hover)\'" onmouseout="this.style.background=\'\'">'
+      + '<div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px;">'+r.chatName+(r.from?' · '+escHtml(r.from):'')+'<span style="float:right;color:var(--text-muted);">'+(r.ts?new Date(r.ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}):'')+' </span></div>'
+      + '<div style="font-size:13px;">'+hi+'</div></div>';
   }).join('');
   el.querySelectorAll('[data-gsi]').forEach(function(div){
     var r = results[parseInt(div.getAttribute('data-gsi'))];
     div.addEventListener('click', function(){
       closeGlobalSearch();
       if      (r.chatType==='general') { if(typeof openGeneral==='function') openGeneral(); }
-      else if (r.chatType==='pm')      { if(typeof openPM==='function') openPM(r.chatId, r.chatName.replace('👤 ','')); }
-      else if (r.chatType==='room')    { if(typeof openRoom==='function') openRoom(Number(r.chatId)); }
-      setTimeout(function(){ _scrollToMsg(r.msgId); }, 500);
+      else if (r.chatType==='pm')      { if(typeof openPM==='function')      openPM(r.chatId, r.chatName.replace('👤 ','')); }
+      else if (r.chatType==='room')    { if(typeof openRoom==='function')    openRoom(Number(r.chatId)); }
+      setTimeout(function(){ _scrollToMsg(r.msgId); }, 600);
     });
   });
 }
-document.addEventListener('keydown', function(e){ if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openGlobalSearch();} if(e.key==='Escape') closeGlobalSearch(); });
+document.addEventListener('keydown', function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();openGlobalSearch();}
+  if(e.key==='Escape'){ closeGlobalSearch(); }
+});
 
 
-// ═══════════════════════════════════════════════════════════════════════
-// 4. ПЕРЕВОД 🌍  —  Google Translate unofficial API (надёжнее всего)
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
+// 4. ПЕРЕВОД 🌍 — Google Translate unofficial API
+// ══════════════════════════════════════════════════════════════════════════
 var _tCache = {};
-
 function translateMessage(msgId, origText) {
   var el = document.getElementById('msg-'+msgId) || document.getElementById('pm-'+msgId) || document.getElementById('rmsg-'+msgId);
   if (!el) return;
   var existing = el.querySelector('.msg-translation');
   if (existing) { existing.remove(); return; }
   var textEl = el.querySelector('.text');
-  var text = textEl ? (textEl.innerText||textEl.textContent).trim() : (origText||'');
-  // Убираем переводы и метки
+  var text   = textEl ? (textEl.innerText||textEl.textContent).trim() : (origText||'');
   text = text.replace(/🌍.*$/gm,'').trim();
-  if (!text || text.length < 1) { showToast('Нечего переводить'); return; }
+  if (!text) { showToast('Нечего переводить'); return; }
   if (_tCache[msgId]) { _insertTranslation(el, _tCache[msgId]); return; }
   showToast('🌍 Переводим...');
   var hasCyrillic = /[а-яёА-ЯЁ]/.test(text);
   var src = hasCyrillic ? 'ru' : 'en';
   var tgt = hasCyrillic ? 'en' : 'ru';
-  // Google Translate unofficial free endpoint
-  var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=' + src + '&tl=' + tgt + '&dt=t&q=' + encodeURIComponent(text.slice(0,500));
+  var url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl='+src+'&tl='+tgt+'&dt=t&q='+encodeURIComponent(text.slice(0,500));
   fetch(url)
     .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(data) {
-      // Ответ: [[["перевод","оригинал",null,null,10],...],null,"ru"]
       if (!data || !data[0]) throw new Error('empty');
-      var translated = data[0].map(function(part){ return part[0]||''; }).join('');
+      var translated = data[0].map(function(p){ return p[0]||''; }).join('');
       if (!translated.trim()) throw new Error('empty result');
-      var result = '(' + tgt.toUpperCase() + ') ' + translated;
+      var result = '('+tgt.toUpperCase()+') ' + translated;
       _tCache[msgId] = result;
       _insertTranslation(el, result);
     })
-    .catch(function(err) {
-      console.warn('translate error', err);
-      showToast('⚠️ Ошибка перевода. Попробуй позже.');
-    });
+    .catch(function(){ showToast('⚠️ Ошибка перевода'); });
 }
 window.translateMessage = translateMessage;
-
 function _insertTranslation(el, text) {
   var div = document.createElement('div');
   div.className = 'msg-translation';
-  div.style.cssText = 'font-size:12px;color:var(--text-secondary);font-style:italic;margin-top:6px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.1);line-height:1.5;cursor:pointer;';
+  div.style.cssText = 'font-size:12px;color:var(--text-secondary);font-style:italic;margin-top:6px;padding-top:5px;border-top:1px solid rgba(128,128,128,0.2);line-height:1.5;cursor:pointer;';
   div.title = 'Нажми чтобы скрыть';
   div.textContent = '🌍 ' + text;
   div.addEventListener('click', function(){ div.remove(); });
@@ -5523,159 +5618,131 @@ function _insertTranslation(el, text) {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 // 5. ЗВУКИ 🔔
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 var _sndType    = localStorage.getItem('notifSound') || 'ding';
 var _sndEnabled = localStorage.getItem('notifSoundEnabled') !== 'false';
-
 function playNotifSound() {
   if (!_sndEnabled) return;
   try {
     var Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
     var ctx=new Ctx(), osc=ctx.createOscillator(), gain=ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
-    var freqMap={default:880,ding:1318,ping:1760,pop:523,chime:1047};
-    osc.frequency.value = freqMap[_sndType]||1318;
+    var freq={default:880,ding:1318,ping:1760,pop:523,chime:1047};
+    osc.frequency.value = freq[_sndType]||1318;
     osc.type = _sndType==='pop'?'triangle':'sine';
     var dur = _sndType==='chime'?0.7:0.35;
     gain.gain.setValueAtTime(0.3,ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+dur);
     osc.start(); osc.stop(ctx.currentTime+dur);
-  } catch(e) {}
+  } catch(e){}
 }
 window.playNotifSound = playNotifSound;
 function previewSound(type){ _sndType=type; localStorage.setItem('notifSound',type); playNotifSound(); }
 window.previewSound = previewSound;
-
-if (!window._sndListenerAdded) {
-  window._sndListenerAdded = true;
-  socket.on('chatMessage',       function(m){ if(m&&m.user_login!==myLogin) playNotifSound(); });
-  socket.on('newPrivateMessage', function(m){ if(m&&m.from_login!==myLogin) playNotifSound(); });
-  socket.on('roomNewMessage',    function(m){ if(m&&m.user_login!==myLogin) playNotifSound(); });
-}
+socket.on('chatMessage',       function(m){ if(m&&m.user_login!==myLogin) playNotifSound(); });
+socket.on('newPrivateMessage', function(m){ if(m&&m.from_login!==myLogin) playNotifSound(); });
+socket.on('roomNewMessage',    function(m){ if(m&&m.user_login!==myLogin) playNotifSound(); });
 
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 // 6. НОЧНОЙ РЕЖИМ 🌙
-// Исправлено: патчим applyTheme чтобы он сохранял наш ночной режим
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 var _nightOn   = localStorage.getItem('nightScheduleEnabled') === 'true';
 var _nightFrom = localStorage.getItem('nightFrom') || '22:00';
 var _nightTo   = localStorage.getItem('nightTo')   || '08:00';
-
 function _isNight() {
   if (!_nightOn) return false;
   var now = new Date();
   var cur = now.getHours()*60 + now.getMinutes();
   var f=_nightFrom.split(':'), t=_nightTo.split(':');
   var fmin=+f[0]*60+ +f[1], tmin=+t[0]*60+ +t[1];
-  return fmin>tmin ? (cur>=fmin||cur<tmin) : (cur>=fmin&&cur<tmin);
+  return fmin > tmin ? (cur>=fmin||cur<tmin) : (cur>=fmin&&cur<tmin);
 }
-
 function _applyNight() {
   var body = document.body;
   if (_isNight()) {
-    // Только переключаем если не уже в ночном
     if (!body.classList.contains('_nightAuto')) {
+      body._preNightClass = body.className;
       body.classList.add('_nightAuto');
-      // Запоминаем текущую тему
-      body._savedNightClass = body.className.replace('_nightAuto','').trim();
-      // Убираем светлую тему, добавляем тёмную
       body.classList.remove('theme-light');
       if (!body.classList.contains('theme-dark')) body.classList.add('theme-dark');
     }
   } else {
     if (body.classList.contains('_nightAuto')) {
-      // Восстанавливаем сохранённую тему
-      body.className = (body._savedNightClass || '').replace('theme-dark','').trim();
-      body._savedNightClass = null;
+      body.className = (body._preNightClass||'').replace('_nightAuto','').trim() || '';
     }
   }
 }
-
-// Патчим applyTheme: когда ночной режим активен, он должен игнорироваться
-(function patchApplyTheme() {
+// Патч applyTheme — восстанавливать ночной режим после смены темы
+setTimeout(function(){
   if (window._applyThemePatched) return;
   var orig = window.applyTheme;
-  if (!orig) { setTimeout(patchApplyTheme, 300); return; }
+  if (!orig) return;
   window._applyThemePatched = true;
   window.applyTheme = function(key) {
     orig(key);
-    // После applyTheme восстанавливаем ночной режим если он активен
     if (_isNight()) {
       document.body.classList.add('_nightAuto');
       document.body.classList.remove('theme-light');
       if (!document.body.classList.contains('theme-dark')) document.body.classList.add('theme-dark');
     }
   };
-})();
-
+}, 200);
 setInterval(_applyNight, 30000);
 setTimeout(_applyNight, 1500);
 
 function openSoundNightSettings() {
   var body = document.getElementById('settingsBody');
   if (!body) return;
-
   _nightOn    = localStorage.getItem('nightScheduleEnabled') === 'true';
   _nightFrom  = localStorage.getItem('nightFrom') || '22:00';
   _nightTo    = localStorage.getItem('nightTo')   || '08:00';
   _sndEnabled = localStorage.getItem('notifSoundEnabled') !== 'false';
   _sndType    = localStorage.getItem('notifSound') || 'ding';
-
-  var sndLabels = {default:'🔔 Стандартный',ding:'🔔 Дзинь',ping:'🔔 Пинг',pop:'🔔 Мягкий',chime:'🔔 Колокольчик'};
-  var nowStr = new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-
-  function mkToggle(id, checked, fn) {
-    return '<div id="'+id+'" onclick="'+fn+'" style="position:relative;width:44px;height:24px;min-width:44px;background:'+(checked?'var(--accent)':'rgba(255,255,255,0.15)')+';border-radius:12px;cursor:pointer;transition:background 0.2s;">' +
-      '<div style="position:absolute;top:2px;left:'+(checked?'22px':'2px')+';width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div></div>';
+  var nowStr  = new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  var sndLabels = {default:'Стандартный',ding:'Дзинь',ping:'Пинг',pop:'Мягкий',chime:'Колокольчик'};
+  function mkTgl(id,on,fn) {
+    return '<div id="'+id+'" onclick="'+fn+'" style="position:relative;width:44px;height:24px;min-width:44px;background:'+(on?'var(--accent)':'rgba(255,255,255,0.15)')+';border-radius:12px;cursor:pointer;transition:background 0.2s;flex-shrink:0;"><div style="position:absolute;top:2px;left:'+(on?'22px':'2px')+';width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div></div>';
   }
-
   body.innerHTML =
-    '<div style="padding-bottom:24px;">' +
-    '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);">' +
-      '<button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:22px;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;">←</button>' +
-      '<h3 style="font-size:16px;font-weight:700;margin:0;">🔔 Звук и ночной режим</h3>' +
-    '</div>' +
-
-    '<div style="padding:16px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Звуки уведомлений</div>' +
-    '<div style="padding:0 20px;">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
-        '<span style="font-size:14px;">Включить звуки</span>' + mkToggle('_sndTgl', _sndEnabled, 'window._toggleSnd(this)') +
-      '</div>' +
-      ['default','ding','ping','pop','chime'].map(function(s){
+    '<div style="padding-bottom:24px;">'
+    + '<div style="display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);">'
+    +   '<button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:22px;cursor:pointer;width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:50%;">←</button>'
+    +   '<h3 style="font-size:16px;font-weight:700;margin:0;">🔔 Звук и ночной режим</h3>'
+    + '</div>'
+    + '<div style="padding:16px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Звуки уведомлений</div>'
+    + '<div style="padding:0 20px;">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);"><span style="font-size:14px;">Включить звуки</span>' + mkTgl('_sndTgl',_sndEnabled,'window._toggleSnd(this)') + '</div>'
+    + ['default','ding','ping','pop','chime'].map(function(s){
         var a=_sndType===s;
-        return '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);">' +
-          '<div onclick="_setSnd(\''+s+'\')" id="_sr_'+s+'" style="width:20px;height:20px;border-radius:50%;border:2px solid '+(a?'var(--accent)':'var(--border)')+';background:'+(a?'var(--accent)':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(a?'<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>':'')+'</div>' +
-          '<span style="flex:1;font-size:14px;">'+(sndLabels[s]||s)+'</span>' +
-          '<button onclick="previewSound(\''+s+'\')" style="background:var(--bg-input);border:none;color:var(--text-primary);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">▶ Тест</button></div>';
-      }).join('') +
-    '</div>' +
-
-    '<div style="padding:20px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Ночной режим по расписанию</div>' +
-    '<div style="padding:0 20px;">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">' +
-        '<div><div style="font-size:14px;">Авто тёмная тема</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Сейчас '+nowStr+' — '+(_isNight()?'🌙 активен':'☀️ не активен')+'</div></div>' +
-        mkToggle('_nightTgl', _nightOn, 'window._toggleNight(this)') +
-      '</div>' +
-      '<div style="display:flex;gap:16px;margin-top:16px;">' +
-        '<div style="flex:1;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Включить с</div><input type="time" id="_nFrom" value="'+_nightFrom+'" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;"></div>' +
-        '<div style="flex:1;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Выключить в</div><input type="time" id="_nTo" value="'+_nightTo+'" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;"></div>' +
-      '</div>' +
-    '</div>' +
-    '</div>';
-
-  // Открываем оверлей НАПРЯМУЮ — не через openSettings() который перезапишет body!
+        return '<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border);">'
+          + '<div onclick="_setSnd(\''+s+'\')" id="_sr_'+s+'" style="width:20px;height:20px;border-radius:50%;border:2px solid '+(a?'var(--accent)':'var(--border)')+';background:'+(a?'var(--accent)':'transparent')+';cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;">'+(a?'<div style="width:8px;height:8px;background:#fff;border-radius:50%;"></div>':'')+'</div>'
+          + '<span style="flex:1;font-size:14px;">🔔 '+sndLabels[s]+'</span>'
+          + '<button onclick="previewSound(\''+s+'\')" style="background:var(--bg-input);border:none;color:var(--text-primary);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;">▶ Тест</button></div>';
+      }).join('')
+    + '</div>'
+    + '<div style="padding:20px 20px 8px;font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Ночной режим по расписанию</div>'
+    + '<div style="padding:0 20px;">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">'
+    +     '<div><div style="font-size:14px;">Авто тёмная тема</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Сейчас '+nowStr+' — '+(_isNight()?'🌙 активен':'☀️ не активен')+'</div></div>'
+    +     mkTgl('_nightTgl',_nightOn,'window._toggleNight(this)')
+    +   '</div>'
+    +   '<div style="display:flex;gap:16px;margin-top:16px;">'
+    +     '<div style="flex:1;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Включить с</div><input type="time" id="_nFrom" value="'+_nightFrom+'" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;"></div>'
+    +     '<div style="flex:1;"><div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">Выключить в</div><input type="time" id="_nTo" value="'+_nightTo+'" oninput="window._saveNightTimes()" style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:10px;background:var(--bg-input);color:var(--text-primary);font-size:15px;box-sizing:border-box;"></div>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+  // Открываем оверлей НАПРЯМУЮ, не через openSettings()
   var overlay = document.getElementById('settingsOverlay');
   if (overlay) overlay.classList.add('show');
 }
 window.openSoundNightSettings = openSoundNightSettings;
-
 window._toggleSnd = function(el) {
-  _sndEnabled = !_sndEnabled;
-  localStorage.setItem('notifSoundEnabled', String(_sndEnabled));
-  el.style.background = _sndEnabled?'var(--accent)':'rgba(255,255,255,0.15)';
+  _sndEnabled=!_sndEnabled; localStorage.setItem('notifSoundEnabled',String(_sndEnabled));
+  el.style.background=_sndEnabled?'var(--accent)':'rgba(255,255,255,0.15)';
   var d=el.querySelector('div'); if(d) d.style.left=_sndEnabled?'22px':'2px';
 };
 window._setSnd = function(type) {
@@ -5699,14 +5766,14 @@ window._toggleNight = function(el) {
 window._saveNightTimes = function() {
   var f=document.getElementById('_nFrom'), t=document.getElementById('_nTo');
   if(f){_nightFrom=f.value; localStorage.setItem('nightFrom',_nightFrom);}
-  if(t){_nightTo=t.value;   localStorage.setItem('nightTo',  _nightTo);}
+  if(t){_nightTo=t.value;   localStorage.setItem('nightTo',_nightTo);}
   _applyNight();
 };
 
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 // 7. АНАЛИТИКА ГРУПП 📊
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 function openRoomAnalytics(roomId) {
   var modal = document.getElementById('analyticsModal');
   if (!modal) return;
@@ -5718,148 +5785,119 @@ function openRoomAnalytics(roomId) {
 window.openRoomAnalytics = openRoomAnalytics;
 function closeAnalytics() { var m=document.getElementById('analyticsModal'); if(m) m.classList.remove('show'); }
 window.closeAnalytics = closeAnalytics;
-
-if (!window._analyticsListenerAdded) {
-  window._analyticsListenerAdded = true;
-  socket.on('roomAnalytics', function(data) {
-    var content = document.getElementById('analyticsContent');
-    if (!content) return;
-    var topUsers = data.topUsers||[];
-    var maxCount = topUsers.length ? Math.max.apply(null,topUsers.map(function(u){return u.msg_count;})) : 1;
-    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">' +
-      '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;"><div style="font-size:30px;font-weight:800;color:var(--accent);">'+(data.totalMessages||0)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">📨 Сообщений</div></div>' +
-      '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;"><div style="font-size:30px;font-weight:800;color:var(--accent);">'+(data.totalMembers||0)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">👥 Участников</div></div>' +
-      '</div>';
-    if (data.dailyMessages&&data.dailyMessages.length) {
-      var maxD=Math.max.apply(null,data.dailyMessages.map(function(d){return d.count;}))||1;
-      html+='<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">📈 Активность 7 дней</div><div style="display:flex;align-items:flex-end;gap:4px;height:80px;">';
-      data.dailyMessages.forEach(function(d){ var h=Math.max(3,Math.round((d.count/maxD)*64)); html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:10px;color:var(--text-muted);">'+d.count+'</div><div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:'+h+'px;"></div><div style="font-size:9px;color:var(--text-muted);">'+escHtml(d.day)+'</div></div>'; });
-      html+='</div></div>';
-    }
-    if (topUsers.length) {
-      html+='<div><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px;">🏆 Топ участников</div>';
-      topUsers.forEach(function(u,i){ var pct=Math.round((u.msg_count/maxCount)*100); var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1); html+='<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>'+medal+' '+escHtml(u.username)+'</span><span style="color:var(--text-muted);">'+u.msg_count+'</span></div><div style="height:5px;background:var(--bg-input);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;"></div></div></div>'; });
-      html+='</div>';
-    }
-    content.innerHTML = html;
-  });
-}
+socket.on('roomAnalytics', function(data) {
+  var content = document.getElementById('analyticsContent');
+  if (!content) return;
+  var top = data.topUsers||[], maxC = top.length ? Math.max.apply(null,top.map(function(u){return u.msg_count;})) : 1;
+  var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">'
+    + '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;"><div style="font-size:30px;font-weight:800;color:var(--accent);">'+(data.totalMessages||0)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">📨 Сообщений</div></div>'
+    + '<div style="background:var(--bg-input);border-radius:14px;padding:16px;text-align:center;"><div style="font-size:30px;font-weight:800;color:var(--accent);">'+(data.totalMembers||0)+'</div><div style="font-size:12px;color:var(--text-muted);margin-top:4px;">👥 Участников</div></div>'
+    + '</div>';
+  if (data.dailyMessages&&data.dailyMessages.length) {
+    var maxD=Math.max.apply(null,data.dailyMessages.map(function(d){return d.count;}))||1;
+    html+='<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:10px;">📈 Активность 7 дней</div><div style="display:flex;align-items:flex-end;gap:4px;height:80px;">';
+    data.dailyMessages.forEach(function(d){ var h=Math.max(3,Math.round((d.count/maxD)*64)); html+='<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;"><div style="font-size:10px;color:var(--text-muted);">'+d.count+'</div><div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:'+h+'px;"></div><div style="font-size:9px;color:var(--text-muted);">'+escHtml(d.day)+'</div></div>'; });
+    html+='</div></div>';
+  }
+  if (top.length) {
+    html+='<div><div style="font-size:12px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px;">🏆 Топ участников</div>';
+    top.forEach(function(u,i){ var pct=Math.round((u.msg_count/maxC)*100); var medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1); html+='<div style="margin-bottom:10px;"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;"><span>'+medal+' '+escHtml(u.username)+'</span><span style="color:var(--text-muted);">'+u.msg_count+'</span></div><div style="height:5px;background:var(--bg-input);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+pct+'%;background:var(--accent);border-radius:3px;"></div></div></div>'; });
+    html+='</div>';
+  }
+  content.innerHTML = html;
+});
 
 
-// ═══════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════
 // 8. ФОТО 1 ПРОСМОТР 👁
-// ═══════════════════════════════════════════════════════════════════════
-var _voViewed = {};
-var _voImages = {};
-
+// ══════════════════════════════════════════════════════════════════════════
+var _voViewed={}, _voImages={};
 function sendViewOncePhoto() {
-  var inp = document.createElement('input');
-  inp.type='file'; inp.accept='image/*';
+  var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*';
   inp.addEventListener('change', function() {
-    var file = inp.files&&inp.files[0];
-    if (!file) return;
-    if (file.size > 15*1024*1024) { showToast('Максимум 15 МБ'); return; }
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      var payload = { type:'view_once', image:ev.target.result, text:'' };
-      if      (currentView==='pm'   && currentPrivateLogin) socket.emit('privateMessage', Object.assign({toLogin:currentPrivateLogin}, payload));
-      else if (currentView==='room' && currentRoomId)       socket.emit('roomMessage',    Object.assign({roomId:currentRoomId},          payload));
-      else if (currentView==='general')                      socket.emit('chatMessage',    payload);
+    var file=inp.files&&inp.files[0]; if(!file) return;
+    if(file.size>15*1024*1024){showToast('Максимум 15 МБ');return;}
+    var reader=new FileReader();
+    reader.onload=function(ev){
+      var payload={type:'view_once',image:ev.target.result,text:''};
+      if     (currentView==='pm'&&currentPrivateLogin)  socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
+      else if(currentView==='room'&&currentRoomId)      socket.emit('roomMessage',   Object.assign({roomId:currentRoomId},payload));
+      else if(currentView==='general')                  socket.emit('chatMessage',   payload);
       showToast('👁 Отправлено — доступно 1 раз');
     };
     reader.readAsDataURL(file);
   });
   inp.click();
 }
-window.sendViewOncePhoto = sendViewOncePhoto;
-
+window.sendViewOncePhoto=sendViewOncePhoto;
 function openViewOnce(msgId) {
-  if (_voViewed[msgId]) { showToast('Уже просмотрено'); return; }
-  var imgSrc = _voImages[msgId];
-  if (!imgSrc) { showToast('Изображение недоступно'); return; }
-  _voViewed[msgId] = true;
-  var overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.97);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
+  if(_voViewed[msgId]){showToast('Уже просмотрено');return;}
+  var imgSrc=_voImages[msgId]; if(!imgSrc){showToast('Изображение недоступно');return;}
+  _voViewed[msgId]=true;
+  var overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.97);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
   var sec=10;
-  var timerEl = document.createElement('div');
+  var timerEl=document.createElement('div');
   timerEl.style.cssText='color:rgba(255,255,255,0.7);font-size:14px;font-weight:600;';
   timerEl.textContent='🔒 Закроется через '+sec+' сек';
-  var img=document.createElement('img');
-  img.src=imgSrc; img.style.cssText='max-width:88vw;max-height:74vh;border-radius:12px;object-fit:contain;';
-  var closeBtn=document.createElement('button');
-  closeBtn.textContent='✕ Закрыть';
+  var img=document.createElement('img'); img.src=imgSrc;
+  img.style.cssText='max-width:88vw;max-height:74vh;border-radius:12px;object-fit:contain;';
+  var closeBtn=document.createElement('button'); closeBtn.textContent='✕ Закрыть';
   closeBtn.style.cssText='background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:10px 28px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;';
   overlay.appendChild(timerEl); overlay.appendChild(img); overlay.appendChild(closeBtn);
   document.body.appendChild(overlay);
-  var tick=setInterval(function(){ sec--; timerEl.textContent='🔒 Закроется через '+sec+' сек'; if(sec<=0){clearInterval(tick);done();} },1000);
-  function done(){ clearInterval(tick); overlay.remove(); _updateVoUI(msgId); }
+  var tick=setInterval(function(){sec--;timerEl.textContent='🔒 Закроется через '+sec+' сек';if(sec<=0){clearInterval(tick);done();}},1000);
+  function done(){clearInterval(tick);overlay.remove();_updateVoUI(msgId);}
   closeBtn.onclick=done;
 }
-window.openViewOnce = openViewOnce;
-
-function _updateVoUI(msgId) {
+window.openViewOnce=openViewOnce;
+function _updateVoUI(msgId){
   ['msg-','pm-','rmsg-'].forEach(function(p){
     var el=document.getElementById(p+msgId); if(!el) return;
     var btn=el.querySelector('[data-vo]');
     if(btn) btn.outerHTML='<div style="display:inline-flex;align-items:center;gap:8px;opacity:0.5;padding:10px 14px;border-radius:10px;background:var(--bg-input);">👁️ <span style="font-size:13px;">Просмотрено</span></div>';
   });
 }
-
-// Перехват socket-событий для view_once сообщений
-if (!window._voSocketAdded) {
-  window._voSocketAdded = true;
-
-  function _handleVoMsg(msg, prefix) {
-    if (!msg || msg.type !== 'view_once') return;
-    if (msg.image) _voImages[msg.id] = msg.image;
-    setTimeout(function() {
-      var el = document.getElementById(prefix + msg.id);
-      if (!el) return;
-      var imgEl = el.querySelector('img');
-      if (imgEl && imgEl.src && !_voImages[msg.id]) _voImages[msg.id] = imgEl.src;
-      var isMine = el.classList.contains('mine');
-      var photoWrap = imgEl ? (imgEl.closest('.photo-img-wrap') || imgEl.closest('.msg-image') || imgEl.parentElement) : null;
-      if (photoWrap) photoWrap.style.display='none';
-      var textDiv = el.querySelector('.text');
-      if (!textDiv) return;
-      if (isMine) {
-        textDiv.innerHTML='<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
-      } else {
-        textDiv.innerHTML='<div data-vo="1" onclick="openViewOnce('+msg.id+')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 сек · только 1 раз</div></div></div>';
-      }
-    }, 200);
-  }
-
-  socket.on('chatMessage',       function(m){ _handleVoMsg(m,'msg-'); });
-  socket.on('newPrivateMessage', function(m){ _handleVoMsg(m,'pm-'); });
-  socket.on('roomNewMessage',    function(m){ _handleVoMsg(m,'rmsg-'); });
-
-  function _patchVoHistory(msgs, prefix) {
-    if (!Array.isArray(msgs)) return;
-    msgs.forEach(function(msg){
-      if (msg.type==='view_once') {
-        if (msg.image) _voImages[msg.id]=msg.image;
-        setTimeout(function(){ _handleVoMsg(msg, prefix); }, 500);
-      }
-    });
-  }
-  socket.on('messageHistory', function(msgs){ _patchVoHistory(msgs,'msg-'); });
-  socket.on('privateHistory', function(d){ if(d&&d.messages) _patchVoHistory(d.messages,'pm-'); });
-  socket.on('roomData',       function(d){ if(d&&d.messages) _patchVoHistory(d.messages,'rmsg-'); });
+function _handleVoMsg(msg, prefix) {
+  if(!msg||msg.type!=='view_once') return;
+  if(msg.image) _voImages[msg.id]=msg.image;
+  setTimeout(function(){
+    var el=document.getElementById(prefix+msg.id); if(!el) return;
+    var imgEl=el.querySelector('img');
+    if(imgEl&&imgEl.src&&!_voImages[msg.id]) _voImages[msg.id]=imgEl.src;
+    var isMine=el.classList.contains('mine');
+    var photoWrap=imgEl?(imgEl.closest('.photo-img-wrap')||imgEl.closest('.msg-image')||imgEl.parentElement):null;
+    if(photoWrap) photoWrap.style.display='none';
+    var textDiv=el.querySelector('.text');
+    if(!textDiv) return;
+    if(isMine) {
+      textDiv.innerHTML='<div style="display:inline-flex;align-items:center;gap:8px;background:rgba(92,160,220,0.12);padding:10px 14px;border-radius:10px;">👁️ <div><div style="font-size:13px;font-weight:600;">Отправлено (1 просмотр)</div><div style="font-size:11px;color:var(--text-muted);">Получатель увидит 1 раз</div></div></div>';
+    } else {
+      textDiv.innerHTML='<div data-vo="1" onclick="openViewOnce('+msg.id+')" style="display:inline-flex;align-items:center;gap:10px;background:rgba(92,160,220,0.15);padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid var(--accent);">👁️ <div><div style="font-size:13px;font-weight:600;">Фото — нажми для просмотра</div><div style="font-size:11px;color:var(--text-muted);">10 сек · только 1 раз</div></div></div>';
+    }
+  }, 200);
 }
+socket.on('chatMessage',       function(m){ _handleVoMsg(m,'msg-'); });
+socket.on('newPrivateMessage', function(m){ _handleVoMsg(m,'pm-'); });
+socket.on('roomNewMessage',    function(m){ _handleVoMsg(m,'rmsg-'); });
+function _patchVoHistory(msgs, prefix) {
+  if(!Array.isArray(msgs)) return;
+  msgs.forEach(function(msg){ if(msg.type==='view_once'){if(msg.image)_voImages[msg.id]=msg.image; setTimeout(function(){_handleVoMsg(msg,prefix);},600); }});
+}
+socket.on('messageHistory', function(msgs){ _patchVoHistory(msgs,'msg-'); });
+socket.on('privateHistory', function(d){ if(d&&d.messages) _patchVoHistory(d.messages,'pm-'); });
+socket.on('roomData',       function(d){ if(d&&d.messages) _patchVoHistory(d.messages,'rmsg-'); });
 
-// Кнопка 👁 в панели ввода
-window.addEventListener('load', function() {
-  setTimeout(function() {
-    var inputArea = document.getElementById('inputArea');
-    if (!inputArea || inputArea.querySelector('[data-vo-btn]')) return;
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    var inputArea=document.getElementById('inputArea');
+    if(!inputArea||inputArea.querySelector('[data-vo-btn]')) return;
     var btn=document.createElement('button');
     btn.setAttribute('data-vo-btn','1');
-    btn.className='ia-btn'; btn.title='Фото (1 просмотр)';
-    btn.textContent='👁'; btn.style.cssText='font-size:17px;';
+    btn.className='ia-btn'; btn.title='Фото (1 просмотр)'; btn.textContent='👁';
     btn.addEventListener('click', sendViewOncePhoto);
     var sendBtn=document.getElementById('sendBtn');
-    if (sendBtn) inputArea.insertBefore(btn,sendBtn); else inputArea.appendChild(btn);
+    if(sendBtn) inputArea.insertBefore(btn,sendBtn); else inputArea.appendChild(btn);
   }, 800);
 });
 
