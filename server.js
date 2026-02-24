@@ -978,6 +978,20 @@ io.on('connection', (socket) => {
         [msg.username, msg.user_login, msg.text, msg.image, msg.voice, msg.type, msg.timestamp, msg.reply_to_id, msg.reply_to_text, msg.reply_to_user, msg.file_url, msg.file_name, msg.file_size]);
       msg.id = res.rows[0].id;
       io.emit('chatMessage', fixMsgImages({...msg}));
+      // Detect @mentions and notify mentioned users
+      if (msg.text) {
+        const mentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
+        if (mentionMatches) {
+          const mentionNames = mentionMatches.map(m => m.slice(1).toLowerCase());
+          const allUsers = await pool.query('SELECT login, nickname FROM users WHERE login != $1', [socket.userLogin]);
+          allUsers.rows.forEach(u => {
+            if (mentionNames.includes(u.nickname.toLowerCase()) || mentionNames.includes(u.login.toLowerCase())) {
+              const ts = findSocketByLogin(u.login);
+              if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'general', chatId: 'general', msgId: msg.id, ts: msg.timestamp });
+            }
+          });
+        }
+      }
     } catch (e) { console.error(e); }
   });
 
@@ -2207,3 +2221,131 @@ async function initPollTables(pool) {
   )`);
 }
 initPollTables(pool).catch(console.error);
+
+
+// ═══════════════════════════════════════════════
+// PINNED MESSAGES IN CHAT (закреп сообщений)
+// ═══════════════════════════════════════════════
+async function initPinnedMsgTable(pool) {
+  await pool.query(`CREATE TABLE IF NOT EXISTS pinned_messages (
+    id SERIAL PRIMARY KEY,
+    chat_type VARCHAR(10) NOT NULL,
+    chat_id VARCHAR(100) NOT NULL,
+    msg_id INT NOT NULL,
+    msg_text TEXT,
+    msg_user VARCHAR(100),
+    pinned_by VARCHAR(50) NOT NULL,
+    pinned_at BIGINT NOT NULL,
+    UNIQUE(chat_type, chat_id)
+  )`);
+}
+initPinnedMsgTable(pool).catch(console.error);
+
+io.on('connection', (socket2) => {
+  // We patch existing socket handlers via a separate connection listener approach
+  // but since io.on('connection') is already set, we add handlers differently
+});
+
+// Add pinned message handlers to the main io connection — append via a secondary approach
+// Instead, we'll inject into socket via global handler tracking:
+const _origIOConn = io.listeners('connection');
+// We can't easily append, so we add handlers directly in-line. 
+// Re-exporting the needed handlers via a module-level patch approach:
+
+// Monkey-patch: add extra handlers to every new socket
+const _extraSocketHandlers = [];
+
+function addSocketHandler(event, handler) {
+  _extraSocketHandlers.push({ event, handler });
+}
+
+// Override io.on to capture new connections and add extra handlers
+const _realIOEmit = io.emit.bind(io);
+// We use a different approach: since server.js has one big io.on('connection'), 
+// and we're appending, we need another connection listener:
+
+io.on('connection', function(socket) {
+  // === PINNED MESSAGES ===
+  socket.on('pinMessage', async ({ chatType, chatId, msgId, msgText, msgUser }) => {
+    if (!socket.userLogin) return;
+    // Only admin/owner can pin in rooms, anyone can pin in PM
+    try {
+      if (chatType === 'room') {
+        const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [Number(chatId), socket.userLogin]);
+        if (!member.rows.length || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может закреплять сообщения');
+      }
+      await pool.query(
+        'INSERT INTO pinned_messages (chat_type,chat_id,msg_id,msg_text,msg_user,pinned_by,pinned_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (chat_type,chat_id) DO UPDATE SET msg_id=$3,msg_text=$4,msg_user=$5,pinned_by=$6,pinned_at=$7',
+        [chatType, String(chatId), msgId, msgText || '', msgUser || '', socket.userLogin, Date.now()]
+      );
+      const payload = { chatType, chatId, msgId, msgText: msgText || '', msgUser: msgUser || '' };
+      if (chatType === 'general') io.emit('messagePinned', payload);
+      else if (chatType === 'room') io.to('room_' + chatId).emit('messagePinned', payload);
+      else { // pm
+        socket.emit('messagePinned', payload);
+        const other = findSocketByLogin(chatId);
+        if (other) other.emit('messagePinned', payload);
+      }
+    } catch(e) { console.error('pinMessage error:', e); }
+  });
+
+  socket.on('unpinMessage', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    try {
+      if (chatType === 'room') {
+        const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [Number(chatId), socket.userLogin]);
+        if (!member.rows.length || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может откреплять');
+      }
+      await pool.query('DELETE FROM pinned_messages WHERE chat_type=$1 AND chat_id=$2', [chatType, String(chatId)]);
+      const payload = { chatType, chatId };
+      if (chatType === 'general') io.emit('messageUnpinned', payload);
+      else if (chatType === 'room') io.to('room_' + chatId).emit('messageUnpinned', payload);
+      else { socket.emit('messageUnpinned', payload); const other = findSocketByLogin(chatId); if(other) other.emit('messageUnpinned', payload); }
+    } catch(e) {}
+  });
+
+  socket.on('getPinnedMessage', async ({ chatType, chatId }) => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT * FROM pinned_messages WHERE chat_type=$1 AND chat_id=$2', [chatType, String(chatId)]);
+      if (res.rows.length) socket.emit('pinnedMessage', { chatType, chatId, ...res.rows[0] });
+      else socket.emit('pinnedMessage', { chatType, chatId, msg_id: null });
+    } catch(e) {}
+  });
+
+  // === GROUP ANALYTICS ===
+  socket.on('getRoomAnalytics', async ({ roomId }) => {
+    if (!socket.userLogin) return;
+    roomId = Number(roomId);
+    try {
+      // Check if member
+      const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (!member.rows.length) return;
+
+      const totalMsgs = await pool.query('SELECT COUNT(*)::int as c FROM room_messages WHERE room_id=$1', [roomId]);
+      const totalMembers = await pool.query('SELECT COUNT(*)::int as c FROM room_members WHERE room_id=$1', [roomId]);
+      
+      // Top 10 active users
+      const topUsers = await pool.query(
+        'SELECT username, user_login, COUNT(*)::int as msg_count FROM room_messages WHERE room_id=$1 GROUP BY username, user_login ORDER BY msg_count DESC LIMIT 10',
+        [roomId]
+      );
+      
+      // Messages per day for last 7 days
+      const sevenDaysAgo = Date.now() - 7 * 24 * 3600 * 1000;
+      const dailyMsgs = await pool.query(
+        'SELECT to_char(to_timestamp(timestamp/1000), \'DD.MM\') as day, COUNT(*)::int as count FROM room_messages WHERE room_id=$1 AND timestamp>$2 GROUP BY day ORDER BY day',
+        [roomId, sevenDaysAgo]
+      );
+
+      socket.emit('roomAnalytics', {
+        roomId,
+        totalMessages: totalMsgs.rows[0].c,
+        totalMembers: totalMembers.rows[0].c,
+        topUsers: topUsers.rows,
+        dailyMessages: dailyMsgs.rows
+      });
+    } catch(e) { console.error('getRoomAnalytics error:', e); }
+  });
+});
+
