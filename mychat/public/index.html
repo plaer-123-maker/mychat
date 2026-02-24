@@ -2302,7 +2302,6 @@ socket.on('roomData',function(data){
   if(data.myRole==='admin')btns+='<button onclick="openRoomSettings()" title="Настройки">⚙️</button>';
   btns+='<button onclick="leaveCurrentRoom()" title="Покинуть">🚪</button>';
   document.getElementById('chatHeaderBtns').innerHTML=btns+'<button onclick="openSecretTimerModal()" title="Самоудаление сообщений">🔥</button><button onclick="openMsgSearch()" title="Поиск (Ctrl+F)">🔍</button>';
-  socket.emit('getSecretTimer', { otherLogin: login });
   document.getElementById('inputArea').style.display=(data.room.type==='channel'&&data.myRole!=='admin')?'none':'flex';
   md.innerHTML='';
   if(data.messages.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
@@ -2584,7 +2583,7 @@ function formatText(s){
   // Strikethrough ~~text~~
   t=t.replace(/~~([^~\n]+)~~/g,'<s>$1</s>');
   // Spoiler ||text||
-  t=t.replace(/\|\|([^|\n]+)\|\|/g,"<span class=\"msg-spoiler\" onclick=\"this.classList.toggle('revealed')\">$1</span>");
+  t=t.replace(/\|\|([^|\n]+)\|\|/g,'<span class="msg-spoiler" onclick="this.classList.toggle(\'revealed\')">$1</span>');
   // URLs
   t=t.replace(/(https?:\/\/[^\s<>"]+)/g,'<a href="$1" target="_blank" rel="noopener noreferrer" class="msg-link">$1</a>');
   // Newlines
@@ -2809,8 +2808,8 @@ function msgSearchInput() {
     // Highlight occurrences
     var result = '';
     var last = 0;
-        var re = new RegExp(escHtml(q).replace(/[-[\]{}()*+?.,\\^$|#\s]/g,'\\$&'), 'gi');
-        result = el.innerHTML.replace(new RegExp('('+q.replace(/[-[\]{}()*+?.,\\^$|#\s]/g,'\\$&')+')', 'gi'), '<mark class="msg-highlight">$1</mark>');
+    var re = new RegExp(escHtml(q).replace(/[-[\]{}()*+?.,\\\\^$|#]/g,'\\\\$&'), 'gi');
+    result = el.innerHTML.replace(new RegExp('('+q.replace(/[-[\]{}()*+?.,\\\\^$|#]/g,'\\\\$&')+')', 'gi'), '<mark class="msg-highlight">$1</mark>');
     el.innerHTML = result;
   });
   
@@ -2964,7 +2963,7 @@ function openScheduleModal() {
     '<input type="datetime-local" id="schedTime" value="'+dtLocal+'">' +
     '<div id="schedList" class="sched-list"></div>' +
     '<div style="display:flex;gap:8px;justify-content:flex-end">' +
-    '<button onclick="var m=document.getElementById(\'schedModal\');if(m)m.remove();" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button>' +
+    '<button onclick="document.getElementById(\'schedModal\').remove()" style="background:var(--bg-input);border:none;border-radius:10px;padding:9px 18px;color:var(--text-secondary);cursor:pointer;font-weight:600">Закрыть</button>' +
     '<button onclick="submitSchedule()" style="background:var(--accent);border:none;border-radius:10px;padding:9px 18px;color:#fff;cursor:pointer;font-weight:600">Запланировать</button>' +
     '</div></div>';
   document.body.appendChild(modal);
