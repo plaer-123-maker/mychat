@@ -145,20 +145,45 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 // Set these env vars in Railway: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM
 const EMAIL_ENABLED = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 let mailer = null;
-if (EMAIL_ENABLED && nodemailer) {
-  mailer = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_PORT === '465',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-  });
+if (nodemailer) {
+  if (EMAIL_ENABLED) {
+    const transportConfig = {
+      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.EMAIL_PORT || '587'),
+      secure: process.env.EMAIL_PORT === '465',
+      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+    };
+    console.log('[EMAIL] Configuring SMTP:', transportConfig.host + ':' + transportConfig.port, 'user:', process.env.EMAIL_USER);
+    mailer = nodemailer.createTransport(transportConfig);
+    // Verify connection on startup
+    mailer.verify((err) => {
+      if (err) {
+        console.error('[EMAIL] SMTP connection FAILED:', err.message);
+        console.error('[EMAIL] Check EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS in Railway variables');
+      } else {
+        console.log('[EMAIL] SMTP connection OK — ready to send emails');
+      }
+    });
+  } else {
+    console.warn('[EMAIL] EMAIL_USER or EMAIL_PASS not set — email sending disabled!');
+    console.warn('[EMAIL] Registration will be BLOCKED until email is configured.');
+  }
+} else {
+  console.warn('[EMAIL] nodemailer not installed — run: npm install nodemailer');
 }
 async function sendEmail(to, subject, html) {
-  if (!mailer) return false;
+  if (!mailer) {
+    console.error('[EMAIL] Cannot send email: mailer not configured');
+    return false;
+  }
   try {
-    await mailer.sendMail({ from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to, subject, html });
+    const info = await mailer.sendMail({ from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to, subject, html });
+    console.log('[EMAIL] Sent to', to, '| messageId:', info.messageId);
     return true;
-  } catch(e) { console.error('Email error:', e.message); return false; }
+  } catch(e) {
+    console.error('[EMAIL] Send error to', to, ':', e.message);
+    return false;
+  }
 }
 
 // ── GOOGLE OAUTH CONFIG ───────────────────────────────────
@@ -592,19 +617,8 @@ io.on('connection', (socket) => {
 
       const hash = await bcrypt.hash(password, 10);
 
-      if (!EMAIL_ENABLED) {
-        // Gmail не настроен — разрешаем регистрацию без подтверждения (только для dev)
-        const role = login === ADMIN_LOGIN ? 'admin' : 'user';
-        const token = generateToken();
-        await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,false,$7)',
-          [login, hash, nickname, role, token, email, 'password']);
-        socket.username = nickname; socket.userLogin = login; socket.userRole = role;
-        onlineUsers.set(socket.id, { nickname, login, ip });
-        socketUsers.set(socket.id, socket);
-        socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
-        sendOnlineToAll();
-        await addLog('register', nickname, 'Registered (email not configured)', ip);
-        return;
+      if (!EMAIL_ENABLED || !mailer) {
+        return socket.emit('authError', 'Сервер временно не может отправлять письма. Обратитесь к администратору.');
       }
 
       // Отправляем код подтверждения на email
@@ -809,6 +823,10 @@ io.on('connection', (socket) => {
       if (res.rows.length === 0) return socket.emit('authError', 'Неверный логин или пароль');
       const user = res.rows[0];
       if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
+      // Проверяем верификацию email (кроме Google/Telegram аккаунтов)
+      if (user.auth_method === 'email' && !user.email_verified) {
+        return socket.emit('authError', 'Email не подтверждён. Зарегистрируйся заново.');
+      }
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) return socket.emit('authError', 'Неверный логин или пароль');
       socket.username = user.nickname; socket.userLogin = login;
