@@ -215,8 +215,6 @@ body.theme-light .message.system{background:rgba(0,0,0,0.08);color:#444;}
 /* Общий текст в светлой теме */
 body.theme-light .text{color:#1a1a1a;}
 body.theme-light .msg-time{color:rgba(0,0,0,0.45);}
-body.theme-light #pinnedMsgBar{background:rgba(65,159,217,0.1);border-bottom-color:var(--accent);}
-body.theme-light #pinnedMsgBar .pm-text{color:#1a1a1a;}
 body.theme-light .reaction-chip{background:rgba(0,0,0,0.07);color:#333;}
 body.theme-light .reaction-chip.mine{background:rgba(65,159,217,0.2);}
 .msg-wrapper{display:flex;align-items:flex-end;padding:1px 0;}
@@ -736,6 +734,13 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 .ai-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid var(--border-color);}
 .ai-input-row input{flex:1;background:var(--bg-input);border:1px solid var(--border-color);border-radius:10px;padding:8px 12px;color:var(--text-primary);font-size:13px;outline:none;}
 .ai-input-row button{background:linear-gradient(135deg,#6c3fff,#3fa7ff);border:none;border-radius:10px;color:#fff;padding:8px 14px;cursor:pointer;font-size:16px;}
+/* ── PINNED MSG BAR ── */
+#pinnedMsgBar{display:none;padding:8px 14px;background:var(--bg-panel);border-bottom:1px solid var(--border);cursor:pointer;position:relative;flex-shrink:0;}
+#pinnedMsgBar.show{display:flex!important;align-items:center;gap:10px;}
+#pinnedMsgBar .pm-icon{font-size:18px;flex-shrink:0;}
+#pinnedMsgBar .pm-text{flex:1;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#pinnedMsgBar .pm-label{font-size:11px;color:var(--accent);font-weight:700;display:block;margin-bottom:1px;}
+#pinnedMsgBar .pm-close{background:transparent;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -5129,12 +5134,6 @@ window.leaveRoomFromList = leaveRoomFromList;
 
 <!-- ═══ NEW FEATURES: CSS + MODALS ═══ -->
 <style>
-#pinnedMsgBar{display:none;padding:8px 14px;background:var(--bg-panel);border-bottom:1px solid var(--border);cursor:pointer;position:relative;}
-#pinnedMsgBar.show{display:flex;align-items:center;gap:10px;}
-#pinnedMsgBar .pm-icon{font-size:18px;flex-shrink:0;}
-#pinnedMsgBar .pm-text{flex:1;font-size:13px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-#pinnedMsgBar .pm-label{font-size:11px;color:var(--accent);font-weight:700;display:block;margin-bottom:1px;}
-#pinnedMsgBar .pm-close{background:transparent;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;padding:0 4px;flex-shrink:0;}
 #globalSearchModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:5000;align-items:flex-start;justify-content:center;padding-top:60px;}
 #globalSearchModal.show{display:flex;}
 #globalSearchBox{background:var(--bg-panel);border-radius:18px;width:560px;max-width:95vw;max-height:70vh;display:flex;flex-direction:column;box-shadow:0 24px 80px rgba(0,0,0,0.6);overflow:hidden;}
@@ -5314,20 +5313,18 @@ window._onPinClose = function(e) {
 };
 
 function _showPinBar(msgId, msgText) {
-  console.log('[PIN CLIENT] _showPinBar called', { msgId, msgText });
   _pinMsgId = msgId;
   var bar = document.getElementById('pinnedMsgBar');
   var txt = document.getElementById('pinnedMsgText');
-  console.log('[PIN CLIENT] bar element:', bar, 'classList:', bar && bar.classList.toString());
-  if (!bar) { console.log('[PIN CLIENT] NO BAR ELEMENT!'); return; }
+  if (!bar) return;
   if (txt) txt.textContent = (msgText || 'Сообщение').slice(0, 90);
   bar.classList.add('show');
-  console.log('[PIN CLIENT] bar classList after add:', bar.classList.toString());
+  bar.style.display = 'flex'; // inline backup
 }
 function _hidePinBar() {
   _pinMsgId = null;
   var bar = document.getElementById('pinnedMsgBar');
-  if (bar) bar.classList.remove('show');
+  if (bar) { bar.classList.remove('show'); bar.style.display = ''; }
 }
 function _loadPin() {
   var ctx = _chatCtx();
@@ -5339,8 +5336,13 @@ function _loadPin() {
 // msgId — число, msgType — строка типа чата, msgText — текст, msgUser — ник автора
 function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   var ctx = _chatCtx();
-  console.log('[PIN CLIENT] pinMessageInChat called', { msgId, msgType, ctx, msgText: (msgText||'').slice(0,30) });
-  if (!ctx) { showToast('⚠️ Открой чат чтобы закрепить'); return; }
+  // Fallback: if ctx is null but we know msgType, reconstruct from globals
+  if (!ctx) {
+    if (msgType === 'general') ctx = { chatType: 'general', chatId: 'general' };
+    else if (msgType === 'pm' && currentPrivateLogin) ctx = { chatType: 'pm', chatId: String(currentPrivateLogin) };
+    else if (msgType === 'room' && currentRoomId) ctx = { chatType: 'room', chatId: String(currentRoomId) };
+  }
+  if (!ctx) { showToast('⚠️ Открой чат'); return; }
   socket.emit('pinMessage', {
     chatType: ctx.chatType,
     chatId:   ctx.chatId,
@@ -5372,9 +5374,7 @@ socket.on('pinnedMessage', function(d) {
 // messagePinned — broadcast когда кто-то закрепил
 socket.on('messagePinned', function(d) {
   if (!d) return;
-  console.log('[PIN CLIENT] messagePinned received', d);
   var ctx = _chatCtx();
-  console.log('[PIN CLIENT] ctx=', ctx);
   if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
     _showPinBar(d.msgId, d.msgText);
   }
