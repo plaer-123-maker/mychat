@@ -223,8 +223,6 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT \'user\''); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS token VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS comments_enabled BOOLEAN DEFAULT true'); } catch(e) {}
-  try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS username VARCHAR(50) DEFAULT NULL'); } catch(e) {}
-  try { await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS invite_token VARCHAR(32) DEFAULT NULL'); } catch(e) {}
   try { await pool.query("UPDATE users SET role='admin' WHERE login=$1", [ADMIN_LOGIN]); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(50) DEFAULT NULL UNIQUE'); } catch(e) {}
@@ -1099,7 +1097,7 @@ io.on('connection', (socket) => {
   socket.on('searchRooms', async (query) => {
     if (!query) return;
     try {
-      const res = await pool.query('SELECT id, name, type, username FROM rooms WHERE LOWER(name) LIKE LOWER($1) OR LOWER(username) LIKE LOWER($2) LIMIT 10', ['%' + query + '%', '%' + query.replace('@','') + '%']);
+      const res = await pool.query('SELECT id, name, type FROM rooms WHERE LOWER(name) LIKE LOWER($1) LIMIT 10', ['%' + query + '%']);
       socket.emit('roomSearchResults', res.rows);
     } catch(e) { socket.emit('roomSearchResults', []); }
   });
@@ -1245,7 +1243,7 @@ io.on('connection', (socket) => {
     if (!socket.userLogin) return;
     try {
       const res = await pool.query(`
-        SELECT r.id, r.name, r.type, r.owner_login, r.comments_enabled, r.timestamp, r.username,
+        SELECT r.id, r.name, r.type, r.owner_login, r.comments_enabled, r.timestamp,
         rm.role as my_role,
         (SELECT COUNT(*)::int FROM room_members WHERE room_id=r.id) as member_count
         FROM rooms r
@@ -1353,25 +1351,20 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
-  socket.on('roomAddMember', async ({ roomId, username: targetUsername }) => {
+  socket.on('roomAddMember', async ({ roomId, login }) => {
     if (!socket.userLogin) return;
     roomId = Number(roomId);
     try {
       var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0 || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может добавлять');
-      // Search by username (strip @ if present)
-      var uname = (targetUsername || '').replace(/^@/, '').trim();
-      if (!uname) return socket.emit('chatError', 'Введи юзернейм');
-      var userExists = await pool.query('SELECT login, nickname FROM users WHERE LOWER(username)=LOWER($1)', [uname]);
-      if (userExists.rows.length === 0) return socket.emit('chatError', 'Пользователь с таким юзернеймом не найден');
-      var login = userExists.rows[0].login;
-      var nickname = userExists.rows[0].nickname;
+      var userExists = await pool.query('SELECT login FROM users WHERE login=$1', [login]);
+      if (userExists.rows.length === 0) return socket.emit('chatError', 'Пользователь не найден');
       var already = await pool.query('SELECT id FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, login]);
       if (already.rows.length > 0) return socket.emit('chatError', 'Уже участник');
       await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [roomId, login, 'member']);
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1', [roomId]);
       io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
-      socket.emit('chatError', nickname + ' добавлен(а)');
+      socket.emit('chatError', login + ' добавлен');
     } catch(e) { console.error(e); }
   });
 
@@ -1402,87 +1395,6 @@ io.on('connection', (socket) => {
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1', [roomId]);
       io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
     } catch(e) {}
-  });
-
-
-  // ── SET ROOM USERNAME ──────────────────────────────────────────────────
-  socket.on('setRoomUsername', async ({ roomId, username }) => {
-    if (!socket.userLogin) return;
-    roomId = Number(roomId);
-    try {
-      var room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
-      if (room.rows.length === 0 || room.rows[0].owner_login !== socket.userLogin) return socket.emit('roomUsernameResult', { ok: false, msg: 'Только владелец может менять юзернейм' });
-      if (!username) {
-        await pool.query('UPDATE rooms SET username=NULL WHERE id=$1', [roomId]);
-        return socket.emit('roomUsernameResult', { ok: true, username: null, roomId });
-      }
-      username = username.trim().replace(/[^a-zA-Z0-9_]/g, '');
-      if (username.length < 3 || username.length > 32) return socket.emit('roomUsernameResult', { ok: false, msg: 'Юзернейм: от 3 до 32 символов (латиница, цифры, _)' });
-      // Check uniqueness across users AND rooms
-      var userConflict = await pool.query('SELECT login FROM users WHERE LOWER(username)=LOWER($1)', [username]);
-      if (userConflict.rows.length > 0) return socket.emit('roomUsernameResult', { ok: false, msg: 'Этот юзернейм уже занят пользователем' });
-      var roomConflict = await pool.query('SELECT id FROM rooms WHERE LOWER(username)=LOWER($1) AND id!=$2', [username, roomId]);
-      if (roomConflict.rows.length > 0) return socket.emit('roomUsernameResult', { ok: false, msg: 'Этот юзернейм уже занят другой группой/каналом' });
-      await pool.query('UPDATE rooms SET username=$1 WHERE id=$2', [username, roomId]);
-      socket.emit('roomUsernameResult', { ok: true, username, roomId });
-    } catch(e) { console.error(e); socket.emit('roomUsernameResult', { ok: false, msg: 'Ошибка сервера' }); }
-  });
-
-  // ── GENERATE / GET ROOM INVITE LINK ───────────────────────────────────
-  socket.on('getRoomInvite', async ({ roomId }) => {
-    if (!socket.userLogin) return;
-    roomId = Number(roomId);
-    try {
-      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
-      if (member.rows.length === 0 || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может управлять ссылками');
-      var room = await pool.query('SELECT invite_token FROM rooms WHERE id=$1', [roomId]);
-      var token = room.rows[0] && room.rows[0].invite_token;
-      if (!token) {
-        token = crypto.randomBytes(16).toString('hex');
-        await pool.query('UPDATE rooms SET invite_token=$1 WHERE id=$2', [token, roomId]);
-      }
-      socket.emit('roomInviteLink', { roomId, token });
-    } catch(e) { console.error(e); }
-  });
-
-  socket.on('resetRoomInvite', async ({ roomId }) => {
-    if (!socket.userLogin) return;
-    roomId = Number(roomId);
-    try {
-      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
-      if (member.rows.length === 0 || member.rows[0].role !== 'admin') return;
-      var token = crypto.randomBytes(16).toString('hex');
-      await pool.query('UPDATE rooms SET invite_token=$1 WHERE id=$2', [token, roomId]);
-      socket.emit('roomInviteLink', { roomId, token });
-    } catch(e) { console.error(e); }
-  });
-
-  socket.on('joinRoomByInvite', async ({ token }) => {
-    if (!socket.userLogin) return;
-    try {
-      var room = await pool.query('SELECT * FROM rooms WHERE invite_token=$1', [token]);
-      if (room.rows.length === 0) return socket.emit('chatError', 'Ссылка недействительна');
-      var r = room.rows[0];
-      var already = await pool.query('SELECT id FROM room_members WHERE room_id=$1 AND user_login=$2', [r.id, socket.userLogin]);
-      if (already.rows.length > 0) {
-        return socket.emit('joinedRoomByInvite', { roomId: r.id, roomName: r.name });
-      }
-      await pool.query('INSERT INTO room_members (room_id, user_login, role) VALUES ($1,$2,$3)', [r.id, socket.userLogin, 'member']);
-      socket.join('room_' + r.id);
-      socket.emit('joinedRoomByInvite', { roomId: r.id, roomName: r.name });
-      var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1', [r.id]);
-      io.to('room_' + r.id).emit('roomMembersUpdated', { roomId: r.id, members: members.rows });
-    } catch(e) { console.error(e); socket.emit('chatError', 'Ошибка при вступлении'); }
-  });
-
-  socket.on('getRoomByUsername', async ({ username }) => {
-    if (!socket.userLogin) return;
-    username = (username || '').replace(/^@/, '').trim();
-    if (!username) return socket.emit('roomByUsernameResult', null);
-    try {
-      var res = await pool.query('SELECT id, name, type, username FROM rooms WHERE LOWER(username)=LOWER($1)', [username]);
-      socket.emit('roomByUsernameResult', res.rows[0] || null);
-    } catch(e) { socket.emit('roomByUsernameResult', null); }
   });
 
   socket.on('roomToggleComments', async (roomId) => {
@@ -2196,6 +2108,11 @@ io.on('connection', (socket) => {
   socket.on('pinMessage', async ({ chatType, chatId, msgId, msgText, msgUser }) => {
     if (!socket.userLogin) return;
     try {
+      // For PM, normalize chatId to sorted pair so both users see the same pin
+      if (chatType === 'pm') {
+        const pair = [socket.userLogin, String(chatId)].sort();
+        chatId = pair[0] + ':' + pair[1];
+      }
       if (chatType === 'room') {
         const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [Number(chatId), socket.userLogin]);
         if (!member.rows.length || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может закреплять сообщения');
@@ -2208,9 +2125,12 @@ io.on('connection', (socket) => {
       if (chatType === 'general') io.emit('messagePinned', payload);
       else if (chatType === 'room') io.to('room_' + chatId).emit('messagePinned', payload);
       else {
-        socket.emit('messagePinned', payload);
-        const other = findSocketByLogin(chatId);
-        if (other) other.emit('messagePinned', payload);
+        // PM: chatId is now "loginA:loginB", extract both logins
+        const [loginA, loginB] = String(chatId).split(':');
+        const sockA = findSocketByLogin(loginA);
+        const sockB = findSocketByLogin(loginB);
+        if (sockA) sockA.emit('messagePinned', payload);
+        if (sockB && sockB !== sockA) sockB.emit('messagePinned', payload);
       }
     } catch(e) { console.error('pinMessage error:', e); }
   });
@@ -2218,6 +2138,11 @@ io.on('connection', (socket) => {
   socket.on('unpinMessage', async ({ chatType, chatId }) => {
     if (!socket.userLogin) return;
     try {
+      // For PM, normalize chatId
+      if (chatType === 'pm') {
+        const pair = [socket.userLogin, String(chatId)].sort();
+        chatId = pair[0] + ':' + pair[1];
+      }
       if (chatType === 'room') {
         const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [Number(chatId), socket.userLogin]);
         if (!member.rows.length || member.rows[0].role !== 'admin') return socket.emit('chatError', 'Только админ может откреплять');
@@ -2226,13 +2151,24 @@ io.on('connection', (socket) => {
       const payload = { chatType, chatId };
       if (chatType === 'general') io.emit('messageUnpinned', payload);
       else if (chatType === 'room') io.to('room_' + chatId).emit('messageUnpinned', payload);
-      else { socket.emit('messageUnpinned', payload); const other = findSocketByLogin(chatId); if(other) other.emit('messageUnpinned', payload); }
+      else {
+        const [loginA, loginB] = String(chatId).split(':');
+        const sockA = findSocketByLogin(loginA);
+        const sockB = findSocketByLogin(loginB);
+        if (sockA) sockA.emit('messageUnpinned', payload);
+        if (sockB && sockB !== sockA) sockB.emit('messageUnpinned', payload);
+      }
     } catch(e) {}
   });
 
   socket.on('getPinnedMessage', async ({ chatType, chatId }) => {
     if (!socket.userLogin) return;
     try {
+      // For PM, normalize chatId to sorted pair
+      if (chatType === 'pm') {
+        const pair = [socket.userLogin, String(chatId)].sort();
+        chatId = pair[0] + ':' + pair[1];
+      }
       const res = await pool.query('SELECT * FROM pinned_messages WHERE chat_type=$1 AND chat_id=$2', [chatType, String(chatId)]);
       if (res.rows.length) socket.emit('pinnedMessage', { chatType, chatId, ...res.rows[0] });
       else socket.emit('pinnedMessage', { chatType, chatId, msg_id: null });

@@ -1934,13 +1934,6 @@ socket.on('authSuccess',function(d){
   // Refresh chats on login
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
-  // Handle invite link in URL
-  var _urlParams = new URLSearchParams(window.location.search);
-  var _inviteToken = _urlParams.get('invite');
-  if (_inviteToken) {
-    setTimeout(function() { socket.emit('joinRoomByInvite', { token: _inviteToken }); }, 1000);
-    window.history.replaceState({}, '', window.location.pathname);
-  }
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');
@@ -2138,7 +2131,7 @@ socket.on('searchResults',function(users){
 socket.on('roomSearchResults',function(rooms){
   if(currentView!=='rooms')return;var list=document.getElementById('sidebarList');
   if(rooms.length===0){list.innerHTML='<div class="empty-list">Ничего не найдено</div>';return;}
-  var html='';rooms.forEach(function(r){var icon=r.type==='channel'?'📢':'👥';var sub=r.username?'@'+r.username:'Войти';html+='<div class="chat-item" onclick="joinAndOpenRoom('+r.id+')"><div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">'+sub+'</div></div><div class="tag">'+r.type+'</div></div>';});
+  var html='';rooms.forEach(function(r){var icon=r.type==='channel'?'📢':'👥';html+='<div class="chat-item" onclick="joinAndOpenRoom('+r.id+')"><div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">Войти</div></div><div class="tag">'+r.type+'</div></div>';});
   list.innerHTML=html;
 });
 
@@ -2517,29 +2510,9 @@ window.leaveCurrentRoom=leaveCurrentRoom;
 function openRoomSettings(){
   if(!currentRoomData)return;var d=currentRoomData;
   var html='<h3>⚙️ '+d.room.name+'</h3>';
-  // Username section
-  var curUsername = d.room.username ? '@'+d.room.username : '';
-  html+='<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:12px;">';
-  html+='<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">🔗 Юзернейм группы/канала</div>';
-  html+='<div style="display:flex;gap:6px;">';
-  html+='<input id="roomUsernameInput" placeholder="username (латиница, цифры, _)" value="'+(d.room.username||'')+'" style="flex:1;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg-input);color:var(--text-primary);outline:none;font-size:14px;">';
-  html+='<button style="padding:8px 14px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;white-space:nowrap;" onclick="saveRoomUsername()">Сохранить</button>';
-  html+='</div>';
-  html+='<div id="roomUsernameMsg" style="font-size:12px;margin-top:5px;color:var(--text-muted);">'+(d.room.username?'Текущий: @'+d.room.username+' — можно найти по этому юзернейму':'Не задан — задай для поиска и упоминаний')+'</div>';
-  html+='</div>';
-  // Invite link section
-  if(d.myRole==='admin'){
-    html+='<div style="margin-bottom:14px;border:1px solid var(--border);border-radius:10px;padding:12px;">';
-    html+='<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">🔑 Пригласительная ссылка</div>';
-    html+='<div id="inviteLinkBox" style="display:flex;gap:6px;align-items:center;">';
-    html+='<div style="flex:1;padding:8px 10px;background:var(--bg-input);border-radius:8px;font-size:12px;color:var(--text-muted);border:1px solid var(--border);" id="inviteLinkText">Нажми чтобы получить ссылку</div>';
-    html+='<button style="padding:8px 10px;border:none;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;" onclick="loadRoomInvite()">Показать</button>';
-    html+='<button style="padding:8px 10px;border:none;border-radius:8px;background:#e94560;color:#fff;cursor:pointer;font-size:12px;" onclick="resetRoomInvite()" title="Создать новую ссылку">🔄</button>';
-    html+='</div></div>';
-  }
   if(d.room.type==='channel')html+='<div style="margin-bottom:15px;"><button class="save" style="width:100%;padding:10px;border:none;border-radius:8px;background:'+(d.room.comments_enabled?'#e94560':'#27ae60')+';color:#fff;cursor:pointer;" onclick="toggleComments()">Комментарии: '+(d.room.comments_enabled?'ВКЛ — выключить':'ВЫКЛ — включить')+'</button></div>';
   html+='<div class="members-panel"><h4>Участники ('+d.members.length+')</h4>';
-  html+='<div style="margin-bottom:8px;display:flex;gap:4px;"><span style="display:flex;align-items:center;padding:0 8px;background:var(--bg-input);border:1.5px solid var(--border);border-radius:8px 0 0 8px;color:var(--text-muted);">@</span><input id="addMemberInput" placeholder="username участника" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:0;background:var(--bg-input);color:var(--text-primary);outline:none;border-left:none;border-right:none;"><button style="padding:8px 12px;border:none;border-radius:0 8px 8px 0;background:#27ae60;color:#fff;cursor:pointer;font-weight:600;" onclick="addMember()">+</button></div>';
+  html+='<div style="margin-bottom:8px;display:flex;gap:4px;"><input id="addMemberInput" placeholder="Логин" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg-input);color:var(--text-primary);outline:none;"><button style="padding:8px 12px;border:none;border-radius:8px;background:#27ae60;color:#fff;cursor:pointer;font-weight:600;" onclick="addMember()">+</button></div>';
   d.members.forEach(function(m){
     html+='<div class="member-row"><span>'+m.nickname+' ('+m.user_login+') <span class="role '+m.role+'">'+m.role+'</span></span>';
     if(m.user_login!==d.room.owner_login){html+='<div class="mr-btns">';if(m.role==='member')html+='<button style="background:#9b59b6;" onclick="setRoomRole(\''+m.user_login+'\',\'admin\')">→Админ</button>';else html+='<button style="background:var(--bg-base);" onclick="setRoomRole(\''+m.user_login+'\',\'member\')">→Участник</button>';html+='<button style="background:#c0392b;" onclick="removeMember(\''+m.user_login+'\')">✕</button></div>';}
@@ -2552,45 +2525,7 @@ function openRoomSettings(){
   document.getElementById('roomSettingsModal').classList.add('show');
 }
 window.openRoomSettings=openRoomSettings;
-function saveRoomUsername(){
-  var v=document.getElementById('roomUsernameInput');
-  if(!v)return;
-  socket.emit('setRoomUsername',{roomId:currentRoomId,username:v.value.trim()});
-}
-window.saveRoomUsername=saveRoomUsername;
-function loadRoomInvite(){socket.emit('getRoomInvite',{roomId:currentRoomId});}
-window.loadRoomInvite=loadRoomInvite;
-function resetRoomInvite(){if(confirm('Сбросить ссылку? Старая перестанет работать.'))socket.emit('resetRoomInvite',{roomId:currentRoomId});}
-window.resetRoomInvite=resetRoomInvite;
-socket.on('roomUsernameResult',function(d){
-  var msg=document.getElementById('roomUsernameMsg');
-  if(!msg)return;
-  if(d.ok){
-    msg.style.color='#4dde6a';
-    msg.textContent=d.username?'✅ Юзернейм @'+d.username+' сохранён':'✅ Юзернейм удалён';
-    if(currentRoomData&&currentRoomData.room){currentRoomData.room.username=d.username||null;}
-  } else {
-    msg.style.color='#e94560';
-    msg.textContent='❌ '+d.msg;
-  }
-});
-socket.on('roomInviteLink',function(d){
-  var el=document.getElementById('inviteLinkText');
-  if(!el)return;
-  var link=window.location.origin+'/?invite='+d.token;
-  el.textContent=link;
-  el.style.color='var(--accent)';
-  el.style.cursor='pointer';
-  el.onclick=function(){
-    navigator.clipboard&&navigator.clipboard.writeText(link).then(function(){showToast&&showToast('🔗 Ссылка скопирована');});
-  };
-});
-socket.on('joinedRoomByInvite',function(d){
-  showToast&&showToast('✅ Вы вступили в '+d.roomName);
-  openRoom(d.roomId);
-  socket.emit('getMyRooms');
-});
-function addMember(){var l=document.getElementById('addMemberInput').value.trim().replace(/^@/,'');if(l){socket.emit('roomAddMember',{roomId:currentRoomId,username:l});document.getElementById('addMemberInput').value='';}}
+function addMember(){var l=document.getElementById('addMemberInput').value.trim();if(l){socket.emit('roomAddMember',{roomId:currentRoomId,login:l});document.getElementById('addMemberInput').value='';}}
 window.addMember=addMember;
 function removeMember(login){if(confirm('Удалить '+login+'?'))socket.emit('roomRemoveMember',{roomId:currentRoomId,login:login});}
 window.removeMember=removeMember;
@@ -5417,23 +5352,38 @@ function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   });
   // Показываем бар сразу (optimistic UI), сервер подтвердит через messagePinned
   _showPinBar(Number(msgId), msgText || '');
-  showToast('📌 Сообщение закреплено');
 }
 window.pinMessageInChat = pinMessageInChat;
 
+// Helper: normalize PM chatId for comparison
+function _normPmChatId(chatId) {
+  // Server stores PM pins as "loginA:loginB" (sorted)
+  // Client ctx.chatId is currentPrivateLogin
+  if (!myLogin || !chatId) return String(chatId || '');
+  var pair = [myLogin, String(chatId)].sort();
+  return pair[0] + ':' + pair[1];
+}
+function _chatIdMatches(ctx, dChatType, dChatId) {
+  if (dChatType !== ctx.chatType) return false;
+  if (ctx.chatType === 'pm') {
+    // Server sends normalized pair, compare with our normalized version
+    var norm = _normPmChatId(ctx.chatId);
+    return dChatId === norm || dChatId === ctx.chatId;
+  }
+  return String(dChatId) === String(ctx.chatId);
+}
+
 // pinnedMessage — ответ на getPinnedMessage
 // Сервер шлёт: { chatType, chatId, ...DB_row }
-// DB_row содержит: chat_type, chat_id, msg_id, msg_text, ...
 socket.on('pinnedMessage', function(d) {
   if (!d) return;
   var ctx = _chatCtx();
   if (!ctx) return;
-  // Сервер шлёт ОБА варианта: camelCase (из параметров) и snake_case (из DB spread)
   var dChatType = d.chatType || d.chat_type;
   var dChatId   = String(d.chatId  || d.chat_id || '');
   var dMsgId    = d.msg_id;
   var dMsgText  = d.msg_text;
-  if (dChatType === ctx.chatType && dChatId === ctx.chatId) {
+  if (_chatIdMatches(ctx, dChatType, dChatId)) {
     if (dMsgId) _showPinBar(dMsgId, dMsgText);
     else        _hidePinBar();
   }
@@ -5443,20 +5393,20 @@ socket.on('pinnedMessage', function(d) {
 socket.on('messagePinned', function(d) {
   if (!d) return;
   var ctx = _chatCtx();
-  if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
+  if (ctx && _chatIdMatches(ctx, d.chatType, String(d.chatId))) {
     _showPinBar(d.msgId, d.msgText);
+    showToast('📌 Сообщение закреплено');
   }
-  // Toast только для других пользователей (у инициатора уже показан)
 });
 
 // messageUnpinned — broadcast
 socket.on('messageUnpinned', function(d) {
   if (!d) return;
   var ctx = _chatCtx();
-  if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
+  if (ctx && _chatIdMatches(ctx, d.chatType, String(d.chatId))) {
     _hidePinBar();
+    showToast('📌 Откреплено');
   }
-  showToast('📌 Откреплено');
 });
 
 // Загружаем закреп при открытии каждого чата
