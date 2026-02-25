@@ -983,9 +983,9 @@ io.on('connection', (socket) => {
         const mentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
         if (mentionMatches) {
           const mentionNames = mentionMatches.map(m => m.slice(1).toLowerCase());
-          const allUsers = await pool.query('SELECT login, nickname FROM users WHERE login != $1', [socket.userLogin]);
+          const allUsers = await pool.query('SELECT login, nickname, username FROM users WHERE login != $1', [socket.userLogin]);
           allUsers.rows.forEach(u => {
-            if (mentionNames.includes(u.nickname.toLowerCase()) || mentionNames.includes(u.login.toLowerCase())) {
+            if (mentionNames.includes(u.nickname.toLowerCase()) || mentionNames.includes(u.login.toLowerCase()) || (u.username && mentionNames.includes(u.username.toLowerCase()))) {
               const ts = findSocketByLogin(u.login);
               if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'general', chatId: 'general', msgId: msg.id, ts: msg.timestamp });
             }
@@ -1196,9 +1196,9 @@ io.on('connection', (socket) => {
           const pmMentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
           if (pmMentionMatches) {
             const pmMentionNames = pmMentionMatches.map(m => m.slice(1).toLowerCase());
-            const allPmUsers = await pool.query('SELECT login, nickname FROM users WHERE login != $1', [socket.userLogin]);
+            const allPmUsers = await pool.query('SELECT login, nickname, username FROM users WHERE login != $1', [socket.userLogin]);
             allPmUsers.rows.forEach(u => {
-              if (pmMentionNames.includes(u.nickname.toLowerCase()) || pmMentionNames.includes(u.login.toLowerCase())) {
+              if (pmMentionNames.includes(u.nickname.toLowerCase()) || pmMentionNames.includes(u.login.toLowerCase()) || (u.username && pmMentionNames.includes(u.username.toLowerCase()))) {
                 const ts = findSocketByLogin(u.login);
                 if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'pm', chatId: socket.userLogin, msgId: msg.id, ts: msg.timestamp });
               }
@@ -1322,11 +1322,11 @@ io.on('connection', (socket) => {
           const roomMentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
           if (roomMentionMatches) {
             const roomMentionNames = roomMentionMatches.map(m => m.slice(1).toLowerCase());
-            const roomUsers = await pool.query('SELECT u.login, u.nickname FROM room_members rm JOIN users u ON rm.user_login=u.login WHERE rm.room_id=$1 AND u.login != $2', [roomId, socket.userLogin]);
+            const roomUsers = await pool.query('SELECT u.login, u.nickname, u.username FROM room_members rm JOIN users u ON rm.user_login=u.login WHERE rm.room_id=$1 AND u.login != $2', [roomId, socket.userLogin]);
             const roomInfo = await pool.query('SELECT name FROM rooms WHERE id=$1', [roomId]);
             const roomName = roomInfo.rows[0] ? roomInfo.rows[0].name : 'Группа';
             roomUsers.rows.forEach(u => {
-              if (roomMentionNames.includes(u.nickname.toLowerCase()) || roomMentionNames.includes(u.login.toLowerCase())) {
+              if (roomMentionNames.includes(u.nickname.toLowerCase()) || roomMentionNames.includes(u.login.toLowerCase()) || (u.username && roomMentionNames.includes(u.username.toLowerCase()))) {
                 const ts = findSocketByLogin(u.login);
                 if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'room', chatId: String(roomId), chatName: roomName, msgId: msg.id, ts: msg.timestamp });
               }
@@ -2104,7 +2104,8 @@ io.on('connection', (socket) => {
 
   // === ЗАКРЕП СООБЩЕНИЙ ===
   socket.on('pinMessage', async ({ chatType, chatId, msgId, msgText, msgUser }) => {
-    if (!socket.userLogin) return;
+    if (!socket.userLogin) { console.log('[PIN] rejected: no userLogin'); return; }
+    console.log('[PIN] pinMessage from', socket.userLogin, { chatType, chatId, msgId });
     try {
       if (chatType === 'room') {
         const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [Number(chatId), socket.userLogin]);
@@ -2142,11 +2143,13 @@ io.on('connection', (socket) => {
 
   socket.on('getPinnedMessage', async ({ chatType, chatId }) => {
     if (!socket.userLogin) return;
+    console.log('[PIN] getPinnedMessage', { chatType, chatId, user: socket.userLogin });
     try {
       const res = await pool.query('SELECT * FROM pinned_messages WHERE chat_type=$1 AND chat_id=$2', [chatType, String(chatId)]);
+      console.log('[PIN] DB result:', res.rows[0] || 'none');
       if (res.rows.length) socket.emit('pinnedMessage', { chatType, chatId, ...res.rows[0] });
       else socket.emit('pinnedMessage', { chatType, chatId, msg_id: null });
-    } catch(e) {}
+    } catch(e) { console.error('[PIN] getPinnedMessage error:', e); }
   });
 
   // === АНАЛИТИКА ГРУПП ===

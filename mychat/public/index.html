@@ -5314,12 +5314,15 @@ window._onPinClose = function(e) {
 };
 
 function _showPinBar(msgId, msgText) {
+  console.log('[PIN CLIENT] _showPinBar called', { msgId, msgText });
   _pinMsgId = msgId;
   var bar = document.getElementById('pinnedMsgBar');
   var txt = document.getElementById('pinnedMsgText');
-  if (!bar) return;
+  console.log('[PIN CLIENT] bar element:', bar, 'classList:', bar && bar.classList.toString());
+  if (!bar) { console.log('[PIN CLIENT] NO BAR ELEMENT!'); return; }
   if (txt) txt.textContent = (msgText || 'Сообщение').slice(0, 90);
   bar.classList.add('show');
+  console.log('[PIN CLIENT] bar classList after add:', bar.classList.toString());
 }
 function _hidePinBar() {
   _pinMsgId = null;
@@ -5336,6 +5339,7 @@ function _loadPin() {
 // msgId — число, msgType — строка типа чата, msgText — текст, msgUser — ник автора
 function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   var ctx = _chatCtx();
+  console.log('[PIN CLIENT] pinMessageInChat called', { msgId, msgType, ctx, msgText: (msgText||'').slice(0,30) });
   if (!ctx) { showToast('⚠️ Открой чат чтобы закрепить'); return; }
   socket.emit('pinMessage', {
     chatType: ctx.chatType,
@@ -5368,7 +5372,9 @@ socket.on('pinnedMessage', function(d) {
 // messagePinned — broadcast когда кто-то закрепил
 socket.on('messagePinned', function(d) {
   if (!d) return;
+  console.log('[PIN CLIENT] messagePinned received', d);
   var ctx = _chatCtx();
+  console.log('[PIN CLIENT] ctx=', ctx);
   if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
     _showPinBar(d.msgId, d.msgText);
   }
