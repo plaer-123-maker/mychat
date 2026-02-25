@@ -1193,16 +1193,18 @@ io.on('connection', (socket) => {
       // Detect @mentions in PM text
       if (msg.text) {
         try {
+          // PM: упоминание работает только если упомянут собеседник этого ЛС
           const pmMentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
           if (pmMentionMatches) {
             const pmMentionNames = pmMentionMatches.map(m => m.slice(1).toLowerCase());
-            const allPmUsers = await pool.query('SELECT login, username FROM users WHERE login != $1 AND username IS NOT NULL', [socket.userLogin]);
-            allPmUsers.rows.forEach(u => {
+            const recipientRes = await pool.query('SELECT login, username FROM users WHERE login=$1 AND username IS NOT NULL', [data.toLogin]);
+            if (recipientRes.rows.length) {
+              const u = recipientRes.rows[0];
               if (u.username && pmMentionNames.includes(u.username.toLowerCase())) {
                 const ts = findSocketByLogin(u.login);
                 if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'pm', chatId: socket.userLogin, msgId: msg.id, ts: msg.timestamp });
               }
-            });
+            }
           }
         } catch(e) {}
       }

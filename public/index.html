@@ -5336,7 +5336,7 @@ function _loadPin() {
 // msgId — число, msgType — строка типа чата, msgText — текст, msgUser — ник автора
 function pinMessageInChat(msgId, msgType, msgText, msgUser) {
   var ctx = _chatCtx();
-  // Fallback: if ctx is null but we know msgType, reconstruct from globals
+  // Fallback: if ctx is null, reconstruct from msgType + globals
   if (!ctx) {
     if (msgType === 'general') ctx = { chatType: 'general', chatId: 'general' };
     else if (msgType === 'pm' && currentPrivateLogin) ctx = { chatType: 'pm', chatId: String(currentPrivateLogin) };
@@ -5350,6 +5350,9 @@ function pinMessageInChat(msgId, msgType, msgText, msgUser) {
     msgText:  (msgText || '').slice(0, 200),
     msgUser:  msgUser || ''
   });
+  // Показываем бар сразу (optimistic UI), сервер подтвердит через messagePinned
+  _showPinBar(Number(msgId), msgText || '');
+  showToast('📌 Сообщение закреплено');
 }
 window.pinMessageInChat = pinMessageInChat;
 
@@ -5378,7 +5381,7 @@ socket.on('messagePinned', function(d) {
   if (ctx && d.chatType === ctx.chatType && String(d.chatId) === ctx.chatId) {
     _showPinBar(d.msgId, d.msgText);
   }
-  showToast('📌 Сообщение закреплено');
+  // Toast только для других пользователей (у инициатора уже показан)
 });
 
 // messageUnpinned — broadcast
