@@ -2390,8 +2390,15 @@ function openPM(login,nickname){
   _md.innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
-  socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
+  // Fallback: if no response in 5s, show empty state
+  var _fbLogin = login, _fbToken = _myPmToken;
+  setTimeout(function(){
+    if(currentView==='pm' && currentPrivateLogin===_fbLogin && _pmToken===_fbToken) {
+      var md=document.getElementById('messages');
+      if(md&&md.innerHTML.indexOf('Загрузка')!==-1) md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
+    }
+  }, 5000);
   // Dialog background
   currentDialogBg = null;
   document.getElementById('dialogBgBtn').style.display='block';
@@ -2437,6 +2444,7 @@ socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Ком
 
 socket.on('roomData',function(data){
   // Only render if this response matches the currently requested room
+  if(!data||!data.room) return;
   if(Number(currentRoomId) !== Number(data.room.id)) return;
   var md=document.getElementById('messages');
   currentView='room';currentRoomData=data;
@@ -2542,10 +2550,10 @@ window.closeAllModals=closeAllModals;
 socket.on('privateHistory',function(d){
   // Only render if this response matches the currently open PM chat
   if(currentView !== 'pm') return;
-  if(currentPrivateLogin !== d.otherLogin) return;
+  if(!d || currentPrivateLogin !== d.otherLogin) return;
   var md=document.getElementById('messages');
   md.innerHTML='';
-  if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
+  if(!d.messages||d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
   else d.messages.forEach(function(m){addPM(m);});
   md.scrollTop=md.scrollHeight;
 });

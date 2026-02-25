@@ -983,9 +983,11 @@ io.on('connection', (socket) => {
         const mentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
         if (mentionMatches) {
           const mentionNames = mentionMatches.map(m => m.slice(1).toLowerCase());
-          const allUsers = await pool.query('SELECT login, username FROM users WHERE login != $1 AND username IS NOT NULL', [socket.userLogin]);
+          const allUsers = await pool.query('SELECT login, username FROM users WHERE login != $1', [socket.userLogin]);
           allUsers.rows.forEach(u => {
-            if (u.username && mentionNames.includes(u.username.toLowerCase())) {
+            const matchedByUsername = u.username && mentionNames.includes(u.username.toLowerCase());
+            const matchedByLogin = mentionNames.includes(u.login.toLowerCase());
+            if (matchedByUsername || matchedByLogin) {
               const ts = findSocketByLogin(u.login);
               if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'general', chatId: 'general', msgId: msg.id, ts: msg.timestamp });
             }
@@ -1193,14 +1195,17 @@ io.on('connection', (socket) => {
       // Detect @mentions in PM text
       if (msg.text) {
         try {
-          // PM: упоминание работает только если упомянут собеседник этого ЛС
+          // PM: упоминание срабатывает только если упомянут собеседник (по username или login)
           const pmMentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
           if (pmMentionMatches) {
             const pmMentionNames = pmMentionMatches.map(m => m.slice(1).toLowerCase());
-            const recipientRes = await pool.query('SELECT login, username FROM users WHERE login=$1 AND username IS NOT NULL', [data.toLogin]);
+            const recipientRes = await pool.query('SELECT login, username FROM users WHERE login=$1', [data.toLogin]);
             if (recipientRes.rows.length) {
               const u = recipientRes.rows[0];
-              if (u.username && pmMentionNames.includes(u.username.toLowerCase())) {
+              // Check by username OR by login
+              const matchedByUsername = u.username && pmMentionNames.includes(u.username.toLowerCase());
+              const matchedByLogin = pmMentionNames.includes(u.login.toLowerCase());
+              if (matchedByUsername || matchedByLogin) {
                 const ts = findSocketByLogin(u.login);
                 if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'pm', chatId: socket.userLogin, msgId: msg.id, ts: msg.timestamp });
               }
@@ -1324,11 +1329,13 @@ io.on('connection', (socket) => {
           const roomMentionMatches = msg.text.match(/@([a-zA-Zа-яА-ЯёЁ0-9_]+)/g);
           if (roomMentionMatches) {
             const roomMentionNames = roomMentionMatches.map(m => m.slice(1).toLowerCase());
-            const roomUsers = await pool.query('SELECT u.login, u.username FROM room_members rm JOIN users u ON rm.user_login=u.login WHERE rm.room_id=$1 AND u.login != $2 AND u.username IS NOT NULL', [roomId, socket.userLogin]);
+            const roomUsers = await pool.query('SELECT u.login, u.username FROM room_members rm JOIN users u ON rm.user_login=u.login WHERE rm.room_id=$1 AND u.login != $2', [roomId, socket.userLogin]);
             const roomInfo = await pool.query('SELECT name FROM rooms WHERE id=$1', [roomId]);
             const roomName = roomInfo.rows[0] ? roomInfo.rows[0].name : 'Группа';
             roomUsers.rows.forEach(u => {
-              if (u.username && roomMentionNames.includes(u.username.toLowerCase())) {
+              const matchedByUsername = u.username && roomMentionNames.includes(u.username.toLowerCase());
+              const matchedByLogin = roomMentionNames.includes(u.login.toLowerCase());
+              if (matchedByUsername || matchedByLogin) {
                 const ts = findSocketByLogin(u.login);
                 if (ts) ts.emit('mentionReceived', { from: socket.username, text: msg.text, chatType: 'room', chatId: String(roomId), chatName: roomName, msgId: msg.id, ts: msg.timestamp });
               }
