@@ -567,68 +567,72 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
 
-  // ── REGISTER WITH EMAIL VERIFICATION ─────────────────────
+  // ── REGISTER — EMAIL ОБЯЗАТЕЛЕН ──────────────────────────
   socket.on('register', async ({ login, password, nickname, email }) => {
     if (!checkRateLimit(ip, 'register')) return socket.emit('authError', 'Слишком много регистраций с вашего IP. Подождите.');
     try {
-      if (!login || !password || !nickname) return socket.emit('authError', 'Заполни все поля');
+      if (!login || !password || !nickname || !email) return socket.emit('authError', 'Заполни все поля');
       login = sanitize(login, 50); password = sanitize(password, 200); nickname = sanitize(nickname, 50); email = sanitize(email, 200);
       login = login.trim().toLowerCase();
       nickname = nickname.trim();
-      email = (email || '').trim().toLowerCase();
+      email = email.trim().toLowerCase();
 
-      // Validate login
+      // Валидация
       if (!/^[a-z0-9_]{3,30}$/.test(login)) return socket.emit('authError', 'Логин: 3-30 символов, только a-z, 0-9, _');
       if (password.length < 6) return socket.emit('authError', 'Пароль минимум 6 символов');
       if (nickname.length < 2 || nickname.length > 30) return socket.emit('authError', 'Ник 2-30 символов');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return socket.emit('authError', 'Неверный формат email');
 
       const exists = await pool.query('SELECT id FROM users WHERE login=$1', [login]);
       if (exists.rows.length > 0) return socket.emit('authError', 'Этот логин уже занят');
       const nickExists = await pool.query('SELECT id FROM users WHERE LOWER(nickname)=LOWER($1)', [nickname]);
       if (nickExists.rows.length > 0) return socket.emit('authError', 'Этот ник уже занят');
+      const emailExists = await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1)', [email]);
+      if (emailExists.rows.length > 0) return socket.emit('authError', 'Этот email уже зарегистрирован');
 
       const hash = await bcrypt.hash(password, 10);
 
-      // If email provided and mailer configured → send verification code
-      if (email && EMAIL_ENABLED) {
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return socket.emit('authError', 'Неверный формат email');
-        const emailExists = await pool.query('SELECT id FROM users WHERE email=$1', [email]);
-        if (emailExists.rows.length > 0) return socket.emit('authError', 'Email уже используется');
-
-        // Clean old pending
-        await pool.query('DELETE FROM pending_registrations WHERE login=$1 OR email=$2', [login, email]);
-
-        const code = String(Math.floor(100000 + Math.random() * 900000)); // 6-digit
-        const now = Date.now();
-        const expires = now + 15 * 60000; // 15 min
-        await pool.query('INSERT INTO pending_registrations (login,nickname,email,password_hash,code,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-          [login, nickname, email, hash, code, now, expires]);
-
-        const html = `<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;">
-          <h2 style="color:#2ea9df;">MyChat — Подтверждение регистрации</h2>
-          <p>Привет, <b>\${nickname}</b>! Для завершения регистрации введи этот код:</p>
-          <div style="font-size:36px;font-weight:bold;letter-spacing:8px;text-align:center;padding:20px;background:#f0f4f8;border-radius:12px;margin:20px 0;">\${code}</div>
-          <p style="color:#666;">Код действителен 15 минут. Если ты не регистрировался — проигнорируй это письмо.</p>
-        </div>`;
-
-        const sent = await sendEmail(email, 'MyChat — Код подтверждения: ' + code, html);
-        if (!sent) return socket.emit('authError', 'Не удалось отправить email. Попробуй без почты.');
-
-        socket.emit('emailVerificationRequired', { login, email });
+      if (!EMAIL_ENABLED) {
+        // Gmail не настроен — разрешаем регистрацию без подтверждения (только для dev)
+        const role = login === ADMIN_LOGIN ? 'admin' : 'user';
+        const token = generateToken();
+        await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,false,$7)',
+          [login, hash, nickname, role, token, email, 'password']);
+        socket.username = nickname; socket.userLogin = login; socket.userRole = role;
+        onlineUsers.set(socket.id, { nickname, login, ip });
+        socketUsers.set(socket.id, socket);
+        socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
+        sendOnlineToAll();
+        await addLog('register', nickname, 'Registered (email not configured)', ip);
         return;
       }
 
-      // Registration without email (or email disabled)
-      const role = login === ADMIN_LOGIN ? 'admin' : 'user';
-      const token = generateToken();
-      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,$7,$8)',
-        [login, hash, nickname, role, token, email || null, email ? false : null, 'password']);
-      socket.username = nickname; socket.userLogin = login; socket.userRole = role;
-      onlineUsers.set(socket.id, { nickname, login, ip });
-      socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
-      sendOnlineToAll();
-      await addLog('register', nickname, 'Registered', ip);
+      // Отправляем код подтверждения на email
+      await pool.query('DELETE FROM pending_registrations WHERE login=$1 OR LOWER(email)=LOWER($2)', [login, email]);
+
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const now = Date.now();
+      const expires = now + 15 * 60000; // 15 минут
+      await pool.query('INSERT INTO pending_registrations (login,nickname,email,password_hash,code,created_at,expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+        [login, nickname, email, hash, code, now, expires]);
+
+      const html = `<div style="font-family:Arial,sans-serif;max-width:460px;margin:0 auto;padding:20px;">
+        <div style="text-align:center;margin-bottom:24px;">
+          <div style="font-size:40px;">💬</div>
+          <h2 style="color:#2ea9df;margin:8px 0;">MyChat</h2>
+        </div>
+        <p style="font-size:16px;">Привет, <b>\${nickname}</b>! Для завершения регистрации введи этот код:</p>
+        <div style="font-size:40px;font-weight:bold;letter-spacing:10px;text-align:center;padding:24px;background:#f0f4f8;border-radius:14px;margin:20px 0;color:#1a1a2e;">\${code}</div>
+        <p style="color:#888;font-size:13px;text-align:center;">Код действителен 15 минут.<br>Если ты не регистрировался — проигнори это письмо.</p>
+      </div>`;
+
+      const sent = await sendEmail(email, 'MyChat — код подтверждения: ' + code, html);
+      if (!sent) {
+        await pool.query('DELETE FROM pending_registrations WHERE login=$1', [login]);
+        return socket.emit('authError', 'Не удалось отправить письмо. Проверь правильность email.');
+      }
+
+      socket.emit('emailVerificationRequired', { login, email });
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
   });
 
