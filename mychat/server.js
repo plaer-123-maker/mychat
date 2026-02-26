@@ -74,8 +74,8 @@ if (ENCRYPT_ENABLED) {
   console.log('[CRYPTO] Message encryption DISABLED (set MSG_SECRET env to enable)');
 }
 
-let nodemailer = null;
-try { nodemailer = require('nodemailer'); } catch(e) { console.log('nodemailer not installed — email disabled'); }
+let Resend = null;
+try { Resend = require('resend').Resend; } catch(e) { console.log('resend not installed — email disabled'); }
 let OAuth2Client = null;
 try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { console.log('google-auth-library not installed — Google auth disabled'); }
 
@@ -141,44 +141,34 @@ const pool = new Pool({
 const ADMIN_LOGIN = 'pekka';
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 
-// ── EMAIL CONFIG ──────────────────────────────────────────
-// Set these env vars in Railway: EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS, EMAIL_FROM
-const EMAIL_ENABLED = !!(process.env.EMAIL_USER && process.env.EMAIL_PASS);
-let mailer = null;
-if (nodemailer) {
-  if (EMAIL_ENABLED) {
-    const transportConfig = {
-      host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-      port: parseInt(process.env.EMAIL_PORT || '587'),
-      secure: process.env.EMAIL_PORT === '465',
-      auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-    };
-    console.log('[EMAIL] Configuring SMTP:', transportConfig.host + ':' + transportConfig.port, 'user:', process.env.EMAIL_USER);
-    mailer = nodemailer.createTransport(transportConfig);
-    // Verify connection on startup
-    mailer.verify((err) => {
-      if (err) {
-        console.error('[EMAIL] SMTP connection FAILED:', err.message);
-        console.error('[EMAIL] Check EMAIL_HOST, EMAIL_PORT, EMAIL_USER, EMAIL_PASS in Railway variables');
-      } else {
-        console.log('[EMAIL] SMTP connection OK — ready to send emails');
-      }
-    });
-  } else {
-    console.warn('[EMAIL] EMAIL_USER or EMAIL_PASS not set — email sending disabled!');
-    console.warn('[EMAIL] Registration will be BLOCKED until email is configured.');
-  }
+// ── EMAIL CONFIG (Resend) ─────────────────────────────────
+// Set these env vars in Railway: RESEND_API_KEY, EMAIL_FROM
+const EMAIL_ENABLED = !!(process.env.RESEND_API_KEY);
+let resendClient = null;
+if (Resend && EMAIL_ENABLED) {
+  resendClient = new Resend(process.env.RESEND_API_KEY);
+  console.log('[EMAIL] Resend client initialized, from:', process.env.EMAIL_FROM);
 } else {
-  console.warn('[EMAIL] nodemailer not installed — run: npm install nodemailer');
+  console.warn('[EMAIL] RESEND_API_KEY not set — email sending disabled!');
+  console.warn('[EMAIL] Registration will be BLOCKED until email is configured.');
 }
 async function sendEmail(to, subject, html) {
-  if (!mailer) {
-    console.error('[EMAIL] Cannot send email: mailer not configured');
+  if (!resendClient) {
+    console.error('[EMAIL] Cannot send email: Resend not configured');
     return false;
   }
   try {
-    const info = await mailer.sendMail({ from: process.env.EMAIL_FROM || process.env.EMAIL_USER, to, subject, html });
-    console.log('[EMAIL] Sent to', to, '| messageId:', info.messageId);
+    const { data, error } = await resendClient.emails.send({
+      from: process.env.EMAIL_FROM || 'noreply@kp2025.ru',
+      to,
+      subject,
+      html
+    });
+    if (error) {
+      console.error('[EMAIL] Resend error to', to, ':', error.message);
+      return false;
+    }
+    console.log('[EMAIL] Sent to', to, '| id:', data.id);
     return true;
   } catch(e) {
     console.error('[EMAIL] Send error to', to, ':', e.message);
@@ -617,7 +607,7 @@ io.on('connection', (socket) => {
 
       const hash = await bcrypt.hash(password, 10);
 
-      if (!EMAIL_ENABLED || !mailer) {
+      if (!EMAIL_ENABLED || !resendClient) {
         return socket.emit('authError', 'Сервер временно не может отправлять письма. Обратитесь к администратору.');
       }
 
