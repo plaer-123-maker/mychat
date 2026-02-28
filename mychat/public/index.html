@@ -1417,41 +1417,7 @@ function closeEmailChangeModal() {
 }
 window.closeEmailChangeModal = closeEmailChangeModal;
 
-socket.on('emailChangeCodeSent', function(data) {
-  document.getElementById('emailChangeMasked').textContent = data.maskedEmail;
-  document.getElementById('emailChangeStep1').style.display='none';
-  document.getElementById('emailChangeStep2').style.display='';
-  document.getElementById('emailChangeError').textContent='';
-});
-
-socket.on('currentEmailVerified', function() {
-  document.getElementById('emailChangeStep2').style.display='none';
-  document.getElementById('emailChangeStep3').style.display='';
-  document.getElementById('emailChangeError').textContent='';
-});
-
-socket.on('newEmailCodeSent', function(data) {
-  document.getElementById('emailChangeStep3').style.display='none';
-  document.getElementById('emailChangeStep4Label').textContent = 'Код отправлен на ' + data.newEmail;
-  document.getElementById('emailChangeStep4').style.display='';
-  document.getElementById('emailChangeError').textContent='';
-});
-
-socket.on('emailChanged', function(data) {
-  document.getElementById('emailChangeStep4') && (document.getElementById('emailChangeStep4').style.display='none');
-  document.getElementById('emailChangeStepSuccess').style.display='';
-  document.getElementById('emailChangeSuccessAddr').textContent = data.newEmail;
-  document.getElementById('settingsEmailDesc').textContent = data.newEmail;
-});
-
-socket.on('emailChangeError', function(msg) {
-  document.getElementById('emailChangeError').textContent = msg;
-});
-
-socket.on('myEmail', function(data) {
-  var el = document.getElementById('settingsEmailDesc');
-  if (el) el.textContent = data.email || 'Не привязана';
-});
+// email change socket listeners registered after socket init below
 
 function submitCurrentEmailCode() {
   var code = document.getElementById('emailChangeCode1').value.trim();
@@ -1751,6 +1717,41 @@ replyTo=null,myVipUntil=0,myVipEmoji=null,myVerified=false,
 editingMsgId=null,editingMsgType=null,
 pinnedChats=[],vipEmojiCache={},verifiedCache={},lastSeenCache={},hideOnlineSelf=false,
 mutedChats=[];
+
+// ── EMAIL CHANGE LISTENERS ────────────────────────────────
+socket.on('emailChangeCodeSent', function(data) {
+  document.getElementById('emailChangeMasked').textContent = data.maskedEmail;
+  document.getElementById('emailChangeStep1').style.display='none';
+  document.getElementById('emailChangeStep2').style.display='';
+  document.getElementById('emailChangeError').textContent='';
+});
+socket.on('currentEmailVerified', function() {
+  document.getElementById('emailChangeStep2').style.display='none';
+  document.getElementById('emailChangeStep3').style.display='';
+  document.getElementById('emailChangeError').textContent='';
+});
+socket.on('newEmailCodeSent', function(data) {
+  document.getElementById('emailChangeStep3').style.display='none';
+  document.getElementById('emailChangeStep4Label').textContent = 'Код отправлен на ' + data.newEmail;
+  document.getElementById('emailChangeStep4').style.display='';
+  document.getElementById('emailChangeError').textContent='';
+});
+socket.on('emailChanged', function(data) {
+  var s4 = document.getElementById('emailChangeStep4');
+  if (s4) s4.style.display='none';
+  document.getElementById('emailChangeStepSuccess').style.display='';
+  document.getElementById('emailChangeSuccessAddr').textContent = data.newEmail;
+  var desc = document.getElementById('settingsEmailDesc');
+  if (desc) desc.textContent = data.newEmail;
+});
+socket.on('emailChangeError', function(msg) {
+  document.getElementById('emailChangeError').textContent = msg;
+});
+socket.on('myEmail', function(data) {
+  var el = document.getElementById('settingsEmailDesc');
+  if (el) el.textContent = data.email || 'Не привязана';
+});
+
 
 /* ── NICK + VIP EMOJI + VERIFIED HELPER ── */
 function getNickWithEmoji(login, nickname, inlineEmoji) {

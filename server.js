@@ -84,7 +84,7 @@ const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
 
 app.use(express.static('public'));
-app.use(express.json({ limit: '2mb' })); // limit JSON body size
+app.use(express.json({ limit: '1mb' })); // limit JSON body size
 
 // ── HTTP Security Headers ──────────────────────────────────
 app.use((req, res, next) => {
@@ -93,10 +93,12 @@ app.use((req, res, next) => {
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=*, microphone=*, geolocation=*');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data: wss: https:; img-src 'self' data: blob: https:;");
   next();
 });
 
-// ── HTTP Rate limiter (login/register endpoints if ever exposed via HTTP) ──
+// ── HTTP Rate limiter ──────────────────────────────────────
 const httpHits = new Map(); // ip -> { count, resetAt }
 app.use((req, res, next) => {
   if (req.path === '/config' || req.path.startsWith('/socket.io')) return next();
@@ -105,7 +107,7 @@ app.use((req, res, next) => {
   let h = httpHits.get(ip);
   if (!h || now > h.resetAt) { h = { count: 0, resetAt: now + 60_000 }; httpHits.set(ip, h); }
   h.count++;
-  if (h.count > 300) { // 300 HTTP requests per minute per IP
+  if (h.count > 150) { // 150 HTTP requests per minute per IP
     console.warn('[SECURITY] HTTP flood from', ip);
     return res.status(429).json({ error: 'Too Many Requests' });
   }
@@ -479,10 +481,12 @@ function generateToken() {
 // --- Rate limiter (in-memory, per IP) ---
 const rateLimitMap = new Map(); // ip -> { events: [timestamps], blocked_until }
 const RATE_RULES = {
-  login:    { max: 5,  windowMs: 60_000,  blockMs: 300_000 },  // 5 попыток / мин → бан 5 мин
-  register: { max: 3,  windowMs: 60_000,  blockMs: 600_000 },  // 3 регистрации / мин → бан 10 мин
-  message:  { max: 30, windowMs: 10_000,  blockMs: 30_000  },  // 30 сообщений / 10с → бан 30с
-  socket:   { max: 100,windowMs: 10_000,  blockMs: 60_000  },  // 100 событий / 10с → бан 1 мин
+  login:      { max: 5,   windowMs: 60_000,   blockMs: 600_000  },  // 5 попыток / мин → бан 10 мин
+  register:   { max: 3,   windowMs: 60_000,   blockMs: 1800_000 },  // 3 регистрации / мин → бан 30 мин
+  message:    { max: 20,  windowMs: 10_000,   blockMs: 60_000   },  // 20 сообщений / 10с → бан 1 мин
+  socket:     { max: 60,  windowMs: 10_000,   blockMs: 120_000  },  // 60 событий / 10с → бан 2 мин
+  emailCode:  { max: 3,   windowMs: 300_000,  blockMs: 1800_000 },  // 3 попытки / 5 мин → бан 30 мин
+  emailChange:{ max: 3,   windowMs: 3600_000, blockMs: 3600_000 },  // 3 смены в час → бан 1 час
 };
 
 function checkRateLimit(ip, action) {
@@ -605,7 +609,7 @@ io.on('connection', (socket) => {
       const emailExists = await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1)', [email]);
       if (emailExists.rows.length > 0) return socket.emit('authError', 'Этот email уже зарегистрирован');
 
-      const hash = await bcrypt.hash(password, 10);
+      const hash = await bcrypt.hash(password, 12);
 
       if (!EMAIL_ENABLED || !resendClient) {
         return socket.emit('authError', 'Сервер временно не может отправлять письма. Обратитесь к администратору.');
@@ -684,6 +688,7 @@ io.on('connection', (socket) => {
   // ── CHANGE EMAIL: Step 1 — send code to current email ──
   socket.on('requestEmailChange', async () => {
     if (!socket.userLogin) return socket.emit('emailChangeError', 'Не авторизован');
+    if (!checkRateLimit(getIP(socket), 'emailChange')) return socket.emit('emailChangeError', 'Слишком много попыток. Подождите час.');
     try {
       const res = await pool.query('SELECT email FROM users WHERE login=$1', [socket.userLogin]);
       if (!res.rows.length) return socket.emit('emailChangeError', 'Пользователь не найден');
@@ -1125,7 +1130,7 @@ io.on('connection', (socket) => {
       if (res.rows.length === 0) return socket.emit('passwordResult', 'Ошибка');
       const valid = await bcrypt.compare(oldPassword, res.rows[0].password);
       if (!valid) return socket.emit('passwordResult', 'Неверный старый пароль');
-      const hash = await bcrypt.hash(newPassword, 10);
+      const hash = await bcrypt.hash(newPassword, 12);
       await pool.query('UPDATE users SET password=$1 WHERE login=$2', [hash, socket.userLogin]);
       socket.emit('passwordResult', 'ok');
     } catch(e) { socket.emit('passwordResult', 'Ошибка'); }
