@@ -642,6 +642,27 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   .hdr-btn{width:30px;height:30px;font-size:15px;}
 }
 
+/* ── MOBILE TOUCH IMPROVEMENTS ────────────────────────── */
+@media(max-width:640px){
+  /* Bigger touch targets */
+  .modal-btns button{min-height:48px;font-size:15px;border-radius:14px;}
+  .modal-box input,.modal-box select{min-height:48px;font-size:16px!important;}
+  .settings-row{min-height:60px;padding:12px 16px;}
+  .sr-icon{width:42px;height:42px;font-size:20px;}
+  /* Modal full screen on mobile */
+  .modal-box{width:100%!important;max-width:100%!important;border-radius:20px 20px 0 0!important;position:fixed!important;bottom:0!important;left:0!important;top:auto!important;transform:none!important;max-height:90vh;overflow-y:auto;}
+  .modal-overlay{align-items:flex-end!important;}
+  /* Emoji panel bigger on mobile */
+  #emojiPanel{width:100vw!important;left:0!important;right:0!important;border-radius:20px 20px 0 0;bottom:0;position:fixed!important;}
+  #emojiGrid{max-height:250px!important;}
+  /* Chat list items bigger */
+  .chat-item{min-height:64px;padding:10px 12px;}
+  /* Prevent zoom on input focus */
+  input,textarea,select{font-size:16px!important;}
+  /* Bottom nav safe area */
+  .input-area{padding-bottom:max(8px, env(safe-area-inset-bottom));}
+}
+
 
 /* ── BLOCK / DELETE HISTORY ── */
 .action-sheet-overlay{position:fixed;inset:0;z-index:8000;background:rgba(0,0,0,0.6);display:none;align-items:flex-end;justify-content:center;}
@@ -994,6 +1015,53 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
     </div>
   </div>
 </div>
+
+<!-- ATTACH EMAIL MODAL -->
+<div class="modal-overlay" id="attachEmailModal">
+  <div class="modal-box">
+    <h3>📧 Привяжи почту</h3>
+    <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px">Привяжи email для восстановления доступа и безопасности аккаунта.</p>
+    <div class="modal-error" id="attachEmailError"></div>
+    <div id="attachEmailStep1">
+      <input type="email" id="attachEmailInput" placeholder="Твой email">
+      <div class="modal-btns">
+        <button class="cancel" onclick="dismissAttachEmail()">Позже</button>
+        <button class="save" onclick="submitAttachEmail()">Отправить код</button>
+      </div>
+    </div>
+    <div id="attachEmailStep2" style="display:none">
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px">Код отправлен на вашу почту:</p>
+      <input type="text" id="attachEmailCode" placeholder="Код из письма" maxlength="6" style="letter-spacing:4px;text-align:center;font-size:20px">
+      <div class="modal-btns">
+        <button class="cancel" onclick="dismissAttachEmail()">Позже</button>
+        <button class="save" onclick="submitAttachEmailCode()">Подтвердить</button>
+      </div>
+    </div>
+    <div id="attachEmailStepSuccess" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:48px">✅</div>
+      <p style="color:var(--text-secondary)">Почта успешно привязана!</p>
+      <button class="save" onclick="closeAttachEmailModal()" style="margin-top:12px">Готово</button>
+    </div>
+  </div>
+</div>
+
+<!-- PHOTO STICKER MODAL -->
+<div class="modal-overlay" id="photoStickerModal">
+  <div class="modal-box">
+    <h3>🖼️ Стикер из фото</h3>
+    <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Выбери фото — оно станет стикером в чате</p>
+    <div style="text-align:center;margin-bottom:12px">
+      <div id="stickerPreview" style="width:150px;height:150px;border-radius:20px;background:var(--bg-input);border:2px dashed var(--border);display:flex;align-items:center;justify-content:center;margin:0 auto 12px;overflow:hidden;font-size:40px;">📷</div>
+      <input type="file" id="stickerFileInput" accept="image/*" style="display:none" onchange="previewSticker(this)">
+      <button class="save" onclick="document.getElementById('stickerFileInput').click()" style="margin-bottom:8px">Выбрать фото</button>
+    </div>
+    <div class="modal-btns">
+      <button class="cancel" onclick="closePhotoStickerModal()">Отмена</button>
+      <button class="save" id="sendStickerBtn" onclick="sendPhotoSticker()" disabled style="opacity:0.5">Отправить</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="createRoomModal">
   <div class="modal-box">
     <h3>✨ Создать</h3>
@@ -1750,6 +1818,11 @@ socket.on('emailChangeError', function(msg) {
 socket.on('myEmail', function(data) {
   var el = document.getElementById('settingsEmailDesc');
   if (el) el.textContent = data.email || 'Не привязана';
+  // Show attach email modal if no email linked (only when app is active)
+  if (!data.email && document.getElementById('appContainer').classList.contains('active')) {
+    var alreadyShown = localStorage.getItem('attachEmailDismissed_' + myLogin);
+    if (!alreadyShown) showAttachEmailModal();
+  }
 });
 
 
@@ -2046,18 +2119,16 @@ socket.on('authSuccess',function(d){
   document.getElementById('authOverlay').classList.add('hidden');
   document.getElementById('appContainer').classList.add('active');
   if(myRole==='admin'||myRole==='moderator')document.getElementById('adminPanelBtn').style.display='flex';
-  // apply saved background after login
   if(customBgData) applyBackground('custom', customBgData);
   else if(currentBgId !== 'none') applyBackground(currentBgId, null);
-  // fetch pinned chats
   socket.emit('getPinnedChats');
   socket.emit('getMutedChats');
-  // init notifications
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
   switchToGeneral();
-  // Refresh chats on login
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
+  // Check if email is attached
+  socket.emit('getMyEmail');
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');
@@ -5105,6 +5176,7 @@ socket.on('authSuccess', function() {
     <button onclick="showEmojiTab('emoji')" id="tabEmoji" style="flex:1;padding:11px 6px;border:none;background:transparent;color:var(--accent);font-size:13px;cursor:pointer;border-bottom:2px solid var(--accent);font-weight:600;">😊 Эмодзи</button>
     <button onclick="showEmojiTab('sticker')" id="tabSticker" style="flex:1;padding:11px 6px;border:none;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:600;">🎭 Стикеры</button>
     <button onclick="showEmojiTab('gif')" id="tabGif" style="flex:1;padding:11px 6px;border:none;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:600;">🎬 GIF</button>
+    <button onclick="openPhotoStickerModal()" style="flex:1;padding:11px 6px;border:none;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:600;">🖼️ Фото</button>
   </div>
   <div id="gifSearchWrap" style="display:none;padding:8px 10px 0;">
     <input id="gifSearchInput" placeholder="Поиск GIF..." style="width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-input);color:var(--text-primary);outline:none;font-size:13px;box-sizing:border-box;" oninput="searchGifs(this.value)">
@@ -6119,10 +6191,8 @@ window.addEventListener('load', function(){
 });
 
 </script>
+<script>
 
-// ============================================================
-// GIF SEARCH via Tenor API
-// ============================================================
 var gifSearchTimer = null;
 
 function searchGifs(query) {
@@ -6134,9 +6204,158 @@ function searchGifs(query) {
       return;
     }
     grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">⏳ Ищем...</div>';
-    // Using Tenor API v2 with demo key (replace LIVDSRZULELA with your key from tenor.com)
-    var apiKey = 'AIzaSyAyimkuYQYF_FXVALexPfTwJhCGFR9dn9s'; // Tenor demo key
-    var url = 'https://tenor.googleapis.com/v2/search?q=' + encodeURIComponent(query) + '&key=' + apiKey + '&limit=20&contentfilter=medium&media_filter=gif,tinygif';
+    // Tenor API v2
+    var apiKey = 'AIzaSyAyimkuYQYF_FXVALexPfTwJhCGFR9dn9s';
+    var url = 'https://tenor.googleapis.com/v2/search?q=' + encodeURIComponent(query.trim()) + '&key=' + apiKey + '&limit=20&contentfilter=medium&media_filter=tinygif,gif&locale=ru_RU';
+    fetch(url)
+      .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function(data) {
+        if (!data.results || !data.results.length) {
+          grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';
+          return;
+        }
+        var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
+        data.results.forEach(function(gif) {
+          var thumb = (gif.media_formats && gif.media_formats.tinygif) ? gif.media_formats.tinygif.url : null;
+          var full = (gif.media_formats && gif.media_formats.gif) ? gif.media_formats.gif.url : thumb;
+          if (!thumb && !full) return;
+          if (!thumb) thumb = full;
+          if (!full) full = thumb;
+          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;transition:transform 0.15s,opacity 0.15s;opacity:0.9;" onclick="sendGif(this.dataset.full)" onmouseover="this.style.transform=\'scale(1.04)\';this.style.opacity=\'1\'" onmouseout="this.style.transform=\'scale(1)\';this.style.opacity=\'0.9\'" onerror="this.style.display=\'none\'">';
+        });
+        html += '</div>';
+        grid.innerHTML = html;
+      })
+      .catch(function(e) {
+        // Fallback to Giphy if Tenor fails
+        var giphyKey = 'dc6zaTOxFJmzC'; // public beta key
+        var gurl = 'https://api.giphy.com/v1/gifs/search?api_key=' + giphyKey + '&q=' + encodeURIComponent(query.trim()) + '&limit=20&rating=pg-13';
+        fetch(gurl).then(function(r){return r.json();}).then(function(data){
+          if(!data.data||!data.data.length){grid.innerHTML='<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';return;}
+          var html='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
+          data.data.forEach(function(gif){
+            var thumb=gif.images&&gif.images.fixed_width_small?gif.images.fixed_width_small.url:null;
+            var full=gif.images&&gif.images.original?gif.images.original.url:thumb;
+            if(!thumb)return;
+            html+='<img src="'+thumb+'" data-full="'+full+'" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0.9;" onclick="sendGif(this.dataset.full)" onerror="this.style.display=\'none\'">';
+          });
+          html+='</div>';
+          grid.innerHTML=html;
+        }).catch(function(){grid.innerHTML='<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">Ошибка загрузки GIF 😔</div>';});
+        console.error('Tenor GIF search error:', e);
+      });
+  }, 400);
+}
+
+// ── PHOTO STICKER ─────────────────────────────────────────
+var photoStickerData = null;
+
+function openPhotoStickerModal() {
+  photoStickerData = null;
+  document.getElementById('stickerPreview').innerHTML = '📷';
+  document.getElementById('stickerFileInput').value = '';
+  document.getElementById('sendStickerBtn').disabled = true;
+  document.getElementById('sendStickerBtn').style.opacity = '0.5';
+  document.getElementById('photoStickerModal').classList.add('show');
+  document.getElementById('emojiPanel').style.display = 'none';
+  emojiPanelOpen = false;
+}
+window.openPhotoStickerModal = openPhotoStickerModal;
+
+function closePhotoStickerModal() {
+  document.getElementById('photoStickerModal').classList.remove('show');
+}
+window.closePhotoStickerModal = closePhotoStickerModal;
+
+function previewSticker(input) {
+  var file = input.files[0];
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) { alert('Фото слишком большое (макс 3МБ)'); return; }
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    photoStickerData = e.target.result;
+    var img = document.createElement('img');
+    img.src = photoStickerData;
+    img.style = 'width:100%;height:100%;object-fit:cover;border-radius:18px;';
+    document.getElementById('stickerPreview').innerHTML = '';
+    document.getElementById('stickerPreview').appendChild(img);
+    document.getElementById('sendStickerBtn').disabled = false;
+    document.getElementById('sendStickerBtn').style.opacity = '1';
+  };
+  reader.readAsDataURL(file);
+}
+window.previewSticker = previewSticker;
+
+function sendPhotoSticker() {
+  if (!photoStickerData) return;
+  if (currentView === 'pm' && currentPrivateLogin) {
+    socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: photoStickerData, type: 'image' });
+  } else if (currentView === 'room' && currentRoomId) {
+    socket.emit('roomMessage', { roomId: currentRoomId, image: photoStickerData, type: 'image' });
+  } else if (currentView === 'general') {
+    socket.emit('chatMessage', { image: photoStickerData, type: 'image' });
+  }
+  closePhotoStickerModal();
+}
+window.sendPhotoSticker = sendPhotoSticker;
+
+// ── ATTACH EMAIL ──────────────────────────────────────────
+function showAttachEmailModal() {
+  document.getElementById('attachEmailStep1').style.display = '';
+  document.getElementById('attachEmailStep2').style.display = 'none';
+  document.getElementById('attachEmailStepSuccess').style.display = 'none';
+  document.getElementById('attachEmailError').textContent = '';
+  document.getElementById('attachEmailInput').value = '';
+  document.getElementById('attachEmailCode').value = '';
+  document.getElementById('attachEmailModal').classList.add('show');
+}
+window.showAttachEmailModal = showAttachEmailModal;
+
+function closeAttachEmailModal() {
+  document.getElementById('attachEmailModal').classList.remove('show');
+}
+window.closeAttachEmailModal = closeAttachEmailModal;
+
+function dismissAttachEmail() {
+  localStorage.setItem('attachEmailDismissed_' + myLogin, '1');
+  closeAttachEmailModal();
+}
+window.dismissAttachEmail = dismissAttachEmail;
+
+function submitAttachEmail() {
+  var email = document.getElementById('attachEmailInput').value.trim();
+  if (!email) return;
+  socket.emit('requestAttachEmail', { email: email });
+}
+window.submitAttachEmail = submitAttachEmail;
+
+function submitAttachEmailCode() {
+  var code = document.getElementById('attachEmailCode').value.trim();
+  if (!code) return;
+  socket.emit('confirmAttachEmail', { code: code });
+}
+window.submitAttachEmailCode = submitAttachEmailCode;
+
+socket.on('attachEmailCodeSent', function(data) {
+  document.getElementById('attachEmailStep1').style.display = 'none';
+  document.getElementById('attachEmailStep2').style.display = '';
+  document.getElementById('attachEmailError').textContent = '';
+});
+
+socket.on('emailAttached', function(data) {
+  document.getElementById('attachEmailStep2').style.display = 'none';
+  document.getElementById('attachEmailStepSuccess').style.display = '';
+  var desc = document.getElementById('settingsEmailDesc');
+  if (desc) desc.textContent = data.email;
+});
+
+socket.on('attachEmailError', function(msg) {
+  document.getElementById('attachEmailError').textContent = msg;
+});
+
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(data) {

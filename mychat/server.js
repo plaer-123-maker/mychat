@@ -768,7 +768,45 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('myEmail', { email: null }); }
   });
 
-  // ── TELEGRAM OAUTH ──────────────────────────────────────
+  // ── ATTACH EMAIL (for accounts without email) ──────────
+  socket.on('requestAttachEmail', async ({ email }) => {
+    if (!socket.userLogin) return socket.emit('attachEmailError', 'Не авторизован');
+    if (!checkRateLimit(getIP(socket), 'emailChange')) return socket.emit('attachEmailError', 'Слишком много попыток. Подождите.');
+    try {
+      email = (email || '').trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return socket.emit('attachEmailError', 'Неверный формат email');
+      const existing = await pool.query('SELECT email FROM users WHERE login=$1', [socket.userLogin]);
+      if (existing.rows[0]?.email) return socket.emit('attachEmailError', 'Email уже привязан');
+      const taken = await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1)', [email]);
+      if (taken.rows.length) return socket.emit('attachEmailError', 'Этот email уже используется');
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expires = Date.now() + 10 * 60 * 1000;
+      pendingEmailVerifications.set(socket.userLogin + '_attach', { code, expires, email });
+      const html = `<div style="font-family:sans-serif;max-width:400px;margin:auto;padding:32px;background:#18181b;border-radius:16px;color:#fff">
+        <h2 style="color:#2ea9df">MyChat — Привязка почты</h2>
+        <p>Введите этот код для подтверждения вашей почты.</p>
+        <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#2ea9df;text-align:center;margin:24px 0">${code}</div>
+        <p style="color:#999">Код действует 10 минут.</p>
+      </div>`;
+      const sent = await sendEmail(email, 'MyChat — код подтверждения: ' + code, html);
+      if (sent) socket.emit('attachEmailCodeSent', { email });
+      else socket.emit('attachEmailError', 'Не удалось отправить письмо');
+    } catch(e) { console.error(e); socket.emit('attachEmailError', 'Ошибка сервера'); }
+  });
+
+  socket.on('confirmAttachEmail', async ({ code }) => {
+    if (!socket.userLogin) return socket.emit('attachEmailError', 'Не авторизован');
+    const key = socket.userLogin + '_attach';
+    const pending = pendingEmailVerifications.get(key);
+    if (!pending) return socket.emit('attachEmailError', 'Код не найден. Запросите снова');
+    if (Date.now() > pending.expires) { pendingEmailVerifications.delete(key); return socket.emit('attachEmailError', 'Код истёк'); }
+    if (pending.code !== code.trim()) return socket.emit('attachEmailError', 'Неверный код');
+    await pool.query('UPDATE users SET email=$1, email_verified=true WHERE login=$2', [pending.email, socket.userLogin]);
+    pendingEmailVerifications.delete(key);
+    socket.emit('emailAttached', { email: pending.email });
+  });
+
+
   socket.on('telegramAuth', async (tgData) => {
     if (!TELEGRAM_BOT_TOKEN) return socket.emit('authError', 'Telegram авторизация не настроена');
     try {
