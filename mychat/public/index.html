@@ -967,6 +967,33 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
     <div class="modal-btns"><button class="cancel" id="passCancel">Отмена</button><button class="save" id="passSave">Сохранить</button></div>
   </div>
 </div>
+<div class="modal-overlay" id="emailChangeModal">
+  <div class="modal-box">
+    <h3>📧 Смена почты</h3>
+    <div class="modal-error" id="emailChangeError"></div>
+    <div id="emailChangeStep1" style="text-align:center;padding:12px 0;color:var(--text-secondary)">Отправляем код на вашу текущую почту...</div>
+    <div id="emailChangeStep2" style="display:none">
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px">Код отправлен на <b id="emailChangeMasked"></b>. Введите его:</p>
+      <input type="text" id="emailChangeCode1" placeholder="Код из письма" maxlength="6" style="letter-spacing:4px;text-align:center;font-size:20px">
+      <div class="modal-btns"><button class="cancel" onclick="closeEmailChangeModal()">Отмена</button><button class="save" onclick="submitCurrentEmailCode()">Подтвердить</button></div>
+    </div>
+    <div id="emailChangeStep3" style="display:none">
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px">Введите новый email адрес:</p>
+      <input type="email" id="emailChangeNewEmail" placeholder="Новый email">
+      <div class="modal-btns"><button class="cancel" onclick="closeEmailChangeModal()">Отмена</button><button class="save" onclick="submitNewEmail()">Отправить код</button></div>
+    </div>
+    <div id="emailChangeStep4" style="display:none">
+      <p style="color:var(--text-secondary);font-size:14px;margin-bottom:12px" id="emailChangeStep4Label">Код отправлен на новый email. Введите его:</p>
+      <input type="text" id="emailChangeCode2" placeholder="Код из письма" maxlength="6" style="letter-spacing:4px;text-align:center;font-size:20px">
+      <div class="modal-btns"><button class="cancel" onclick="closeEmailChangeModal()">Отмена</button><button class="save" onclick="submitNewEmailCode()">Сохранить</button></div>
+    </div>
+    <div id="emailChangeStepSuccess" style="display:none;text-align:center;padding:16px 0">
+      <div style="font-size:48px">✅</div>
+      <p style="color:var(--text-secondary)">Почта успешно изменена на<br><b id="emailChangeSuccessAddr"></b></p>
+      <button class="save" onclick="closeEmailChangeModal()" style="margin-top:12px">Готово</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="createRoomModal">
   <div class="modal-box">
     <h3>✨ Создать</h3>
@@ -1254,6 +1281,7 @@ applyTheme(currentThemeKey);
 function openSettings() {
   renderSettingsMain();
   document.getElementById('settingsOverlay').classList.add('show');
+  socket.emit('getMyEmail');
 }
 function closeSettings() {
   document.getElementById('settingsOverlay').classList.remove('show');
@@ -1290,6 +1318,11 @@ function renderSettingsMain() {
     <div class="settings-row" onclick="openUsernameSettings()">
       <div class="sr-icon" style="background:rgba(52,199,89,0.15)">🔖</div>
       <div class="sr-info"><div class="sr-label">Юзернейм</div><div class="sr-desc">${myUsername?'@'+myUsername:'Не установлен — по нему тебя найдут в поиске'}</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="openSettingsEmail()">
+      <div class="sr-icon" style="background:rgba(46,169,223,0.15)">📧</div>
+      <div class="sr-info"><div class="sr-label">Смена почты</div><div class="sr-desc" id="settingsEmailDesc">Загрузка...</div></div>
       <span class="sr-arrow">›</span>
     </div>
     <div class="settings-row" onclick="openSettingsPass()">
@@ -1361,6 +1394,84 @@ function openSettingsPass() {
 }
 window.openSettingsNick = openSettingsNick;
 window.openSettingsPass = openSettingsPass;
+
+// ── EMAIL CHANGE ──────────────────────────────────────────
+function openSettingsEmail() {
+  closeSettings();
+  var modal = document.getElementById('emailChangeModal');
+  modal.classList.add('show');
+  document.getElementById('emailChangeStep1').style.display='';
+  document.getElementById('emailChangeStep2').style.display='none';
+  document.getElementById('emailChangeStep3').style.display='none';
+  document.getElementById('emailChangeStepSuccess').style.display='none';
+  document.getElementById('emailChangeError').textContent='';
+  document.getElementById('emailChangeCode1').value='';
+  document.getElementById('emailChangeCode2').value='';
+  document.getElementById('emailChangeNewEmail').value='';
+  socket.emit('requestEmailChange');
+}
+window.openSettingsEmail = openSettingsEmail;
+
+function closeEmailChangeModal() {
+  document.getElementById('emailChangeModal').classList.remove('show');
+}
+window.closeEmailChangeModal = closeEmailChangeModal;
+
+socket.on('emailChangeCodeSent', function(data) {
+  document.getElementById('emailChangeMasked').textContent = data.maskedEmail;
+  document.getElementById('emailChangeStep1').style.display='none';
+  document.getElementById('emailChangeStep2').style.display='';
+  document.getElementById('emailChangeError').textContent='';
+});
+
+socket.on('currentEmailVerified', function() {
+  document.getElementById('emailChangeStep2').style.display='none';
+  document.getElementById('emailChangeStep3').style.display='';
+  document.getElementById('emailChangeError').textContent='';
+});
+
+socket.on('newEmailCodeSent', function(data) {
+  document.getElementById('emailChangeStep3').style.display='none';
+  document.getElementById('emailChangeStep4Label').textContent = 'Код отправлен на ' + data.newEmail;
+  document.getElementById('emailChangeStep4').style.display='';
+  document.getElementById('emailChangeError').textContent='';
+});
+
+socket.on('emailChanged', function(data) {
+  document.getElementById('emailChangeStep4') && (document.getElementById('emailChangeStep4').style.display='none');
+  document.getElementById('emailChangeStepSuccess').style.display='';
+  document.getElementById('emailChangeSuccessAddr').textContent = data.newEmail;
+  document.getElementById('settingsEmailDesc').textContent = data.newEmail;
+});
+
+socket.on('emailChangeError', function(msg) {
+  document.getElementById('emailChangeError').textContent = msg;
+});
+
+socket.on('myEmail', function(data) {
+  var el = document.getElementById('settingsEmailDesc');
+  if (el) el.textContent = data.email || 'Не привязана';
+});
+
+function submitCurrentEmailCode() {
+  var code = document.getElementById('emailChangeCode1').value.trim();
+  if (!code) return;
+  socket.emit('verifyCurrentEmailCode', { code });
+}
+function submitNewEmail() {
+  var email = document.getElementById('emailChangeNewEmail').value.trim();
+  if (!email) return;
+  socket.emit('sendNewEmailCode', { newEmail: email });
+}
+function submitNewEmailCode() {
+  var code = document.getElementById('emailChangeCode2').value.trim();
+  if (!code) return;
+  socket.emit('verifyNewEmailCode', { code });
+}
+window.submitCurrentEmailCode = submitCurrentEmailCode;
+window.submitNewEmail = submitNewEmail;
+window.submitNewEmailCode = submitNewEmailCode;
+
 
 function openAvatarSettings() {
   var body = document.getElementById('settingsBody');
