@@ -681,6 +681,88 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('emailCodeError', 'Ошибка'); }
   });
 
+  // ── CHANGE EMAIL: Step 1 — send code to current email ──
+  socket.on('requestEmailChange', async () => {
+    if (!socket.userLogin) return socket.emit('emailChangeError', 'Не авторизован');
+    try {
+      const res = await pool.query('SELECT email FROM users WHERE login=$1', [socket.userLogin]);
+      if (!res.rows.length) return socket.emit('emailChangeError', 'Пользователь не найден');
+      const currentEmail = res.rows[0].email;
+      if (!currentEmail) return socket.emit('emailChangeError', 'Email не привязан к аккаунту');
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const expires = Date.now() + 10 * 60 * 1000;
+      pendingEmailVerifications.set(socket.userLogin + '_emailchange', { code, expires, currentEmail });
+      const html = `<div style="font-family:sans-serif;max-width:400px;margin:auto;padding:32px;background:#18181b;border-radius:16px;color:#fff">
+        <h2 style="color:#2ea9df">MyChat — Смена почты</h2>
+        <p>Кто-то (надеемся, вы) запросил смену email.</p>
+        <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#2ea9df;text-align:center;margin:24px 0">${code}</div>
+        <p style="color:#999">Код действует 10 минут. Если вы не запрашивали — игнорируйте письмо.</p>
+      </div>`;
+      const sent = await sendEmail(currentEmail, 'MyChat — подтверждение смены почты: ' + code, html);
+      if (sent) socket.emit('emailChangeCodeSent', { maskedEmail: currentEmail.replace(/(.{2})(.*)(@.*)/, '$1***$3') });
+      else socket.emit('emailChangeError', 'Не удалось отправить письмо');
+    } catch(e) { console.error(e); socket.emit('emailChangeError', 'Ошибка сервера'); }
+  });
+
+  // ── CHANGE EMAIL: Step 2 — verify current email code ──
+  socket.on('verifyCurrentEmailCode', async ({ code }) => {
+    if (!socket.userLogin) return socket.emit('emailChangeError', 'Не авторизован');
+    const key = socket.userLogin + '_emailchange';
+    const pending = pendingEmailVerifications.get(key);
+    if (!pending) return socket.emit('emailChangeError', 'Код не найден. Запросите снова');
+    if (Date.now() > pending.expires) { pendingEmailVerifications.delete(key); return socket.emit('emailChangeError', 'Код истёк'); }
+    if (pending.code !== code.trim()) return socket.emit('emailChangeError', 'Неверный код');
+    pending.currentVerified = true;
+    socket.emit('currentEmailVerified');
+  });
+
+  // ── CHANGE EMAIL: Step 3 — send code to new email ──
+  socket.on('sendNewEmailCode', async ({ newEmail }) => {
+    if (!socket.userLogin) return socket.emit('emailChangeError', 'Не авторизован');
+    const key = socket.userLogin + '_emailchange';
+    const pending = pendingEmailVerifications.get(key);
+    if (!pending || !pending.currentVerified) return socket.emit('emailChangeError', 'Сначала подтвердите текущую почту');
+    newEmail = newEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) return socket.emit('emailChangeError', 'Неверный формат email');
+    const exists = await pool.query('SELECT id FROM users WHERE LOWER(email)=LOWER($1) AND login!=$2', [newEmail, socket.userLogin]);
+    if (exists.rows.length) return socket.emit('emailChangeError', 'Этот email уже используется');
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    pending.newEmail = newEmail;
+    pending.newCode = code;
+    pending.newExpires = Date.now() + 10 * 60 * 1000;
+    const html = `<div style="font-family:sans-serif;max-width:400px;margin:auto;padding:32px;background:#18181b;border-radius:16px;color:#fff">
+      <h2 style="color:#2ea9df">MyChat — Подтверждение новой почты</h2>
+      <p>Введите этот код для подтверждения новой почты.</p>
+      <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#2ea9df;text-align:center;margin:24px 0">${code}</div>
+      <p style="color:#999">Код действует 10 минут.</p>
+    </div>`;
+    const sent = await sendEmail(newEmail, 'MyChat — подтверждение новой почты: ' + code, html);
+    if (sent) socket.emit('newEmailCodeSent', { newEmail });
+    else socket.emit('emailChangeError', 'Не удалось отправить письмо на новый адрес');
+  });
+
+  // ── CHANGE EMAIL: Step 4 — verify new email code and save ──
+  socket.on('verifyNewEmailCode', async ({ code }) => {
+    if (!socket.userLogin) return socket.emit('emailChangeError', 'Не авторизован');
+    const key = socket.userLogin + '_emailchange';
+    const pending = pendingEmailVerifications.get(key);
+    if (!pending || !pending.newEmail) return socket.emit('emailChangeError', 'Сессия истекла');
+    if (Date.now() > pending.newExpires) { pendingEmailVerifications.delete(key); return socket.emit('emailChangeError', 'Код истёк'); }
+    if (pending.newCode !== code.trim()) return socket.emit('emailChangeError', 'Неверный код');
+    await pool.query('UPDATE users SET email=$1 WHERE login=$2', [pending.newEmail, socket.userLogin]);
+    pendingEmailVerifications.delete(key);
+    socket.emit('emailChanged', { newEmail: pending.newEmail });
+  });
+
+  // ── GET MY EMAIL ──────────────────────────────────────
+  socket.on('getMyEmail', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT email FROM users WHERE login=$1', [socket.userLogin]);
+      socket.emit('myEmail', { email: res.rows[0]?.email || null });
+    } catch(e) { socket.emit('myEmail', { email: null }); }
+  });
+
   // ── TELEGRAM OAUTH ──────────────────────────────────────
   socket.on('telegramAuth', async (tgData) => {
     if (!TELEGRAM_BOT_TOKEN) return socket.emit('authError', 'Telegram авторизация не настроена');
