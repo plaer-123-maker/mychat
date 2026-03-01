@@ -1466,17 +1466,23 @@ window.openSettingsPass = openSettingsPass;
 // ── EMAIL CHANGE ──────────────────────────────────────────
 function openSettingsEmail() {
   closeSettings();
-  var modal = document.getElementById('emailChangeModal');
-  modal.classList.add('show');
-  document.getElementById('emailChangeStep1').style.display='';
-  document.getElementById('emailChangeStep2').style.display='none';
-  document.getElementById('emailChangeStep3').style.display='none';
-  document.getElementById('emailChangeStepSuccess').style.display='none';
-  document.getElementById('emailChangeError').textContent='';
-  document.getElementById('emailChangeCode1').value='';
-  document.getElementById('emailChangeCode2').value='';
-  document.getElementById('emailChangeNewEmail').value='';
-  socket.emit('requestEmailChange');
+  var desc = document.getElementById('settingsEmailDesc');
+  var hasEmail = desc && desc.textContent && desc.textContent !== 'Не привязана' && desc.textContent !== 'Загрузка...';
+  if (!hasEmail) {
+    showAttachEmailModal();
+  } else {
+    var modal = document.getElementById('emailChangeModal');
+    modal.classList.add('show');
+    document.getElementById('emailChangeStep1').style.display='';
+    document.getElementById('emailChangeStep2').style.display='none';
+    document.getElementById('emailChangeStep3').style.display='none';
+    document.getElementById('emailChangeStepSuccess').style.display='none';
+    document.getElementById('emailChangeError').textContent='';
+    document.getElementById('emailChangeCode1').value='';
+    document.getElementById('emailChangeCode2').value='';
+    document.getElementById('emailChangeNewEmail').value='';
+    socket.emit('requestEmailChange');
+  }
 }
 window.openSettingsEmail = openSettingsEmail;
 
@@ -6204,48 +6210,28 @@ function searchGifs(query) {
       return;
     }
     grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">⏳ Ищем...</div>';
-    // Tenor API v2
-    var apiKey = 'AIzaSyAyimkuYQYF_FXVALexPfTwJhCGFR9dn9s';
-    var url = 'https://tenor.googleapis.com/v2/search?q=' + encodeURIComponent(query.trim()) + '&key=' + apiKey + '&limit=20&contentfilter=medium&media_filter=tinygif,gif&locale=ru_RU';
-    fetch(url)
-      .then(function(r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
+    var q = encodeURIComponent(query.trim());
+    // Try Giphy first (free public beta key)
+    var giphyUrl = 'https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=' + q + '&limit=20&rating=pg-13&lang=ru';
+    fetch(giphyUrl)
+      .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data.results || !data.results.length) {
+        if (!data.data || !data.data.length) {
           grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';
           return;
         }
         var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
-        data.results.forEach(function(gif) {
-          var thumb = (gif.media_formats && gif.media_formats.tinygif) ? gif.media_formats.tinygif.url : null;
-          var full = (gif.media_formats && gif.media_formats.gif) ? gif.media_formats.gif.url : thumb;
-          if (!thumb && !full) return;
-          if (!thumb) thumb = full;
-          if (!full) full = thumb;
-          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;transition:transform 0.15s,opacity 0.15s;opacity:0.9;" onclick="sendGif(this.dataset.full)" onmouseover="this.style.transform=\'scale(1.04)\';this.style.opacity=\'1\'" onmouseout="this.style.transform=\'scale(1)\';this.style.opacity=\'0.9\'" onerror="this.style.display=\'none\'">';
+        data.data.forEach(function(gif) {
+          var thumb = gif.images && gif.images.fixed_width_small ? gif.images.fixed_width_small.url : null;
+          var full = gif.images && gif.images.original ? gif.images.original.url : thumb;
+          if (!thumb) return;
+          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0.9;transition:transform 0.15s;" onclick="sendGif(this.dataset.full)" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\'">';
         });
         html += '</div>';
         grid.innerHTML = html;
       })
-      .catch(function(e) {
-        // Fallback to Giphy if Tenor fails
-        var giphyKey = 'dc6zaTOxFJmzC'; // public beta key
-        var gurl = 'https://api.giphy.com/v1/gifs/search?api_key=' + giphyKey + '&q=' + encodeURIComponent(query.trim()) + '&limit=20&rating=pg-13';
-        fetch(gurl).then(function(r){return r.json();}).then(function(data){
-          if(!data.data||!data.data.length){grid.innerHTML='<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';return;}
-          var html='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
-          data.data.forEach(function(gif){
-            var thumb=gif.images&&gif.images.fixed_width_small?gif.images.fixed_width_small.url:null;
-            var full=gif.images&&gif.images.original?gif.images.original.url:thumb;
-            if(!thumb)return;
-            html+='<img src="'+thumb+'" data-full="'+full+'" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0.9;" onclick="sendGif(this.dataset.full)" onerror="this.style.display=\'none\'">';
-          });
-          html+='</div>';
-          grid.innerHTML=html;
-        }).catch(function(){grid.innerHTML='<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">Ошибка загрузки GIF 😔</div>';});
-        console.error('Tenor GIF search error:', e);
+      .catch(function() {
+        grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">Ошибка загрузки GIF 😔</div>';
       });
   }, 400);
 }
@@ -6259,9 +6245,14 @@ function openPhotoStickerModal() {
   document.getElementById('stickerFileInput').value = '';
   document.getElementById('sendStickerBtn').disabled = true;
   document.getElementById('sendStickerBtn').style.opacity = '0.5';
-  document.getElementById('photoStickerModal').classList.add('show');
-  document.getElementById('emojiPanel').style.display = 'none';
+  // Close emoji panel first
+  var panel = document.getElementById('emojiPanel');
+  if (panel) panel.style.display = 'none';
   emojiPanelOpen = false;
+  // Small delay to let panel close before modal opens
+  setTimeout(function() {
+    document.getElementById('photoStickerModal').classList.add('show');
+  }, 50);
 }
 window.openPhotoStickerModal = openPhotoStickerModal;
 
