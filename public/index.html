@@ -5185,7 +5185,7 @@ socket.on('authSuccess', function() {
     <button onclick="openPhotoStickerModal()" style="flex:1;padding:11px 6px;border:none;background:transparent;color:var(--text-muted);font-size:13px;cursor:pointer;border-bottom:2px solid transparent;font-weight:600;">🖼️ Фото</button>
   </div>
   <div id="gifSearchWrap" style="display:none;padding:8px 10px 0;">
-    <input id="gifSearchInput" placeholder="Поиск GIF..." style="width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-input);color:var(--text-primary);outline:none;font-size:13px;box-sizing:border-box;" oninput="searchGifs(this.value)">
+    <input id="gifSearchInput" placeholder="Поиск GIF..." style="width:100%;padding:9px 14px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-input);color:var(--text-primary);outline:none;font-size:13px;box-sizing:border-box;" oninput="if(window.searchGifs)window.searchGifs(this.value)">
   </div>
   <div id="emojiGrid" style="padding:10px;overflow-y:auto;max-height:220px;"></div>
 </div>
@@ -6199,9 +6199,9 @@ window.addEventListener('load', function(){
 </script>
 <script>
 
+// ── GIF SEARCH ────────────────────────────────────────────
 var gifSearchTimer = null;
-
-function searchGifs(query) {
+window.searchGifs = function(query) {
   clearTimeout(gifSearchTimer);
   gifSearchTimer = setTimeout(function() {
     var grid = document.getElementById('emojiGrid');
@@ -6211,9 +6211,7 @@ function searchGifs(query) {
     }
     grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">⏳ Ищем...</div>';
     var q = encodeURIComponent(query.trim());
-    // Try Giphy first (free public beta key)
-    var giphyUrl = 'https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=' + q + '&limit=20&rating=pg-13&lang=ru';
-    fetch(giphyUrl)
+    fetch('https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=' + q + '&limit=20&rating=pg-13&lang=ru')
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (!data.data || !data.data.length) {
@@ -6225,46 +6223,55 @@ function searchGifs(query) {
           var thumb = gif.images && gif.images.fixed_width_small ? gif.images.fixed_width_small.url : null;
           var full = gif.images && gif.images.original ? gif.images.original.url : thumb;
           if (!thumb) return;
-          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0.9;transition:transform 0.15s;" onclick="sendGif(this.dataset.full)" onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'" onerror="this.style.display=\'none\'">';
+          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0.9;transition:transform 0.15s;" onclick="sendGif(this.dataset.full)" onerror="this.style.display=\'none\'">';
         });
         html += '</div>';
         grid.innerHTML = html;
       })
       .catch(function() {
-        grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">Ошибка загрузки GIF 😔</div>';
+        grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">Ошибка загрузки 😔</div>';
       });
   }, 400);
-}
+};
+
+window.sendGif = function(gifUrl) {
+  if (!gifUrl) return;
+  if (currentView === 'pm' && currentPrivateLogin) {
+    socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: gifUrl, type: 'image' });
+  } else if (currentView === 'room' && currentRoomId) {
+    socket.emit('roomMessage', { roomId: currentRoomId, image: gifUrl, type: 'image' });
+  } else if (currentView === 'general') {
+    socket.emit('chatMessage', { image: gifUrl, type: 'image' });
+  }
+  document.getElementById('emojiPanel').style.display = 'none';
+  emojiPanelOpen = false;
+};
 
 // ── PHOTO STICKER ─────────────────────────────────────────
 var photoStickerData = null;
 
-function openPhotoStickerModal() {
+window.openPhotoStickerModal = function() {
   photoStickerData = null;
   document.getElementById('stickerPreview').innerHTML = '📷';
   document.getElementById('stickerFileInput').value = '';
   document.getElementById('sendStickerBtn').disabled = true;
   document.getElementById('sendStickerBtn').style.opacity = '0.5';
-  // Close emoji panel first
   var panel = document.getElementById('emojiPanel');
   if (panel) panel.style.display = 'none';
   emojiPanelOpen = false;
-  // Small delay to let panel close before modal opens
   setTimeout(function() {
     document.getElementById('photoStickerModal').classList.add('show');
   }, 50);
-}
-window.openPhotoStickerModal = openPhotoStickerModal;
+};
 
-function closePhotoStickerModal() {
+window.closePhotoStickerModal = function() {
   document.getElementById('photoStickerModal').classList.remove('show');
-}
-window.closePhotoStickerModal = closePhotoStickerModal;
+};
 
-function previewSticker(input) {
+window.previewSticker = function(input) {
   var file = input.files[0];
   if (!file) return;
-  if (file.size > 3 * 1024 * 1024) { alert('Фото слишком большое (макс 3МБ)'); return; }
+  if (file.size > 5 * 1024 * 1024) { alert('Фото слишком большое (макс 5МБ)'); return; }
   var reader = new FileReader();
   reader.onload = function(e) {
     photoStickerData = e.target.result;
@@ -6277,10 +6284,9 @@ function previewSticker(input) {
     document.getElementById('sendStickerBtn').style.opacity = '1';
   };
   reader.readAsDataURL(file);
-}
-window.previewSticker = previewSticker;
+};
 
-function sendPhotoSticker() {
+window.sendPhotoSticker = function() {
   if (!photoStickerData) return;
   if (currentView === 'pm' && currentPrivateLogin) {
     socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: photoStickerData, type: 'image' });
@@ -6289,12 +6295,11 @@ function sendPhotoSticker() {
   } else if (currentView === 'general') {
     socket.emit('chatMessage', { image: photoStickerData, type: 'image' });
   }
-  closePhotoStickerModal();
-}
-window.sendPhotoSticker = sendPhotoSticker;
+  window.closePhotoStickerModal();
+};
 
 // ── ATTACH EMAIL ──────────────────────────────────────────
-function showAttachEmailModal() {
+window.showAttachEmailModal = function() {
   document.getElementById('attachEmailStep1').style.display = '';
   document.getElementById('attachEmailStep2').style.display = 'none';
   document.getElementById('attachEmailStepSuccess').style.display = 'none';
@@ -6302,35 +6307,30 @@ function showAttachEmailModal() {
   document.getElementById('attachEmailInput').value = '';
   document.getElementById('attachEmailCode').value = '';
   document.getElementById('attachEmailModal').classList.add('show');
-}
-window.showAttachEmailModal = showAttachEmailModal;
+};
 
-function closeAttachEmailModal() {
+window.closeAttachEmailModal = function() {
   document.getElementById('attachEmailModal').classList.remove('show');
-}
-window.closeAttachEmailModal = closeAttachEmailModal;
+};
 
-function dismissAttachEmail() {
+window.dismissAttachEmail = function() {
   localStorage.setItem('attachEmailDismissed_' + myLogin, '1');
-  closeAttachEmailModal();
-}
-window.dismissAttachEmail = dismissAttachEmail;
+  window.closeAttachEmailModal();
+};
 
-function submitAttachEmail() {
+window.submitAttachEmail = function() {
   var email = document.getElementById('attachEmailInput').value.trim();
   if (!email) return;
   socket.emit('requestAttachEmail', { email: email });
-}
-window.submitAttachEmail = submitAttachEmail;
+};
 
-function submitAttachEmailCode() {
+window.submitAttachEmailCode = function() {
   var code = document.getElementById('attachEmailCode').value.trim();
   if (!code) return;
   socket.emit('confirmAttachEmail', { code: code });
-}
-window.submitAttachEmailCode = submitAttachEmailCode;
+};
 
-socket.on('attachEmailCodeSent', function(data) {
+socket.on('attachEmailCodeSent', function() {
   document.getElementById('attachEmailStep1').style.display = 'none';
   document.getElementById('attachEmailStep2').style.display = '';
   document.getElementById('attachEmailError').textContent = '';
@@ -6345,52 +6345,6 @@ socket.on('emailAttached', function(data) {
 
 socket.on('attachEmailError', function(msg) {
   document.getElementById('attachEmailError').textContent = msg;
-});
-
-    fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        if (!data.results || !data.results.length) {
-          grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';
-          return;
-        }
-        var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
-        data.results.forEach(function(gif) {
-          var url = gif.media_formats && gif.media_formats.tinygif ? gif.media_formats.tinygif.url : (gif.media_formats && gif.media_formats.gif ? gif.media_formats.gif.url : null);
-          var fullUrl = gif.media_formats && gif.media_formats.gif ? gif.media_formats.gif.url : url;
-          if (!url) return;
-          html += '<img src="' + url + '" data-full="' + fullUrl + '" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;transition:transform 0.15s,opacity 0.15s;opacity:0.9;" onclick="sendGif(this.dataset.full)" onmouseover="this.style.transform=\'scale(1.04)\';this.style.opacity=\'1\'" onmouseout="this.style.transform=\'scale(1)\';this.style.opacity=\'0.9\'">';
-        });
-        html += '</div>';
-        grid.innerHTML = html;
-      })
-      .catch(function(e) {
-        grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">Ошибка загрузки GIF 😔</div>';
-        console.error('GIF search error:', e);
-      });
-  }, 400);
-}
-
-function sendGif(gifUrl) {
-  if (!gifUrl) return;
-  var msgData = { image: gifUrl, type: 'image', timestamp: Date.now() };
-  if (currentView === 'pm' && currentPrivateLogin) {
-    socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: gifUrl, type: 'image' });
-  } else if (currentView === 'room' && currentRoomId) {
-    socket.emit('roomMessage', { roomId: currentRoomId, image: gifUrl, type: 'image' });
-  } else if (currentView === 'general') {
-    socket.emit('chatMessage', { image: gifUrl, type: 'image' });
-  }
-  document.getElementById('emojiPanel').style.display = 'none';
-  emojiPanelOpen = false;
-}
-
-// GIF search input handler
-document.addEventListener('DOMContentLoaded', function() {
-  var gifInput = document.getElementById('gifSearchInput');
-  if (gifInput) {
-    gifInput.addEventListener('input', function() { searchGifs(this.value); });
-  }
 });
 
 </script>
