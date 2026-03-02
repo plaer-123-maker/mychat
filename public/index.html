@@ -781,7 +781,7 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 
       <!-- OAuth buttons -->
       <div id="oauthBtns" style="display:none;margin-bottom:4px;">
-        <div id="googleBtnWrap" style="display:none;margin-bottom:8px;">
+        <div id="googleBtnWrap" style="margin-bottom:8px;">
           <button class="btn-google" id="googleSignInBtn">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" style="flex-shrink:0"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
             Войти через Google
@@ -1281,6 +1281,9 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 // Google OAuth Client ID
 window.GOOGLE_CLIENT_ID_PUB = '';
 fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
+  // Always show OAuth section
+  document.getElementById('oauthBtns').style.display = 'block';
+  document.getElementById('oauthDivider').style.display = 'flex';
   if (cfg.googleClientId) {
     window.GOOGLE_CLIENT_ID_PUB = cfg.googleClientId;
     if (typeof initGoogleAuth === 'function') initGoogleAuth();
@@ -1290,7 +1293,10 @@ fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
     window.TELEGRAM_BOT_ID_PUB = cfg.telegramBotId || '';
     if (typeof initTelegramAuth === 'function') initTelegramAuth();
   }
-}).catch(function(){});
+}).catch(function(){
+  document.getElementById('oauthBtns').style.display = 'block';
+  document.getElementById('oauthDivider').style.display = 'flex';
+});
 </script>
 <script>
 /* THEME & BACKGROUND SYSTEM */
@@ -2101,14 +2107,16 @@ window.onTelegramAuth = function(user) {
 // ── GOOGLE AUTH INIT ──
 function initGoogleAuth() {
   if (typeof google !== 'undefined' && google.accounts && window.GOOGLE_CLIENT_ID_PUB) {
-    document.getElementById('googleBtnWrap').style.display = 'block';
-    document.getElementById('oauthBtns').style.display = 'block';
-    document.getElementById('oauthDivider').style.display = 'flex';
     google.accounts.id.initialize({
       client_id: window.GOOGLE_CLIENT_ID_PUB,
       callback: function(response) { socket.emit('googleAuth', { idToken: response.credential }); }
     });
-    document.getElementById('googleSignInBtn').addEventListener('click', function() { google.accounts.id.prompt(); });
+    document.getElementById('googleSignInBtn').onclick = function() { google.accounts.id.prompt(); };
+  } else if (!window.GOOGLE_CLIENT_ID_PUB) {
+    // Google не настроен - показываем кнопку но при клике объясняем
+    document.getElementById('googleSignInBtn').onclick = function() {
+      alert('Вход через Google не настроен.\n\nЧтобы включить:\n1. Зайди в Google Cloud Console\n2. Создай OAuth Client ID\n3. Добавь переменную GOOGLE_CLIENT_ID в Railway');
+    };
   }
 }
 setTimeout(initGoogleAuth, 800);
@@ -2693,6 +2701,7 @@ function addRoomMsg(msg){
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
+  else if(msg.type==='photo_sticker'&&msg.image)html+='<img src="'+msg.image+'" style="max-width:160px;max-height:160px;border-radius:18px;display:block;margin:2px 0;cursor:pointer;" onclick="window.pvSingle&&pvSingle(msg.image)">';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz+'</div></div></a>';}
   else if(msg.type==='location'&&msg.text){var geoHtml=buildLocationHtml(msg.text);html+=geoHtml||'<div class="text">'+formatText(msg.text||'')+'</div>';}
@@ -2871,6 +2880,7 @@ function addPM(msg){
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
+  else if(msg.type==='photo_sticker'&&msg.image)html+='<img src="'+msg.image+'" style="max-width:160px;max-height:160px;border-radius:18px;display:block;margin:2px 0;cursor:pointer;" onclick="window.pvSingle&&pvSingle(msg.image)">';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
   else if(msg.type==='location'&&msg.text){var geoHtml=buildLocationHtml(msg.text);html+=geoHtml||'<div class="text">'+formatText(msg.text||'')+'</div>';}
@@ -3098,6 +3108,7 @@ function addMsg(msg){
   else if(msg.type==='video_note'&&msg.voice){}
   else if(msg.type==='voice'&&msg.voice)html+='<audio controls src="'+msg.voice+'"></audio>';
   else if(msg.type==='sticker')html+='<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(msg.text||'')+'</span>';
+  else if(msg.type==='photo_sticker'&&msg.image)html+='<img src="'+msg.image+'" style="max-width:160px;max-height:160px;border-radius:18px;display:block;margin:2px 0;cursor:pointer;" onclick="window.pvSingle&&pvSingle(msg.image)">';
   else if(msg.type==='video'&&(msg.file_url||msg.image))html+='<video src="'+(msg.file_url||msg.image)+'" controls style="max-width:260px;max-height:200px;border-radius:10px;display:block;margin-top:4px;"></video>'+(msg.file_name?'<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📹 '+escHtml(msg.file_name)+'</div>':'');
   else if(msg.type==='file'&&msg.file_url){var fsz2=msg.file_size?' ('+Math.round(msg.file_size/1024)+' KB)':'';html+='<a href="'+msg.file_url+'" download="'+(msg.file_name||'file')+'" style="display:flex;align-items:center;gap:8px;background:var(--bg-input);padding:10px 14px;border-radius:10px;color:var(--text-primary);text-decoration:none;margin-top:4px;max-width:260px;"><span style="font-size:24px;">📄</span><div><div style="font-size:13px;font-weight:600;">'+escHtml(msg.file_name||'Файл')+'</div><div style="font-size:11px;color:var(--text-muted);">'+fsz2+'</div></div></a>';}
   else if(msg.type==='location'&&msg.text){var geoHtml=buildLocationHtml(msg.text);html+=geoHtml||'<div class="text">'+formatText(msg.text||'')+'</div>';}
@@ -6211,19 +6222,38 @@ window.searchGifs = function(query) {
     }
     grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">⏳ Ищем...</div>';
     var q = encodeURIComponent(query.trim());
-    fetch('https://api.giphy.com/v1/gifs/search?api_key=dc6zaTOxFJmzC&q=' + q + '&limit=20&rating=pg-13&lang=ru')
+    // Tenor v2 — работает с публичным ключом
+    var tenorKey = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ';
+    fetch('https://tenor.googleapis.com/v2/search?q=' + q + '&key=' + tenorKey + '&limit=20&media_filter=gif&contentfilter=medium')
       .then(function(r) { return r.json(); })
       .then(function(data) {
-        if (!data.data || !data.data.length) {
-          grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';
-          return;
+        if (!data.results || !data.results.length) {
+          // Fallback: Giphy public beta key
+          return fetch('https://api.giphy.com/v1/gifs/search?api_key=0UTRbFtkMxAplrohufYco5IY74U8hOes&q=' + q + '&limit=20&rating=g')
+            .then(function(r2) { return r2.json(); })
+            .then(function(d2) {
+              if (!d2.data || !d2.data.length) {
+                grid.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:10px;text-align:center;">GIF не найдены 😔</div>';
+                return;
+              }
+              var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
+              d2.data.forEach(function(gif) {
+                var thumb = gif.images && gif.images.fixed_width_small ? gif.images.fixed_width_small.url : null;
+                var full = gif.images && gif.images.original ? gif.images.original.url : thumb;
+                if (!thumb) return;
+                html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;" onclick="sendGif(this.dataset.full)" onerror="this.style.display=\'none\'">';
+              });
+              html += '</div>';
+              grid.innerHTML = html;
+            });
         }
         var html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:4px;">';
-        data.data.forEach(function(gif) {
-          var thumb = gif.images && gif.images.fixed_width_small ? gif.images.fixed_width_small.url : null;
-          var full = gif.images && gif.images.original ? gif.images.original.url : thumb;
+        data.results.forEach(function(item) {
+          var med = item.media_formats;
+          var thumb = med && med.tinygif ? med.tinygif.url : (med && med.gif ? med.gif.url : null);
+          var full = med && med.gif ? med.gif.url : thumb;
           if (!thumb) return;
-          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;opacity:0.9;transition:transform 0.15s;" onclick="sendGif(this.dataset.full)" onerror="this.style.display=\'none\'">';
+          html += '<img src="' + thumb + '" data-full="' + full + '" loading="lazy" style="width:100%;height:80px;object-fit:cover;border-radius:10px;cursor:pointer;" onclick="sendGif(this.dataset.full)" onerror="this.style.display=\'none\'">';
         });
         html += '</div>';
         grid.innerHTML = html;
@@ -6289,11 +6319,11 @@ window.previewSticker = function(input) {
 window.sendPhotoSticker = function() {
   if (!photoStickerData) return;
   if (currentView === 'pm' && currentPrivateLogin) {
-    socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: photoStickerData, type: 'image' });
+    socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: photoStickerData, type: 'photo_sticker' });
   } else if (currentView === 'room' && currentRoomId) {
-    socket.emit('roomMessage', { roomId: currentRoomId, image: photoStickerData, type: 'image' });
+    socket.emit('roomMessage', { roomId: currentRoomId, image: photoStickerData, type: 'photo_sticker' });
   } else if (currentView === 'general') {
-    socket.emit('chatMessage', { image: photoStickerData, type: 'image' });
+    socket.emit('chatMessage', { image: photoStickerData, type: 'photo_sticker' });
   }
   window.closePhotoStickerModal();
 };
