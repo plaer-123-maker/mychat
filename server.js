@@ -877,12 +877,8 @@ io.on('connection', (socket) => {
       const googleEmail = (payload.email || '').toLowerCase();
       const googleName = payload.name || payload.given_name || 'User';
 
-      // Check if user exists by google_id
+      // Проверяем только по google_id (email и Google аккаунт — разные вещи)
       let user = await pool.query('SELECT * FROM users WHERE google_id=$1', [googleId]);
-      if (!user.rows.length) {
-        // Check by email
-        user = await pool.query('SELECT * FROM users WHERE email=$1', [googleEmail]);
-      }
 
       if (user.rows.length > 0) {
         // Existing user — login
@@ -918,8 +914,8 @@ io.on('connection', (socket) => {
       const fakeHash = await bcrypt.hash(googleId + Date.now(), 8); // unused password
       const role = login === ADMIN_LOGIN ? 'admin' : 'user';
       const token = generateToken();
-      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,google_id,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,true,$7,$8)',
-        [login, fakeHash, nickname, role, token, email || null, googleId, 'google']);
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email_verified,google_id,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,false,$6,$7)',
+        [login, fakeHash, nickname, role, token, googleId, 'google']);
       socket.username = nickname; socket.userLogin = login; socket.userRole = role;
       onlineUsers.set(socket.id, { nickname, login, ip });
       socketUsers.set(socket.id, socket);
