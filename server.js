@@ -877,8 +877,12 @@ io.on('connection', (socket) => {
       const googleEmail = (payload.email || '').toLowerCase();
       const googleName = payload.name || payload.given_name || 'User';
 
-      // Проверяем только по google_id (email и Google аккаунт — разные вещи)
+      // Check if user exists by google_id
       let user = await pool.query('SELECT * FROM users WHERE google_id=$1', [googleId]);
+      if (!user.rows.length) {
+        // Check by email
+        user = await pool.query('SELECT * FROM users WHERE email=$1', [googleEmail]);
+      }
 
       if (user.rows.length > 0) {
         // Existing user — login
@@ -890,7 +894,7 @@ io.on('connection', (socket) => {
         socket.username = u.nickname; socket.userLogin = u.login; socket.userRole = u.login === ADMIN_LOGIN ? 'admin' : (u.role || 'user');
         onlineUsers.set(socket.id, { nickname: u.nickname, login: u.login, ip });
         socketUsers.set(socket.id, socket);
-        socket.emit('authSuccess', { nickname: u.nickname, role: socket.userRole, login: u.login, token, avatar: u.avatar || null, username: u.username || null, verified: u.verified || false, vip_until: u.vip_until || 0, vip_emoji: u.vip_emoji || null });
+        socket.emit('authSuccess', { nickname: u.nickname, role: socket.userRole, login: u.login, token, avatar: u.avatar || null, username: u.username || null, verified: u.verified || false, vip_until: u.vip_until || 0, vip_emoji: u.vip_emoji || null, authMethod: 'google', googleEmail: googleEmail });
         sendOnlineToAll();
         await addLog('login', u.nickname, 'Login via Google', ip);
       } else {
@@ -914,12 +918,12 @@ io.on('connection', (socket) => {
       const fakeHash = await bcrypt.hash(googleId + Date.now(), 8); // unused password
       const role = login === ADMIN_LOGIN ? 'admin' : 'user';
       const token = generateToken();
-      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email_verified,google_id,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,false,$6,$7)',
-        [login, fakeHash, nickname, role, token, googleId, 'google']);
+      await pool.query('INSERT INTO users (login,password,nickname,banned,muted_until,role,token,email,email_verified,google_id,auth_method) VALUES ($1,$2,$3,false,0,$4,$5,$6,true,$7,$8)',
+        [login, fakeHash, nickname, role, token, email || null, googleId, 'google']);
       socket.username = nickname; socket.userLogin = login; socket.userRole = role;
       onlineUsers.set(socket.id, { nickname, login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false });
+      socket.emit('authSuccess', { nickname, role, login, token, vip_until: 0, vip_emoji: null, verified: false, authMethod: 'google', googleEmail: email });
       sendOnlineToAll();
       await addLog('register', nickname, 'Registered via Google', ip);
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
