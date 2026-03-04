@@ -348,6 +348,7 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT false'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(200) DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_email VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id VARCHAR(100) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_method VARCHAR(20) DEFAULT \'password\''); } catch(e) {}
   // Stories
@@ -927,6 +928,50 @@ io.on('connection', (socket) => {
       sendOnlineToAll();
       await addLog('register', nickname, 'Registered via Google', ip);
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
+  });
+
+  // === LINK / UNLINK GOOGLE ===
+  socket.on('getMyGoogleStatus', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT google_id, google_email FROM users WHERE login=$1', [socket.userLogin]);
+      if (res.rows.length === 0) return;
+      const u = res.rows[0];
+      socket.emit('myGoogleStatus', { googleEmail: u.google_email || null });
+    } catch(e) { console.error(e); }
+  });
+
+  socket.on('linkGoogle', async ({ idToken }) => {
+    if (!socket.userLogin) return socket.emit('googleLinkError', 'Не авторизован');
+    try {
+      const { OAuth2Client } = require('google-auth-library');
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      if (!clientId) return socket.emit('googleLinkError', 'Google не настроен');
+      const client = new OAuth2Client(clientId);
+      const ticket = await client.verifyIdToken({ idToken, audience: clientId });
+      const payload = ticket.getPayload();
+      const googleId = payload.sub;
+      const googleEmail = payload.email;
+      // Check if this Google account is already linked to another user
+      const existing = await pool.query('SELECT login FROM users WHERE google_id=$1', [googleId]);
+      if (existing.rows.length > 0 && existing.rows[0].login !== socket.userLogin) {
+        return socket.emit('googleLinkError', 'Этот Google аккаунт уже привязан к другому пользователю');
+      }
+      await pool.query('UPDATE users SET google_id=$1, google_email=$2 WHERE login=$3', [googleId, googleEmail, socket.userLogin]);
+      socket.emit('googleLinked', { googleEmail });
+    } catch(e) { console.error(e); socket.emit('googleLinkError', 'Ошибка привязки Google'); }
+  });
+
+  socket.on('unlinkGoogle', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const res = await pool.query('SELECT auth_method FROM users WHERE login=$1', [socket.userLogin]);
+      if (res.rows[0]?.auth_method === 'google') {
+        return socket.emit('googleLinkError', 'Нельзя отвязать — это основной способ входа');
+      }
+      await pool.query('UPDATE users SET google_id=NULL, google_email=NULL WHERE login=$1', [socket.userLogin]);
+      socket.emit('googleUnlinked');
+    } catch(e) { console.error(e); }
   });
 
   socket.on('login', async ({ login, password }) => {

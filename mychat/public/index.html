@@ -2542,27 +2542,6 @@ function openGoogleLinkSettings() {
 }
 window.openGoogleLinkSettings = openGoogleLinkSettings;
 
-socket.on('myGoogleStatus', function(data) {
-  // Update Google desc in settings if open
-  var desc = document.getElementById('settingsEmailDesc');
-  // Also update settings row dynamically
-  renderSettingsMain();
-});
-
-socket.on('googleLinked', function(d) {
-  myGoogleEmail = d.googleEmail;
-  showToast('✅ Google привязан: ' + d.googleEmail);
-  renderSettingsMain();
-});
-socket.on('googleUnlinked', function() {
-  myGoogleEmail = null;
-  showToast('Google аккаунт отвязан');
-  renderSettingsMain();
-});
-socket.on('googleLinkError', function(msg) {
-  showToast('❌ ' + msg);
-});
-
 window.openSettings = openSettings;
 window.closeSettings = closeSettings;
 
@@ -2873,6 +2852,23 @@ pinnedChats=[],vipEmojiCache={},verifiedCache={},lastSeenCache={},hideOnlineSelf
 mutedChats=[];
 
 // ── EMAIL CHANGE LISTENERS ────────────────────────────────
+socket.on('myGoogleStatus', function(data) {
+  renderSettingsMain();
+});
+socket.on('googleLinked', function(d) {
+  myGoogleEmail = d.googleEmail;
+  showToast('✅ Google привязан: ' + d.googleEmail);
+  renderSettingsMain();
+});
+socket.on('googleUnlinked', function() {
+  myGoogleEmail = null;
+  showToast('Google аккаунт отвязан');
+  renderSettingsMain();
+});
+socket.on('googleLinkError', function(msg) {
+  showToast('❌ ' + msg);
+});
+
 socket.on('emailChangeCodeSent', function(data) {
   document.getElementById('emailChangeMasked').textContent = data.maskedEmail;
   document.getElementById('emailChangeStep1').style.display='none';
