@@ -12,10 +12,7 @@ window.isCapacitorApp = !!(window.Capacitor && window.Capacitor.isNativePlatform
 async function initCapacitorPush() {
   if (!window.isCapacitorApp) return;
   try {
-    var plugins = window.Capacitor.Plugins;
-    var LN = plugins.LocalNotifications;
-    if (LN) { try { await LN.requestPermissions(); } catch(e2) {} }
-    var PN = plugins.PushNotifications;
+    var PN = window.Capacitor.Plugins.PushNotifications;
     if (!PN) return;
     var perm = await PN.requestPermissions();
     if (perm.receive === 'granted') await PN.register();
@@ -23,7 +20,6 @@ async function initCapacitorPush() {
       window._pushToken = t.value;
       if (window.socket) window.socket.emit('registerPushToken', { token: t.value, platform: 'android' });
     });
-    PN.addListener('registrationError', function(e) { console.log('Push reg error:', e); });
     PN.addListener('pushNotificationReceived', function(n) {
       if (window.showToast) window.showToast('\uD83D\uDD14 ' + (n.title||'MyChat') + ': ' + (n.body||''));
     });
@@ -31,7 +27,7 @@ async function initCapacitorPush() {
       var d = a.notification.data;
       if (d && d.chatLogin && window.openPM) window.openPM(d.chatLogin, d.chatNick||d.chatLogin);
     });
-  } catch(e) { console.log('Push init error:', e); }
+  } catch(e) { console.log('Push error:', e); }
 }
 document.addEventListener('DOMContentLoaded', function() {
   if (!window.isCapacitorApp) return;
@@ -2974,32 +2970,22 @@ function dismissNotifBar() {
   document.getElementById('notifPermBar').classList.remove('show');
   localStorage.setItem('notif_dismissed','1');
 }
-async function sendNotification(title, body, icon) {
+function sendNotification(title, body, icon) {
   // Native Capacitor notification (Android status bar)
   if (window.isCapacitorApp) {
     try {
       var LN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
       if (LN) {
-        // Check permission first
-        var perm = await LN.checkPermissions().catch(function(){return {display:'granted'};});
-        if (perm.display !== 'granted') {
-          perm = await LN.requestPermissions().catch(function(){return {display:'denied'};});
-        }
-        if (perm.display === 'granted') {
-          await LN.schedule({ notifications: [{
-            title: title,
-            body: body,
-            id: Math.floor(Math.random() * 100000),
-            smallIcon: 'ic_stat_icon_config_sample',
-            iconColor: '#7c3aed',
-            sound: null,
-            autoCancel: true,
-            extra: { chatLogin: '', chatNick: '' }
-          }]});
-        }
+        LN.schedule({ notifications: [{
+          title: title,
+          body: body,
+          id: Math.floor(Math.random() * 100000),
+          smallIcon: 'ic_notification',
+          sound: 'default'
+        }]});
         return;
       }
-    } catch(e2) { console.log('LN error:', e2); }
+    } catch(e2) {}
   }
   // Web notification fallback
   if (Notification.permission !== 'granted') return;
@@ -3270,6 +3256,7 @@ socket.on('authSuccess',function(d){
   switchToGeneral();
   socket.emit('getMyChats');
   socket.emit('getMyRooms');
+  // Check if email is attached
   socket.emit('getMyEmail');
 });
 socket.on('authError',function(m){

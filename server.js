@@ -338,11 +338,6 @@ async function initDB() {
     created_at BIGINT DEFAULT 0
   )`);
 
-  // Performance indexes
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp DESC)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_logins ON private_messages(from_login, to_login, timestamp DESC)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_roomid ON room_messages(room_id, timestamp DESC)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_users_login ON users(login)'); } catch(e) {}
   // === NEW FEATURES ===
   // Verification badge
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false'); } catch(e) {}
@@ -1158,8 +1153,8 @@ io.on('connection', (socket) => {
   socket.on('getGeneralHistory', async () => {
     if (!socket.userLogin) return;
     try {
-      const msgs = await pool.query('SELECT id,username,user_login,text,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice,vip_emoji FROM messages ORDER BY timestamp DESC LIMIT 50');
-      socket.emit('messageHistory', msgs.rows.reverse().map(fixMsgImages));
+      const msgs = await pool.query('SELECT * FROM messages ORDER BY timestamp ASC LIMIT 200');
+      socket.emit('messageHistory', msgs.rows.map(fixMsgImages));
     } catch(e) { console.error(e); }
   });
 
@@ -1168,8 +1163,13 @@ io.on('connection', (socket) => {
     if (!socket.userLogin) return;
     if (data && data.text) data.text = sanitize(data.text, 4000);
     if (!socket.username) return;
+    try {
+      const u = await pool.query('SELECT muted_until FROM users WHERE login=$1', [socket.userLogin]);
+      if (u.rows.length > 0 && u.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены');
+    } catch(e) {}
+    // Get vip_emoji for sender
     let vipEmoji = null;
-    try { const ve = await pool.query('SELECT vip_emoji, vip_until, muted_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0]) { if (ve.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы замучены'); if (ve.rows[0].vip_until > Date.now()) vipEmoji = ve.rows[0].vip_emoji || null; } } catch(e) {}
+    try { const ve = await pool.query('SELECT vip_emoji, vip_until FROM users WHERE login=$1', [socket.userLogin]); if (ve.rows[0] && ve.rows[0].vip_until > Date.now()) vipEmoji = ve.rows[0].vip_emoji || null; } catch(e) {}
     const msg = { username: socket.username, user_login: socket.userLogin, vip_emoji: vipEmoji, text: data.text||'', image: serializeImage(data.image)||null, voice: data.voice||null, type: data.type||'text', timestamp: Date.now(), reply_to_id: data.reply_to_id||null, reply_to_text: data.reply_to_text||null, reply_to_user: data.reply_to_user||null, file_url: data.file_url||null, file_name: data.file_name||null, file_size: data.file_size||null };
     try {
       if (data.text) data.text = encryptText(data.text);
@@ -1348,7 +1348,7 @@ io.on('connection', (socket) => {
     var token = (typeof data === 'object' && data.token !== undefined) ? data.token : -1; // -1 never matches client token
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT id,from_login,to_login,from_nickname,text,type,timestamp,read,read_at,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 100', [socket.userLogin, otherLogin]);
+      const res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY timestamp ASC LIMIT 200', [socket.userLogin, otherLogin]);
       const now = Date.now();
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
       await pool.query('UPDATE private_messages SET read=true, read_at=$1 WHERE from_login=$2 AND to_login=$3 AND read=false', [now, otherLogin, socket.userLogin]);
@@ -1388,7 +1388,7 @@ io.on('connection', (socket) => {
       } else {
         socket.emit('newPrivateMessage', msgToSend);
         var target = findSocketByLogin(data.toLogin);
-        if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); } else { sendFCMPush(toLogin, socket.username || socket.userLogin, data.text ? data.text.substring(0, 100) : 'Новое сообщение', { chatLogin: socket.userLogin, chatNick: socket.username || socket.userLogin }); }
+        if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
         // Send FCM push if user is offline
         if (!target) { sendFCMPush(toLogin, socket.username || socket.userLogin, 'Написал тебе в MyChat', { chatLogin: socket.userLogin, chatNick: socket.username }); }
       }
@@ -1492,7 +1492,7 @@ io.on('connection', (socket) => {
       if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник этой комнаты');
       var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return socket.emit('chatError', 'Комната не найдена');
-      var msgs = await pool.query('SELECT id,room_id,from_login,from_nickname,text,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice FROM room_messages WHERE room_id=$1 ORDER BY timestamp ASC LIMIT 100', [roomId]);
+      var msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY timestamp ASC LIMIT 200', [roomId]);
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
       socket.join('room_' + roomId);
       socket.emit('roomData', { room: room.rows[0], myRole: member.rows[0].role, messages: msgs.rows.map(fixMsgImages), members: members.rows, token });
@@ -2565,4 +2565,3 @@ async function initPinnedMsgTable(pool) {
   )`);
 }
 initPinnedMsgTable(pool).catch(console.error);
-
