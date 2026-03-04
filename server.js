@@ -147,25 +147,56 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 // Set these env vars in Railway: RESEND_API_KEY, EMAIL_FROM
 const EMAIL_ENABLED = !!(process.env.RESEND_API_KEY);
 
-// ── FCM Push Notifications ──────────────────────────────
-const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || null;
+// ── FCM Push Notifications V1 ───────────────────────────
+let _fcmAccessToken = null;
+let _fcmTokenExpiry = 0;
+
+async function getFCMAccessToken() {
+  if (_fcmAccessToken && Date.now() < _fcmTokenExpiry) return _fcmAccessToken;
+  try {
+    const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT || '{}');
+    if (!sa.private_key) return null;
+    const { GoogleAuth } = require('google-auth-library');
+    const auth = new GoogleAuth({
+      credentials: sa,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging']
+    });
+    const client = await auth.getClient();
+    const tokenRes = await client.getAccessToken();
+    _fcmAccessToken = tokenRes.token;
+    _fcmTokenExpiry = Date.now() + 55 * 60 * 1000; // 55 min
+    return _fcmAccessToken;
+  } catch(e) { console.error('FCM token error:', e.message); return null; }
+}
+
 async function sendFCMPush(toLogin, title, body, data) {
-  if (!FCM_SERVER_KEY) return;
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT) return;
   try {
     const res = await pool.query('SELECT push_token FROM users WHERE login=$1', [toLogin]);
     const token = res.rows[0]?.push_token;
     if (!token) return;
+    const accessToken = await getFCMAccessToken();
+    if (!accessToken) return;
+    const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    const projectId = sa.project_id;
     const fetch = require('node-fetch');
-    await fetch('https://fcm.googleapis.com/fcm/send', {
+    const response = await fetch('https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'key=' + FCM_SERVER_KEY },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + accessToken },
       body: JSON.stringify({
-        to: token,
-        notification: { title: title, body: body, sound: 'default', icon: 'ic_notification' },
-        data: data || {},
-        priority: 'high'
+        message: {
+          token: token,
+          notification: { title: title, body: body },
+          data: data ? Object.fromEntries(Object.entries(data).map(([k,v]) => [k, String(v)])) : {},
+          android: {
+            priority: 'high',
+            notification: { sound: 'default', icon: 'ic_notification', color: '#7c3aed' }
+          }
+        }
       })
     });
+    const result = await response.json();
+    if (result.error) console.error('FCM send error:', result.error.message);
   } catch(e) { console.error('FCM error:', e.message); }
 }
 let resendClient = null;
@@ -1929,7 +1960,7 @@ io.on('connection', (socket) => {
         const msg = { id: res.rows[0].id, from_login: socket.userLogin, to_login: toId, from_nickname: socket.username, vip_emoji: vipEmojiF, text: origText, image: origImage, voice: origVoice, type: origMsgType, timestamp: Date.now(), fwd_from_nick: fwdNick };
         const msgToSend = fixMsgImages({...msg});
         socket.emit('newPrivateMessage', msgToSend);
-        const t = findSocketByLogin(toId); if (t) { t.emit('newPrivateMessage', msgToSend); t.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+        const t = findSocketByLogin(toId); if (t) { t.emit('newPrivateMessage', msgToSend); t.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); } else { sendFCMPush(toId, socket.username || socket.userLogin, 'Написал тебе в MyChat', { chatLogin: socket.userLogin, chatNick: socket.username || socket.userLogin }); }
       } else if (toType === 'room') {
         const roomId = Number(toId);
         const member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
