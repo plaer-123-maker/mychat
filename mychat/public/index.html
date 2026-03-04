@@ -484,11 +484,10 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 .msg-spoiler.revealed{background:transparent;color:inherit;}
 .fmt-toolbar{
   display:none;flex-direction:row;gap:4px;
-  padding:6px 10px;background:var(--bg-panel);
-  border-radius:14px;border:1px solid rgba(124,58,237,0.2);
-  position:absolute;bottom:calc(100% + 8px);left:0;right:0;
-  box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:50;
+  padding:4px 8px;background:var(--bg-secondary);
+  border-top:1px solid var(--border-color);
 }
+.fmt-toolbar.visible{display:flex;}
 .fmt-btn{
   background:var(--bg-input);border:none;color:var(--text-secondary);
   border-radius:6px;width:28px;height:28px;cursor:pointer;
@@ -618,102 +617,36 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 
 /* ═══════════════ INPUT AREA ═══════════════ */
 .input-area{
-  background:var(--bg-sidebar);padding:8px 12px;
-  display:flex;gap:4px;align-items:center;
-  border-top:1px solid rgba(124,58,237,0.08);flex-shrink:0;
-  position:relative;
-}
-/* Attach popup button */
-.ia-attach-btn{
-  width:38px;height:38px;border:none;border-radius:50%;
-  color:var(--text-secondary);font-size:16px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;background:rgba(255,255,255,0.05);
-  transition:var(--transition);position:relative;
-}
-.ia-attach-btn:hover{background:rgba(124,58,237,0.15);color:var(--accent2);transform:scale(1.08);}
-.ia-attach-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
-/* Attach popup menu */
-.attach-popup{
-  position:absolute;bottom:62px;left:8px;
-  background:var(--bg-panel);border:1px solid rgba(124,58,237,0.2);
-  border-radius:18px;padding:10px;
-  display:none;flex-wrap:wrap;gap:6px;width:200px;
-  box-shadow:0 8px 32px rgba(0,0,0,0.6);
-  animation:popupIn 0.18s cubic-bezier(0.34,1.56,0.64,1);
-  z-index:200;
-}
-.attach-popup.open{display:flex;}
-@keyframes popupIn{from{opacity:0;transform:translateY(8px) scale(0.9);}to{opacity:1;transform:none;}}
-.attach-popup-item{
-  display:flex;flex-direction:column;align-items:center;gap:5px;
-  padding:8px 10px;border-radius:14px;cursor:pointer;
-  border:none;background:transparent;color:var(--text-secondary);
-  font-size:10px;font-weight:600;transition:var(--transition);
-  min-width:52px;
-}
-.attach-popup-item:hover{background:rgba(124,58,237,0.15);color:var(--accent2);}
-.attach-popup-item .ap-icon{
-  width:42px;height:42px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:20px;margin-bottom:2px;
-}
-/* Input field wrapper */
-.input-field-wrap{
-  flex:1;position:relative;display:flex;align-items:center;
+  background:var(--bg-sidebar);padding:10px 12px;
+  display:flex;gap:6px;align-items:center;
+  border-top:1px solid rgba(124,58,237,0.1);flex-shrink:0;
+  background:var(--bg-sidebar);
 }
 .input-area input[type="text"]{
-  flex:1;padding:10px 16px;border:none;
-  border-radius:22px;background:rgba(255,255,255,0.05);
+  flex:1;padding:11px 18px;border:none;
+  border-radius:24px;background:var(--bg-input);
   color:var(--text-primary);font-size:14px;outline:none;
   transition:var(--transition);
-  border:1px solid rgba(255,255,255,0.06);
-  width:100%;
 }
 .input-area input[type="text"]::placeholder{color:var(--text-muted);}
-.input-area input[type="text"]:focus{
-  background:rgba(124,58,237,0.06);
-  border-color:rgba(124,58,237,0.25);
-  box-shadow:0 0 0 3px rgba(124,58,237,0.1);
-}
-/* Right buttons group */
-.ia-right-group{
-  display:flex;align-items:center;gap:2px;flex-shrink:0;
-}
+.input-area input[type="text"]:focus{box-shadow:0 0 0 3px rgba(124,58,237,0.2);}
 .ia-btn{
-  width:36px;height:36px;border:none;border-radius:50%;
-  color:var(--text-secondary);font-size:17px;cursor:pointer;
+  width:40px;height:40px;border:none;border-radius:50%;
+  color:var(--text-secondary);font-size:18px;cursor:pointer;
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;background:transparent;transition:var(--transition);
 }
-.ia-btn:hover{background:rgba(124,58,237,0.12);color:var(--accent2);transform:scale(1.08);}
+.ia-btn:hover{background:var(--bg-hover);color:var(--text-primary);transform:scale(1.05);}
 .ia-btn.send{
   background:linear-gradient(135deg,#7c3aed,#5b21b6);
-  color:#fff;width:40px;height:40px;
-  box-shadow:0 4px 16px rgba(124,58,237,0.45);
-  margin-left:2px;
+  color:#fff;width:44px;height:44px;
+  box-shadow:0 4px 20px rgba(124,58,237,0.4);
 }
-.ia-btn.send:hover{filter:brightness(1.15);transform:scale(1.1);}
-.ia-btn.recording{background:#e94560;color:#fff;animation:pulse 1s infinite;}
-/* More button */
-.ia-more-btn{
-  width:36px;height:36px;border:none;border-radius:50%;
-  color:var(--text-secondary);font-size:18px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  background:transparent;transition:var(--transition);flex-shrink:0;
+.ia-btn.send:hover{filter:brightness(1.12);transform:scale(1.08);}
+.ia-btn.recording{
+  background:#e94560;color:#fff;
+  animation:pulse 1s infinite;
 }
-.ia-more-btn:hover{background:rgba(124,58,237,0.12);color:var(--accent2);}
-/* More popup */
-.more-popup{
-  position:absolute;bottom:62px;right:8px;
-  background:var(--bg-panel);border:1px solid rgba(124,58,237,0.2);
-  border-radius:18px;padding:10px;
-  display:none;flex-direction:row;gap:6px;
-  box-shadow:0 8px 32px rgba(0,0,0,0.6);
-  animation:popupIn 0.18s cubic-bezier(0.34,1.56,0.64,1);
-  z-index:200;
-}
-.more-popup.open{display:flex;}
 .input-area input[type="file"]{display:none;}
 
 /* ═══════════════ BARS ═══════════════ */
@@ -1522,11 +1455,10 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   .hdr-btns{gap:2px;}
   .chat-header{padding:0 10px;height:52px;}
   .chat-header-btns button{width:34px;height:34px;font-size:17px;}
-  .input-area{padding:6px 10px;gap:4px;}
-  .ia-btn{width:34px;height:34px;font-size:16px;flex-shrink:0;}
-  .ia-btn.send{width:38px;height:38px;}
-  .ia-attach-btn{width:34px;height:34px;}
-  .ia-more-btn{width:32px;height:32px;}
+  .input-area{padding:6px 8px;gap:3px;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .input-area::-webkit-scrollbar{display:none;}
+  .ia-btn{width:36px;height:36px;font-size:16px;flex-shrink:0;}
+  .ia-btn.send{width:40px;height:40px;}
   #msgInput{font-size:15px;padding:8px 12px;}
   .fmt-toolbar{display:none!important;}
   .messages{padding:8px 6px;}
@@ -2309,78 +2241,31 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       <span>✏️ Редактирование сообщения</span>
       <button onclick="cancelEdit()" style="background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:18px;">✕</button>
     </div>
-    <!-- Attach popup (above input, left side) -->
-    <div class="attach-popup" id="attachPopup">
-      <label class="attach-popup-item" for="photoInput" onclick="closeAttachPopup()">
-        <div class="ap-icon" style="background:rgba(59,130,246,0.15);">🖼️</div>
-        Фото
-      </label>
-      <label class="attach-popup-item" for="fileInput" onclick="closeAttachPopup()">
-        <div class="ap-icon" style="background:rgba(124,58,237,0.15);">📄</div>
-        Файл
-      </label>
-      <button class="attach-popup-item" onclick="closeAttachPopup();openCreatePoll()">
-        <div class="ap-icon" style="background:rgba(52,199,89,0.15);">📊</div>
-        Опрос
-      </button>
-      <button class="attach-popup-item" onclick="closeAttachPopup();shareLocation()">
-        <div class="ap-icon" style="background:rgba(255,149,0,0.15);">📍</div>
-        Место
-      </button>
-      <button class="attach-popup-item" onclick="closeAttachPopup();openScheduleModal()">
-        <div class="ap-icon" style="background:rgba(255,59,48,0.15);">⏰</div>
-        Отложить
-      </button>
-    </div>
-
-    <!-- Попап "ещё" (справа) -->
-    <div class="more-popup" id="morePopup">
-      <div class="attach-popup-item" onclick="toggleMorePopup();document.getElementById('videoNoteBtn').click()">
-        <div class="ap-icon" style="background:rgba(255,59,48,0.15);">⏺</div>
-        <span>Кружок</span>
-      </div>
-      <div class="attach-popup-item" onclick="toggleMorePopup();toggleFmtToolbar()">
-        <div class="ap-icon" style="background:rgba(90,200,250,0.15);">Аа</div>
-        <span>Формат</span>
-      </div>
-    </div>
-
     <div class="input-area" id="inputArea">
-      <!-- Скрытые file inputs -->
+      <label class="ia-btn" for="photoInput" title="Фото/Видео">📎</label>
       <input type="file" id="photoInput" accept="image/*,video/*" multiple>
       <input type="file" id="fileInput" accept="*/*" multiple style="display:none;">
-
-      <!-- Скрепка (попап) + emoji -->
-      <button class="ia-attach-btn" id="attachToggleBtn" onclick="toggleAttachPopup()" title="Прикрепить">
-        <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-      </button>
-      <button class="ia-btn" id="emojiPanelBtn" title="Эмодзи">😊</button>
-
-      <!-- Поле ввода с fmt toolbar внутри -->
-      <div class="input-field-wrap">
-        <div class="fmt-toolbar" id="fmtToolbar">
-          <button class="fmt-btn" title="Жирный" onclick="fmtWrap('**','**')"><b>B</b></button>
-          <button class="fmt-btn" title="Курсив" onclick="fmtWrap('_','_')"><i>I</i></button>
-          <button class="fmt-btn" title="Зачёркнутый" onclick="fmtWrap('~~','~~')"><s>S</s></button>
-          <button class="fmt-btn" title="Код" onclick="fmtWrap('`','`')">⌨</button>
-          <button class="fmt-btn" title="Блок кода" onclick="fmtWrap('```\n','\n```')">{ }</button>
-          <button class="fmt-btn" title="Спойлер" onclick="fmtWrap('||','||')">👁</button>
-        </div>
-        <input type="text" id="msgInput" placeholder="Написать сообщение...">
+      <label class="ia-btn" for="fileInput" title="Файл">📁</label>
+      <button class="ia-btn" id="emojiPanelBtn" title="Эмодзи/Стикеры">😊</button>
+      <div class="fmt-toolbar" id="fmtToolbar">
+        <button class="fmt-btn" title="Жирный (Ctrl+B)" onclick="fmtWrap('**','**')"><b>B</b></button>
+        <button class="fmt-btn" title="Курсив (Ctrl+I)" onclick="fmtWrap('_','_')"><i>I</i></button>
+        <button class="fmt-btn" title="Зачёркнутый" onclick="fmtWrap('~~','~~')"><s>S</s></button>
+        <button class="fmt-btn" title="Код" onclick="fmtWrap('`','`')">⌨</button>
+        <button class="fmt-btn" title="Блок кода" onclick="fmtWrap('```\n','\n```')">{ }</button>
+        <button class="fmt-btn" title="Спойлер" onclick="fmtWrap('||','||')">👁</button>
       </div>
-
-      <!-- Правая группа -->
-      <div class="ia-right-group">
-        <button class="ia-more-btn" id="moreToggleBtn" onclick="toggleMorePopup()" title="Ещё">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="19" r="1.5" fill="currentColor"/></svg>
-        </button>
-        <button class="ia-btn" id="micBtn" title="Голосовое">🎤</button>
-        <button class="ia-btn" id="videoNoteBtn" title="Видео-кружочек" style="display:none;">⏺</button>
-        <button class="ia-btn send" id="sendBtn">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-        </button>
-      </div>
+      <input type="text" id="msgInput" placeholder="Написать сообщение...">
+      <button class="ia-btn" id="videoNoteBtn" title="Видео-кружочек">⏺</button>
+      <button class="ia-btn" id="micBtn" title="Голосовое">🎤</button>
+      <button class="ia-btn" title="Создать опрос" onclick="openCreatePoll()" style="font-size:16px;">📊</button>
+        <button class="ia-btn" title="Отложенная отправка" onclick="openScheduleModal()" style="font-size:16px;">⏰</button>
+        <button class="ia-btn" title="Поделиться геолокацией" onclick="shareLocation()" style="font-size:16px;">📍</button>
+        <button class="ia-btn" id="fmtToggleBtn" title="Форматирование текста" onclick="toggleFmtToolbar()" style="font-size:14px;">Аа</button>
+        <button class="ia-btn send" id="sendBtn">➤</button>
     </div>
+  </div>
+
   <div class="no-chat" id="noChat">
     <div class="no-chat-icon">💬</div>
     <div class="no-chat-text">Выбери чат слева</div>
@@ -2490,58 +2375,10 @@ function openSettings() {
   renderSettingsMain();
   document.getElementById('settingsOverlay').classList.add('show');
   socket.emit('getMyEmail');
-  socket.emit('getMyGoogleStatus');
 }
 function closeSettings() {
   document.getElementById('settingsOverlay').classList.remove('show');
 }
-
-// ══ GOOGLE ACCOUNT LINKING IN SETTINGS ══
-function openGoogleLinkSettings() {
-  if (myAuthMethod === 'google') {
-    showToast('Ты зарегистрирован через Google — это основной способ входа');
-    return;
-  }
-  if (myGoogleEmail) {
-    if (confirm('Google аккаунт ' + myGoogleEmail + ' привязан.\nОтвязать его?')) {
-      socket.emit('unlinkGoogle');
-    }
-    return;
-  }
-  if (!window.GOOGLE_CLIENT_ID_PUB) {
-    showToast('Google авторизация не настроена');
-    return;
-  }
-  var nonce = Math.random().toString(36).slice(2);
-  var url = 'https://accounts.google.com/o/oauth2/v2/auth'
-    + '?client_id=' + encodeURIComponent(window.GOOGLE_CLIENT_ID_PUB)
-    + '&redirect_uri=' + encodeURIComponent(window.location.origin)
-    + '&response_type=token%20id_token'
-    + '&scope=openid%20email%20profile'
-    + '&nonce=' + nonce
-    + '&prompt=select_account';
-  var w=500,h=620,left=Math.round((screen.width-w)/2),top=Math.round((screen.height-h)/2);
-  var popup=window.open(url,'googleLink','width='+w+',height='+h+',left='+left+',top='+top);
-  showToast('Открываем Google...');
-  var timer=setInterval(function(){
-    try {
-      if(!popup||popup.closed){clearInterval(timer);return;}
-      var href=popup.location.href;
-      if(href&&href.indexOf(window.location.origin)===0){
-        clearInterval(timer);
-        var hash=popup.location.hash||'';
-        popup.close();
-        var m=hash.match(/[#&]id_token=([^&]+)/);
-        if(m){
-          socket.emit('linkGoogle',{idToken:decodeURIComponent(m[1])});
-          showToast('Привязываем Google аккаунт...');
-        }
-      }
-    }catch(e){}
-  },300);
-}
-window.openGoogleLinkSettings = openGoogleLinkSettings;
-
 window.openSettings = openSettings;
 window.closeSettings = closeSettings;
 
@@ -2581,51 +2418,104 @@ function renderSettingsMain() {
       <div class="sr-info"><div class="sr-label">Смена почты</div><div class="sr-desc" id="settingsEmailDesc">Загрузка...</div></div>
       <span class="sr-arrow">›</span>
     </div>
-    <div class="settings-row" onclick="openGoogleLinkSettings()">
-      <div class="sr-icon" style="background:rgba(66,133,244,0.12);padding:0;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg></div>
-      <div class="sr-info"><div class="sr-label">Google аккаунт</div><div class="sr-desc" id="googleLinkDesc">${myGoogleEmail ? myGoogleEmail : (myAuthMethod==='google' ? 'Основной способ входа' : 'Не привязан — нажми чтобы привязать')}</div></div>
-      ${(myGoogleEmail||myAuthMethod==='google') ? '<span style="font-size:11px;background:rgba(52,199,89,0.12);color:#4ade80;padding:3px 9px;border-radius:8px;font-weight:600">✓ Привязан</span>' : '<span class="sr-arrow">›</span>'}
-    </div>
-    </div>
-  `;
-}
-function openAvatarSettings() {
-  var body = document.getElementById('settingsBody');
-  body.innerHTML = `
-    <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
-      <button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button>
-      <h3 style="font-size:16px;font-weight:700;">📷 Аватарка</h3>
-    </div>
-    <div style="padding:24px 20px;display:flex;flex-direction:column;align-items:center;gap:16px;">
-      <div id="avatarPreviewWrap" style="width:120px;height:120px;border-radius:50%;overflow:hidden;border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:48px;">
-        ${myAvatar ? '<img src="'+myAvatar+'" style="width:120px;height:120px;border-radius:50%;object-fit:cover;">' : (myNickname?myNickname[0].toUpperCase():'?')}
+    ${myAuthMethod==='google'?`
+    <div class="settings-row" style="cursor:default;">
+      <div class="sr-icon" style="background:rgba(66,133,244,0.15);padding:0;display:flex;align-items:center;justify-content:center;">
+        <svg width="20" height="20" viewBox="0 0 18 18" fill="none"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/><path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
       </div>
-      <label style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer;text-align:center;display:block;">
-        📷 Загрузить фото
-        <input type="file" accept="image/*" style="display:none;" onchange="handleAvatarUpload(this)">
-      </label>
-      ${myAvatar ? '<button onclick="removeAvatar()" style="width:100%;padding:13px;border:none;border-radius:14px;background:rgba(255,59,48,0.12);color:#ff6b6b;font-size:14px;font-weight:600;cursor:pointer;">🗑 Удалить аватарку</button>' : ''}
+      <div class="sr-info"><div class="sr-label">Google аккаунт</div><div class="sr-desc">${myGoogleEmail||'Подключён'}</div></div>
+      <span style="font-size:11px;background:rgba(52,199,89,0.12);color:#4ade80;padding:3px 9px;border-radius:8px;font-weight:600;white-space:nowrap;">✓ Привязан</span>
+    </div>`:''}
+    <div class="settings-row" onclick="openSettingsPass()">
+      <div class="sr-icon" style="background:rgba(255,149,0,0.15)">🔒</div>
+      <div class="sr-info"><div class="sr-label">Смена пароля</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-section-title">Внешний вид</div>
+    <div class="settings-row" onclick="openSettingsTheme()">
+      <div class="sr-icon" style="background:rgba(175,82,222,0.15)">🎨</div>
+      <div class="sr-info"><div class="sr-label">Тема</div></div>
+      <span class="sr-value">${THEMES[currentThemeKey]?.name||'—'}</span>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="openSettingsBg()">
+      <div class="sr-icon" style="background:rgba(52,199,89,0.15)">🖼️</div>
+      <div class="sr-info"><div class="sr-label">Фон чата</div><div class="sr-desc">Цвет, градиент или своя фотография</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-section-title">Прочее</div>
+    <div class="settings-row" onclick="openSettingsAbout()">
+      <div class="sr-icon" style="background:rgba(90,200,250,0.15)">ℹ️</div>
+      <div class="sr-info"><div class="sr-label">О приложении</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="openSoundNightSettings()">
+      <div class="sr-icon" style="background:rgba(100,80,220,0.15)">🔔</div>
+      <div class="sr-info"><div class="sr-label">Звук и ночной режим</div><div class="sr-desc">Звуки уведомлений, авторежим ночи</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row vip-row" onclick="openVipSettings()">
+      <div class="sr-icon" style="background:linear-gradient(135deg,rgba(247,201,72,0.2),rgba(232,135,10,0.2))">👑</div>
+      <div class="sr-info"><div class="sr-label" style="color:#f7c948">MyChat VIP</div><div class="sr-desc">${myVipUntil>Date.now()?'Активен до '+new Date(myVipUntil).toLocaleDateString('ru'):'Не активирован — введи код'}</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="closeSettings();openSavedMessages()">
+      <div class="sr-icon" style="background:rgba(100,180,255,0.15)">📁</div>
+      <div class="sr-info"><div class="sr-label">Избранное</div><div class="sr-desc">Сохранённые сообщения</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="openVerifySettings()">
+      <div class="sr-icon" style="background:rgba(124,58,237,0.15)">✓</div>
+      <div class="sr-info"><div class="sr-label">Верификация</div><div class="sr-desc">${myVerified?'Аккаунт верифицирован ✓':'Введи промокод верификации'}</div></div>
+      <span class="sr-arrow">›</span>
+    </div>
+    <div class="settings-row" onclick="_toggleAiBtn()" style="cursor:pointer;">
+      <div class="sr-icon" style="background:rgba(108,63,255,0.15)">🤖</div>
+      <div class="sr-info"><div class="sr-label">AI Ассистент</div><div class="sr-desc" id="aiSettingsDesc">${localStorage.getItem('aiChatVisible')==='true'?'Кнопка показана':'Кнопка скрыта'}</div></div>
+      <div id="aiSettingsToggle" style="position:relative;width:44px;height:24px;min-width:44px;background:${localStorage.getItem('aiChatVisible')==='true'?'var(--accent)':'rgba(255,255,255,0.15)'};border-radius:12px;cursor:pointer;transition:background 0.2s;"><div style="position:absolute;top:2px;left:${localStorage.getItem('aiChatVisible')==='true'?'22px':'2px'};width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div></div>
+    </div>
+    <div class="settings-row" onclick="doLogout()" style="color:#ff6b6b">
+      <div class="sr-icon" style="background:rgba(255,59,48,0.15)">🚪</div>
+      <div class="sr-info"><div class="sr-label" style="color:#ff6b6b">Выйти</div></div>
     </div>
   `;
 }
-window.openAvatarSettings = openAvatarSettings;
 
 function openSettingsNick() {
-  document.getElementById('newNickInput').value = myNickname || '';
+  closeSettings();
+  document.getElementById('newNickInput').value = myNickname;
   document.getElementById('nickError').textContent = '';
   document.getElementById('nickModal').classList.add('show');
 }
+function openSettingsPass() {
+  closeSettings();
+  document.getElementById('oldPass').value='';document.getElementById('newPass').value='';document.getElementById('newPass2').value='';
+  document.getElementById('passError').textContent='';document.getElementById('passSuccess').textContent='';
+  document.getElementById('passModal').classList.add('show');
+}
 window.openSettingsNick = openSettingsNick;
+window.openSettingsPass = openSettingsPass;
 
+// ── EMAIL CHANGE ──────────────────────────────────────────
 function openSettingsEmail() {
-  // Reset modal steps
-  ['emailChangeStep1','emailChangeStep2','emailChangeStep3','emailChangeStep4','emailChangeStepSuccess'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (el) el.style.display = id === 'emailChangeStep1' ? '' : 'none';
-  });
-  document.getElementById('emailChangeError').textContent = '';
-  document.getElementById('emailChangeModal').classList.add('show');
-  socket.emit('requestEmailChange');
+  closeSettings();
+  var desc = document.getElementById('settingsEmailDesc');
+  var hasEmail = desc && desc.textContent && desc.textContent !== 'Не привязана' && desc.textContent !== 'Загрузка...';
+  if (!hasEmail) {
+    showAttachEmailModal();
+  } else {
+    var modal = document.getElementById('emailChangeModal');
+    modal.classList.add('show');
+    document.getElementById('emailChangeStep1').style.display='';
+    document.getElementById('emailChangeStep2').style.display='none';
+    document.getElementById('emailChangeStep3').style.display='none';
+    document.getElementById('emailChangeStepSuccess').style.display='none';
+    document.getElementById('emailChangeError').textContent='';
+    document.getElementById('emailChangeCode1').value='';
+    document.getElementById('emailChangeCode2').value='';
+    document.getElementById('emailChangeNewEmail').value='';
+    socket.emit('requestEmailChange');
+  }
 }
 window.openSettingsEmail = openSettingsEmail;
 
@@ -2634,27 +2524,47 @@ function closeEmailChangeModal() {
 }
 window.closeEmailChangeModal = closeEmailChangeModal;
 
+// email change socket listeners registered after socket init below
+
 function submitCurrentEmailCode() {
   var code = document.getElementById('emailChangeCode1').value.trim();
   if (!code) return;
-  socket.emit('verifyCurrentEmail', { code: code });
+  socket.emit('verifyCurrentEmailCode', { code });
 }
-window.submitCurrentEmailCode = submitCurrentEmailCode;
-
 function submitNewEmail() {
   var email = document.getElementById('emailChangeNewEmail').value.trim();
   if (!email) return;
-  socket.emit('requestNewEmail', { newEmail: email });
+  socket.emit('sendNewEmailCode', { newEmail: email });
 }
-window.submitNewEmail = submitNewEmail;
-
 function submitNewEmailCode() {
   var code = document.getElementById('emailChangeCode2').value.trim();
   if (!code) return;
-  socket.emit('verifyNewEmail', { code: code });
+  socket.emit('verifyNewEmailCode', { code });
 }
+window.submitCurrentEmailCode = submitCurrentEmailCode;
+window.submitNewEmail = submitNewEmail;
 window.submitNewEmailCode = submitNewEmailCode;
 
+
+function openAvatarSettings() {
+  var body = document.getElementById('settingsBody');
+  var previewHtml = myAvatar
+    ? '<img src="'+myAvatar+'" style="width:120px;height:120px;border-radius:50%;object-fit:cover;border:3px solid var(--accent);">'
+    : '<div style="width:120px;height:120px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:48px;font-weight:700;color:#fff;">'+(myNickname?myNickname[0].toUpperCase():'?')+'</div>';
+  body.innerHTML = `
+    <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
+      <button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button>
+      <h3 style="font-size:16px;font-weight:700;">Аватарка</h3>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;padding:32px 20px;gap:20px;">
+      <div id="avatarPreviewWrap">${previewHtml}</div>
+      <label style="padding:13px 28px;border-radius:14px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;" for="avatarFileInput">📷 Выбрать фото</label>
+      <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="handleAvatarUpload(this)">
+      ${myAvatar?'<button onclick="removeAvatar()" style="padding:12px 28px;border-radius:14px;background:rgba(255,59,48,0.15);color:#ff6b6b;border:1px solid rgba(255,59,48,0.3);font-size:14px;font-weight:600;cursor:pointer;">🗑 Удалить аватарку</button>':''}
+    </div>
+  `;
+}
+window.openAvatarSettings = openAvatarSettings;
 function openVipSettings() {
   var body = document.getElementById('settingsBody');
   var isVip = myVipUntil > Date.now();
@@ -2917,23 +2827,6 @@ pinnedChats=[],vipEmojiCache={},verifiedCache={},lastSeenCache={},hideOnlineSelf
 mutedChats=[];
 
 // ── EMAIL CHANGE LISTENERS ────────────────────────────────
-socket.on('myGoogleStatus', function(data) {
-  renderSettingsMain();
-});
-socket.on('googleLinked', function(d) {
-  myGoogleEmail = d.googleEmail;
-  showToast('✅ Google привязан: ' + d.googleEmail);
-  renderSettingsMain();
-});
-socket.on('googleUnlinked', function() {
-  myGoogleEmail = null;
-  showToast('Google аккаунт отвязан');
-  renderSettingsMain();
-});
-socket.on('googleLinkError', function(msg) {
-  showToast('❌ ' + msg);
-});
-
 socket.on('emailChangeCodeSent', function(data) {
   document.getElementById('emailChangeMasked').textContent = data.maskedEmail;
   document.getElementById('emailChangeStep1').style.display='none';
@@ -3240,33 +3133,6 @@ window.onTelegramAuth = function(user) {
 };
 
 // ── GOOGLE AUTH INIT ──
-// ══ ATTACH / MORE POPUP TOGGLES ══
-function toggleAttachPopup() {
-  var ap = document.getElementById('attachPopup');
-  var mp = document.getElementById('morePopup');
-  if(mp) mp.classList.remove('open');
-  if(ap) ap.classList.toggle('open');
-}
-function toggleMorePopup() {
-  var mp = document.getElementById('morePopup');
-  var ap = document.getElementById('attachPopup');
-  if(ap) ap.classList.remove('open');
-  if(mp) mp.classList.toggle('open');
-}
-// Close popups on click outside
-document.addEventListener('click', function(e) {
-  var ap = document.getElementById('attachPopup');
-  var mp = document.getElementById('morePopup');
-  var ab = document.getElementById('attachToggleBtn');
-  var mb = document.getElementById('moreToggleBtn');
-  if(ap && ap.classList.contains('open') && !ap.contains(e.target) && e.target!==ab) ap.classList.remove('open');
-  if(mp && mp.classList.contains('open') && !mp.contains(e.target) && e.target!==mb) mp.classList.remove('open');
-});
-window.toggleAttachPopup = toggleAttachPopup;
-window.toggleMorePopup = toggleMorePopup;
-window.closeAttachPopup = function(){ var ap=document.getElementById('attachPopup'); if(ap) ap.classList.remove('open'); };
-window.closeMorePopup = function(){ var mp=document.getElementById('morePopup'); if(mp) mp.classList.remove('open'); };
-
 window.doGoogleLogin = function() {
   if (!window.GOOGLE_CLIENT_ID_PUB) {
     alert('Вход через Google не настроен. Добавь GOOGLE_CLIENT_ID в Railway Variables.');
@@ -4795,8 +4661,8 @@ socket.on('pollDeleted', function(d) {
 // ── TEXT FORMATTING TOOLBAR ──────────────────────────────
 function toggleFmtToolbar(){
   var tb=document.getElementById('fmtToolbar');
-  var vis=tb.style.display==='flex';
-  tb.style.display=vis?'none':'flex';
+  tb.classList.toggle('visible');
+  document.getElementById('fmtToggleBtn').style.color=tb.classList.contains('visible')?'var(--accent)':'';
 }
 function fmtWrap(before,after){
   var inp=document.getElementById('msgInput');
