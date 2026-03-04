@@ -2542,6 +2542,27 @@ function openGoogleLinkSettings() {
 }
 window.openGoogleLinkSettings = openGoogleLinkSettings;
 
+socket.on('myGoogleStatus', function(data) {
+  // Update Google desc in settings if open
+  var desc = document.getElementById('settingsEmailDesc');
+  // Also update settings row dynamically
+  renderSettingsMain();
+});
+
+socket.on('googleLinked', function(d) {
+  myGoogleEmail = d.googleEmail;
+  showToast('✅ Google привязан: ' + d.googleEmail);
+  renderSettingsMain();
+});
+socket.on('googleUnlinked', function() {
+  myGoogleEmail = null;
+  showToast('Google аккаунт отвязан');
+  renderSettingsMain();
+});
+socket.on('googleLinkError', function(msg) {
+  showToast('❌ ' + msg);
+});
+
 window.openSettings = openSettings;
 window.closeSettings = closeSettings;
 
@@ -2589,72 +2610,7 @@ function renderSettingsMain() {
     </div>
   `;
 }
-function openAvatarSettings() {
-  var body = document.getElementById('settingsBody');
-  body.innerHTML = `
-    <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);">
-      <button onclick="renderSettingsMain()" style="background:transparent;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;">←</button>
-      <h3 style="font-size:16px;font-weight:700;">📷 Аватарка</h3>
-    </div>
-    <div style="padding:24px 20px;display:flex;flex-direction:column;align-items:center;gap:16px;">
-      <div id="avatarPreviewWrap" style="width:120px;height:120px;border-radius:50%;overflow:hidden;border:3px solid var(--accent);display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:48px;">
-        ${myAvatar ? '<img src="'+myAvatar+'" style="width:120px;height:120px;border-radius:50%;object-fit:cover;">' : (myNickname?myNickname[0].toUpperCase():'?')}
-      </div>
-      <label style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer;text-align:center;display:block;">
-        📷 Загрузить фото
-        <input type="file" accept="image/*" style="display:none;" onchange="handleAvatarUpload(this)">
-      </label>
-      ${myAvatar ? '<button onclick="removeAvatar()" style="width:100%;padding:13px;border:none;border-radius:14px;background:rgba(255,59,48,0.12);color:#ff6b6b;font-size:14px;font-weight:600;cursor:pointer;">🗑 Удалить аватарку</button>' : ''}
-    </div>
-  `;
-}
 window.openAvatarSettings = openAvatarSettings;
-
-function openSettingsNick() {
-  document.getElementById('newNickInput').value = myNickname || '';
-  document.getElementById('nickError').textContent = '';
-  document.getElementById('nickModal').classList.add('show');
-}
-window.openSettingsNick = openSettingsNick;
-
-function openSettingsEmail() {
-  // Reset modal steps
-  ['emailChangeStep1','emailChangeStep2','emailChangeStep3','emailChangeStep4','emailChangeStepSuccess'].forEach(function(id){
-    var el = document.getElementById(id);
-    if (el) el.style.display = id === 'emailChangeStep1' ? '' : 'none';
-  });
-  document.getElementById('emailChangeError').textContent = '';
-  document.getElementById('emailChangeModal').classList.add('show');
-  socket.emit('requestEmailChange');
-}
-window.openSettingsEmail = openSettingsEmail;
-
-function closeEmailChangeModal() {
-  document.getElementById('emailChangeModal').classList.remove('show');
-}
-window.closeEmailChangeModal = closeEmailChangeModal;
-
-function submitCurrentEmailCode() {
-  var code = document.getElementById('emailChangeCode1').value.trim();
-  if (!code) return;
-  socket.emit('verifyCurrentEmail', { code: code });
-}
-window.submitCurrentEmailCode = submitCurrentEmailCode;
-
-function submitNewEmail() {
-  var email = document.getElementById('emailChangeNewEmail').value.trim();
-  if (!email) return;
-  socket.emit('requestNewEmail', { newEmail: email });
-}
-window.submitNewEmail = submitNewEmail;
-
-function submitNewEmailCode() {
-  var code = document.getElementById('emailChangeCode2').value.trim();
-  if (!code) return;
-  socket.emit('verifyNewEmail', { code: code });
-}
-window.submitNewEmailCode = submitNewEmailCode;
-
 function openVipSettings() {
   var body = document.getElementById('settingsBody');
   var isVip = myVipUntil > Date.now();
@@ -2917,23 +2873,6 @@ pinnedChats=[],vipEmojiCache={},verifiedCache={},lastSeenCache={},hideOnlineSelf
 mutedChats=[];
 
 // ── EMAIL CHANGE LISTENERS ────────────────────────────────
-socket.on('myGoogleStatus', function(data) {
-  renderSettingsMain();
-});
-socket.on('googleLinked', function(d) {
-  myGoogleEmail = d.googleEmail;
-  showToast('✅ Google привязан: ' + d.googleEmail);
-  renderSettingsMain();
-});
-socket.on('googleUnlinked', function() {
-  myGoogleEmail = null;
-  showToast('Google аккаунт отвязан');
-  renderSettingsMain();
-});
-socket.on('googleLinkError', function(msg) {
-  showToast('❌ ' + msg);
-});
-
 socket.on('emailChangeCodeSent', function(data) {
   document.getElementById('emailChangeMasked').textContent = data.maskedEmail;
   document.getElementById('emailChangeStep1').style.display='none';
