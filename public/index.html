@@ -2,10 +2,51 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
 <title>MyChat</title>
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+window.isCapacitorApp = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+async function initCapacitorPush() {
+  if (!window.isCapacitorApp) return;
+  try {
+    var PN = window.Capacitor.Plugins.PushNotifications;
+    if (!PN) return;
+    var perm = await PN.requestPermissions();
+    if (perm.receive === 'granted') await PN.register();
+    PN.addListener('registration', function(t) {
+      window._pushToken = t.value;
+      if (window.socket) window.socket.emit('registerPushToken', { token: t.value, platform: 'android' });
+    });
+    PN.addListener('pushNotificationReceived', function(n) {
+      if (window.showToast) window.showToast('\uD83D\uDD14 ' + (n.title||'MyChat') + ': ' + (n.body||''));
+    });
+    PN.addListener('pushNotificationActionPerformed', function(a) {
+      var d = a.notification.data;
+      if (d && d.chatLogin && window.openPM) window.openPM(d.chatLogin, d.chatNick||d.chatLogin);
+    });
+  } catch(e) { console.log('Push error:', e); }
+}
+document.addEventListener('DOMContentLoaded', function() {
+  if (!window.isCapacitorApp) return;
+  // Fix file downloads on Android
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest('a[download]');
+    if (a && a.href) { e.preventDefault(); window.open(a.href, '_system'); }
+  }, true);
+  // Fix status bar
+  var cap = window.Capacitor;
+  if (cap && cap.Plugins) {
+    var SB = cap.Plugins.StatusBar;
+    if (SB) {
+      try { SB.setOverlaysWebView({ overlay: false }); } catch(e2) {}
+      try { SB.setBackgroundColor({ color: '#0a0a0f' }); } catch(e2) {}
+    }
+  }
+});
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════ THEMES ═══════════════ */
@@ -78,6 +119,8 @@ body.theme-sunset{
 /* ═══════════════ BASE ═══════════════ */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;overflow:hidden;}
+/* Android safe area */
+body { padding-top: env(safe-area-inset-top, 0px); }
 body{
   font-family:'Plus Jakarta Sans',system-ui,-apple-system,sans-serif;
   background:var(--bg-base);color:var(--text-primary);
@@ -2928,6 +2971,23 @@ function dismissNotifBar() {
   localStorage.setItem('notif_dismissed','1');
 }
 function sendNotification(title, body, icon) {
+  // Native Capacitor notification (Android status bar)
+  if (window.isCapacitorApp) {
+    try {
+      var LN = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.LocalNotifications;
+      if (LN) {
+        LN.schedule({ notifications: [{
+          title: title,
+          body: body,
+          id: Math.floor(Math.random() * 100000),
+          smallIcon: 'ic_notification',
+          sound: 'default'
+        }]});
+        return;
+      }
+    } catch(e2) {}
+  }
+  // Web notification fallback
   if (Notification.permission !== 'granted') return;
   if (document.hasFocus()) return;
   try { new Notification(title, { body: body, icon: icon || '/favicon.ico' }); } catch(e) {}
@@ -3189,6 +3249,10 @@ socket.on('authSuccess',function(d){
   socket.emit('getPinnedChats');
   socket.emit('getMutedChats');
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
+  // Init Capacitor push notifications
+  if (window.isCapacitorApp) initCapacitorPush();
+  // Send push token if already have one
+  if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
   switchToGeneral();
   socket.emit('getMyChats');
   socket.emit('getMyRooms');

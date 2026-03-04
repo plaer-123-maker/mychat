@@ -146,6 +146,28 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || null;
 // ── EMAIL CONFIG (Resend) ─────────────────────────────────
 // Set these env vars in Railway: RESEND_API_KEY, EMAIL_FROM
 const EMAIL_ENABLED = !!(process.env.RESEND_API_KEY);
+
+// ── FCM Push Notifications ──────────────────────────────
+const FCM_SERVER_KEY = process.env.FCM_SERVER_KEY || null;
+async function sendFCMPush(toLogin, title, body, data) {
+  if (!FCM_SERVER_KEY) return;
+  try {
+    const res = await pool.query('SELECT push_token FROM users WHERE login=$1', [toLogin]);
+    const token = res.rows[0]?.push_token;
+    if (!token) return;
+    const fetch = require('node-fetch');
+    await fetch('https://fcm.googleapis.com/fcm/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'key=' + FCM_SERVER_KEY },
+      body: JSON.stringify({
+        to: token,
+        notification: { title: title, body: body, sound: 'default', icon: 'ic_notification' },
+        data: data || {},
+        priority: 'high'
+      })
+    });
+  } catch(e) { console.error('FCM error:', e.message); }
+}
 let resendClient = null;
 if (Resend && EMAIL_ENABLED) {
   resendClient = new Resend(process.env.RESEND_API_KEY);
@@ -350,6 +372,8 @@ async function initDB() {
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_id VARCHAR(100) DEFAULT NULL'); } catch(e) {}
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_method VARCHAR(20) DEFAULT \'password\''); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT DEFAULT NULL'); } catch(e) {}
+  try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS google_email VARCHAR(200) DEFAULT NULL'); } catch(e) {}
   // Stories
   await pool.query(`CREATE TABLE IF NOT EXISTS stories (
     id SERIAL PRIMARY KEY,
@@ -929,6 +953,14 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка регистрации'); }
   });
 
+  // ── Register push token ──────────────────────────────────
+  socket.on('registerPushToken', async ({ token, platform }) => {
+    if (!socket.userLogin || !token) return;
+    try {
+      await pool.query('UPDATE users SET push_token=$1 WHERE login=$2', [token, socket.userLogin]);
+    } catch(e) { console.error(e); }
+  });
+
   socket.on('login', async ({ login, password }) => {
     if (!checkRateLimit(ip, 'login')) return socket.emit('authError', 'Слишком много попыток. Подождите 5 минут.');
     try {
@@ -1326,6 +1358,8 @@ io.on('connection', (socket) => {
         socket.emit('newPrivateMessage', msgToSend);
         var target = findSocketByLogin(data.toLogin);
         if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username }); }
+        // Send FCM push if user is offline
+        if (!target) { sendFCMPush(toLogin, socket.username || socket.userLogin, 'Написал тебе в MyChat', { chatLogin: socket.userLogin, chatNick: socket.username }); }
       }
       // Detect @mentions in PM text
       if (msg.text) {
