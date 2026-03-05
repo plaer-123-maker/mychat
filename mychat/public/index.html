@@ -4136,22 +4136,23 @@ socket.on('messageHistory',function(data){
     _generalLoadingMore=false;
     if(!msgs||msgs.length===0){_generalAllLoaded=true;return;}
     var prevH=md.scrollHeight;
-    // Рендерим во временный контейнер чтобы не трогать md
+    var prevScrollTop=md.scrollTop;
+    // Рендерим во временный скрытый контейнер
     var tmpDiv=document.createElement('div');
-    tmpDiv.style.display='none';
+    tmpDiv.style.cssText='position:absolute;left:-9999px;visibility:hidden;';
     document.body.appendChild(tmpDiv);
-    // Подменяем messages на tmpDiv пока рендерим
-    tmpDiv.id='messages';
-    md.id='messages_real';
+    // Используем оверрайд getElementById только для addMsg
+    var _origGetById=document.getElementById.bind(document);
+    document.getElementById=function(id){if(id==='messages')return tmpDiv;return _origGetById(id);};
     msgs.forEach(function(m){addMsg(m);});
-    tmpDiv.id='';
-    md.id='messages';
+    document.getElementById=_origGetById;
     document.body.removeChild(tmpDiv);
-    // Теперь вставляем всё из tmpDiv в начало md
+    // Вставляем из tmpDiv в начало md одним блоком
     var frag=document.createDocumentFragment();
     while(tmpDiv.firstChild)frag.appendChild(tmpDiv.firstChild);
     md.insertBefore(frag,md.firstChild);
-    md.scrollTop=md.scrollHeight-prevH;
+    // Восстанавливаем позицию скролла — компенсируем добавленную высоту
+    md.scrollTop=prevScrollTop+(md.scrollHeight-prevH);
     if(msgs[0])_generalOldestId=msgs[0].id;
     if(!hasMore)_generalAllLoaded=true;
     return;
