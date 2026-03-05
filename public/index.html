@@ -1880,7 +1880,10 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       <p class="auth-sub">Войди в свой аккаунт</p>
       <div class="error" id="loginError"></div>
       <input type="text" id="loginLogin" placeholder="Логин" autocomplete="username">
-      <input type="password" id="loginPassword" placeholder="Пароль" autocomplete="current-password">
+      <div style="position:relative;">
+        <input type="password" id="loginPassword" placeholder="Пароль" autocomplete="current-password" style="padding-right:44px;width:100%;box-sizing:border-box;">
+        <button type="button" onclick="togglePassVis('loginPassword',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted);padding:4px;">👁</button>
+      </div>
       <button class="btn" id="loginBtn">Войти →</button>
     </div>
 
@@ -1894,8 +1897,14 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       <input type="email" id="regEmail" placeholder="Email" autocomplete="email">
       <input type="text" id="regLogin" placeholder="Логин (a-z, 0-9, _)" autocomplete="username">
       <input type="text" id="regNickname" placeholder="Отображаемое имя">
-      <input type="password" id="regPassword" placeholder="Пароль (минимум 6 символов)" autocomplete="new-password">
-      <input type="password" id="regPassword2" placeholder="Повтори пароль" autocomplete="new-password">
+      <div style="position:relative;">
+        <input type="password" id="regPassword" placeholder="Пароль (минимум 6 символов)" autocomplete="new-password" style="padding-right:44px;width:100%;box-sizing:border-box;">
+        <button type="button" onclick="togglePassVis('regPassword',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted);padding:4px;">👁</button>
+      </div>
+      <div style="position:relative;">
+        <input type="password" id="regPassword2" placeholder="Повтори пароль" autocomplete="new-password" style="padding-right:44px;width:100%;box-sizing:border-box;">
+        <button type="button" onclick="togglePassVis('regPassword2',this)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted);padding:4px;">👁</button>
+      </div>
       <button class="btn" id="registerBtn">Создать аккаунт →</button>
       <div class="auth-hint">На email придёт код подтверждения — без него войти нельзя</div>
     </div>
@@ -3636,6 +3645,19 @@ function openGeneral(){
   };
 }
 window.openGeneral=openGeneral;
+function togglePassVis(inputId, btn) {
+  var inp = document.getElementById(inputId);
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+window.togglePassVis = togglePassVis;
+
 
 // Track current PM partner profile data
 var currentPMProfile = null;
@@ -5152,6 +5174,27 @@ dragVideo.addEventListener('touchstart',startDrag,{passive:true});dragVideo.addE
 function startDrag(e){isDragging=true;const evt=e.type==='touchstart'?e.touches[0]:e;startX=evt.clientX;startY=evt.clientY;const rect=dragVideo.getBoundingClientRect();initialLeft=rect.left;initialTop=rect.top;dragVideo.style.right='auto';dragVideo.style.bottom='auto';dragVideo.style.left=initialLeft+'px';dragVideo.style.top=initialTop+'px';document.addEventListener('touchmove',moveDrag,{passive:false});document.addEventListener('touchend',stopDrag);document.addEventListener('mousemove',moveDrag);document.addEventListener('mouseup',stopDrag);}
 function moveDrag(e){if(!isDragging)return;const evt=e.type==='touchmove'?e.touches[0]:e;dragVideo.style.left=(initialLeft+evt.clientX-startX)+'px';dragVideo.style.top=(initialTop+evt.clientY-startY)+'px';e.preventDefault();}
 function stopDrag(){isDragging=false;document.removeEventListener('touchmove',moveDrag);document.removeEventListener('touchend',stopDrag);document.removeEventListener('mousemove',moveDrag);document.removeEventListener('mouseup',stopDrag);}
+
+// ── Переменные системы звонков ───────────────────────────
+var localStream=null, remoteStream=null, peerConnection=null;
+var incomingCallData=null;
+var currentFacingMode='user';
+var pendingIce=[], earlyCandidates=[];
+var callPartnerLogin=null, callPartnerNick='', activeCallType='audio';
+var callStartTime=0, callTimerInterval=null;
+var incomingCallCountdown=null;
+var _callRingAudio=null, _vibInterval=null;
+var _callState='idle'; // idle | calling | ringing | connected
+
+const rtcConfig={
+  iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'stun:stun2.l.google.com:19302'},
+    {urls:'stun:stun.stunprotocol.org:3478'}
+  ],
+  iceCandidatePoolSize:10
+};
 
 // ── Запрос разрешений (Capacitor + браузер) ──────────────
 async function requestMediaPermissions(needVideo){
