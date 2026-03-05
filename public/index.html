@@ -4135,24 +4135,27 @@ socket.on('messageHistory',function(data){
   if(_generalLoadingMore){
     _generalLoadingMore=false;
     if(!msgs||msgs.length===0){_generalAllLoaded=true;return;}
-    var prevH=md.scrollHeight;
     var prevScrollTop=md.scrollTop;
-    // Рендерим во временный скрытый контейнер
+    var prevH=md.scrollHeight;
+    // Рендерим сообщения во временный div вне DOM
     var tmpDiv=document.createElement('div');
-    tmpDiv.style.cssText='position:absolute;left:-9999px;visibility:hidden;';
+    // Подменяем getElementById('messages') на tmpDiv через data-атрибут
+    md.id='messages_bak';
+    tmpDiv.id='messages';
+    tmpDiv.style.cssText='position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;';
     document.body.appendChild(tmpDiv);
-    // Используем оверрайд getElementById только для addMsg
-    var _origGetById=document.getElementById.bind(document);
-    document.getElementById=function(id){if(id==='messages')return tmpDiv;return _origGetById(id);};
     msgs.forEach(function(m){addMsg(m);});
-    document.getElementById=_origGetById;
+    // Возвращаем id обратно
+    tmpDiv.id='';
+    md.id='messages';
     document.body.removeChild(tmpDiv);
-    // Вставляем из tmpDiv в начало md одним блоком
+    // Переносим все дочерние элементы tmpDiv в начало md
     var frag=document.createDocumentFragment();
     while(tmpDiv.firstChild)frag.appendChild(tmpDiv.firstChild);
     md.insertBefore(frag,md.firstChild);
-    // Восстанавливаем позицию скролла — компенсируем добавленную высоту
-    md.scrollTop=prevScrollTop+(md.scrollHeight-prevH);
+    // Компенсируем сдвиг скролла точно
+    var addedH=md.scrollHeight-prevH;
+    md.scrollTop=prevScrollTop+addedH;
     if(msgs[0])_generalOldestId=msgs[0].id;
     if(!hasMore)_generalAllLoaded=true;
     return;
@@ -4168,7 +4171,11 @@ socket.on('messageHistory',function(data){
 socket.on('chatMessage',function(msg){
   if(currentView!=='general')return;
   var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
-  addMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+  var md=document.getElementById('messages');
+  // Только авто-скролл вниз если пользователь и так внизу (порог 150px)
+  var atBottom = md.scrollHeight - md.scrollTop - md.clientHeight < 150;
+  addMsg(msg);
+  if(atBottom) md.scrollTop=md.scrollHeight;
 });
 socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 
@@ -7106,7 +7113,10 @@ document.addEventListener('click', function(e) {
 // 3. ГЛОБАЛЬНЫЙ ПОИСК 🔍
 // ══════════════════════════════════════════════════════════════════════════
 var _gsCache = { general: [], pm: {}, room: {} };
-socket.on('messageHistory', function(msgs) {
+socket.on('messageHistory', function(data) {
+  // Обновляем кэш поиска только при начальной загрузке, не при пагинации
+  if (_generalLoadingMore) return;
+  var msgs = Array.isArray(data) ? data : (data && data.msgs ? data.msgs : null);
   if (Array.isArray(msgs)) _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
 });
 socket.on('privateHistory', function(d) {
