@@ -3601,7 +3601,7 @@ socket.on('myRooms',function(rooms){
   renderChatList();
 });
 
-var _generalOldestId = null, _generalLoadingMore = false, _generalAllLoaded = false;
+var _generalOldestId = null, _generalLoadingMore = false, _generalAllLoaded = false, _generalInitialLoading = false;
 var _pmOldestId = null, _pmLoadingMore = false, _pmAllLoaded = false;
 var _roomOldestId = null, _roomLoadingMore = false, _roomAllLoaded = false;
 
@@ -3616,7 +3616,7 @@ function setupScrollPagination(containerEl, loadMoreFn) {
 function openGeneral(){
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
-  _generalOldestId=null;_generalLoadingMore=false;_generalAllLoaded=false;
+  _generalOldestId=null;_generalLoadingMore=false;_generalAllLoaded=false;_generalInitialLoading=false;
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
@@ -3632,9 +3632,11 @@ function openGeneral(){
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
   _pmToken++; _roomToken++;
   _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
+  _generalInitialLoading=true;
   socket.emit('getGeneralHistory', {});
-  // Setup scroll-up to load more
+  // Setup scroll-up to load more — блокируем пока идёт начальная загрузка
   _mdg.onscroll = function() {
+    if(_generalInitialLoading) return; // ждём пока придут первые 50 сообщений
     if(_mdg.scrollTop < 100 && !_generalLoadingMore && !_generalAllLoaded && _generalOldestId) {
       _generalLoadingMore=true;
       var loader=document.createElement('div');loader.id='load-more-indicator';loader.style.cssText='text-align:center;padding:8px;color:var(--text-muted);font-size:13px;';loader.textContent='Загрузка...';
@@ -4135,47 +4137,45 @@ socket.on('messageHistory',function(data){
   if(_generalLoadingMore){
     _generalLoadingMore=false;
     if(!msgs||msgs.length===0){_generalAllLoaded=true;return;}
-    var prevScrollTop=md.scrollTop;
     var prevH=md.scrollHeight;
-    // Рендерим сообщения во временный div вне DOM
+    var prevScrollTop=md.scrollTop;
+    // Рендерим во временный скрытый контейнер
     var tmpDiv=document.createElement('div');
-    // Подменяем getElementById('messages') на tmpDiv через data-атрибут
-    md.id='messages_bak';
-    tmpDiv.id='messages';
-    tmpDiv.style.cssText='position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;';
+    tmpDiv.style.cssText='position:absolute;left:-9999px;visibility:hidden;';
     document.body.appendChild(tmpDiv);
+    // Используем оверрайд getElementById только для addMsg
+    var _origGetById=document.getElementById.bind(document);
+    document.getElementById=function(id){if(id==='messages')return tmpDiv;return _origGetById(id);};
     msgs.forEach(function(m){addMsg(m);});
-    // Возвращаем id обратно
-    tmpDiv.id='';
-    md.id='messages';
+    document.getElementById=_origGetById;
     document.body.removeChild(tmpDiv);
-    // Переносим все дочерние элементы tmpDiv в начало md
+    // Вставляем из tmpDiv в начало md одним блоком
     var frag=document.createDocumentFragment();
     while(tmpDiv.firstChild)frag.appendChild(tmpDiv.firstChild);
     md.insertBefore(frag,md.firstChild);
-    // Компенсируем сдвиг скролла точно
-    var addedH=md.scrollHeight-prevH;
-    md.scrollTop=prevScrollTop+addedH;
+    // Восстанавливаем позицию скролла — компенсируем добавленную высоту
+    md.scrollTop=prevScrollTop+(md.scrollHeight-prevH);
     if(msgs[0])_generalOldestId=msgs[0].id;
     if(!hasMore)_generalAllLoaded=true;
     return;
   }
   if(md.dataset.loading!=='general')return;
+  delete md.dataset.loading; // снимаем флаг сразу чтобы не попасть сюда повторно
   md.innerHTML='';
-  if(!msgs||msgs.length===0){md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';return;}
+  if(!msgs||msgs.length===0){
+    _generalInitialLoading=false;
+    md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';return;
+  }
   msgs.forEach(function(m){addMsg(m);});
   md.scrollTop=md.scrollHeight;
   if(msgs[0])_generalOldestId=msgs[0].id;
   _generalAllLoaded=!hasMore;
+  _generalInitialLoading=false; // разблокируем скролл-пагинацию
 });
 socket.on('chatMessage',function(msg){
   if(currentView!=='general')return;
   var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
-  var md=document.getElementById('messages');
-  // Только авто-скролл вниз если пользователь и так внизу (порог 150px)
-  var atBottom = md.scrollHeight - md.scrollTop - md.clientHeight < 150;
-  addMsg(msg);
-  if(atBottom) md.scrollTop=md.scrollHeight;
+  addMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
 });
 socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 
@@ -7113,10 +7113,7 @@ document.addEventListener('click', function(e) {
 // 3. ГЛОБАЛЬНЫЙ ПОИСК 🔍
 // ══════════════════════════════════════════════════════════════════════════
 var _gsCache = { general: [], pm: {}, room: {} };
-socket.on('messageHistory', function(data) {
-  // Обновляем кэш поиска только при начальной загрузке, не при пагинации
-  if (_generalLoadingMore) return;
-  var msgs = Array.isArray(data) ? data : (data && data.msgs ? data.msgs : null);
+socket.on('messageHistory', function(msgs) {
   if (Array.isArray(msgs)) _gsCache.general = msgs.map(function(m){ return {id:m.id,text:m.text||'',from:m.username||'',ts:m.timestamp}; });
 });
 socket.on('privateHistory', function(d) {
