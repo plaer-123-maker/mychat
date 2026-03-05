@@ -5191,9 +5191,14 @@ const rtcConfig={
     {urls:'stun:stun.l.google.com:19302'},
     {urls:'stun:stun1.l.google.com:19302'},
     {urls:'stun:stun2.l.google.com:19302'},
-    {urls:'stun:stun.stunprotocol.org:3478'}
+    {urls:'stun:stun.stunprotocol.org:3478'},
+    // Free TURN servers for NAT traversal (когда STUN не хватает)
+    {urls:'turn:openrelay.metered.ca:80',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443',username:'openrelayproject',credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443?transport=tcp',username:'openrelayproject',credential:'openrelayproject'}
   ],
-  iceCandidatePoolSize:10
+  iceCandidatePoolSize:10,
+  iceTransportPolicy:'all'
 };
 
 // ── Запрос разрешений (Capacitor + браузер) ──────────────
@@ -5201,23 +5206,24 @@ async function requestMediaPermissions(needVideo){
   // Capacitor — нативный запрос разрешений Android
   if(window.Capacitor && window.Capacitor.isNativePlatform()){
     try{
-      var perms = ['microphone'];
-      if(needVideo) perms.push('camera');
-      // @capacitor/core Permissions API
-      if(window.CapacitorPermissions){
-        for(var i=0;i<perms.length;i++){
-          await window.CapacitorPermissions.request({name:perms[i]});
-        }
+      var Plugins = window.Capacitor.Plugins || window.Plugins || {};
+      // Пробуем через @capacitor/camera плагин (работает для микрофона тоже)
+      if(Plugins.Camera){
+        await Plugins.Camera.requestPermissions({permissions:['camera','microphone']}).catch(function(){});
       }
-      // Попробуем через AndroidPermissions плагин если доступен
-      if(window.Plugins && window.Plugins.AndroidPermissions){
+      // Пробуем через Microphone плагин
+      if(Plugins.Microphone){
+        await Plugins.Microphone.requestPermission().catch(function(){});
+      }
+      // Пробуем через AndroidPermissions
+      if(Plugins.AndroidPermissions){
         var androidPerms=['android.permission.RECORD_AUDIO'];
         if(needVideo) androidPerms.push('android.permission.CAMERA');
         for(var j=0;j<androidPerms.length;j++){
-          try{ await window.Plugins.AndroidPermissions.requestPermission({permission:androidPerms[j]}); }catch(e){}
+          await Plugins.AndroidPermissions.requestPermission({permission:androidPerms[j]}).catch(function(){});
         }
       }
-    }catch(e){ console.warn('Capacitor permissions:',e); }
+    }catch(e){ console.warn('Capacitor permissions error:',e); }
   }
   // Теперь получаем поток — это само по себе запрашивает разрешения в браузере
   return navigator.mediaDevices.getUserMedia({
@@ -5307,10 +5313,17 @@ function createPeerConnection(targetLogin){
       startCallTimer();
       setCallStatus('');
     }
-    if(s==='failed'){ try{peerConnection.restartIce();}catch(e){} }
-    if(s==='disconnected'||s==='closed'){
-      if(_callState==='connected') endCall();
+    if(s==='failed'){
+      console.warn('ICE failed, trying restart...');
+      try{ peerConnection.restartIce(); }catch(e){ endCall(); }
     }
+    if(s==='disconnected'){
+      // Даём 5 секунд на восстановление
+      setTimeout(function(){
+        if(peerConnection && peerConnection.iceConnectionState==='disconnected') endCall();
+      }, 5000);
+    }
+    if(s==='closed'){ if(_callState==='connected') endCall(); }
   };
   peerConnection.ontrack=function(e){
     var rv=document.getElementById('remoteVideo');
@@ -5435,11 +5448,12 @@ function acceptCall(){
     localStream.getTracks().forEach(function(t){ peerConnection.addTrack(t,localStream); });
     return peerConnection.setRemoteDescription(new RTCSessionDescription(savedData.signal));
   })
-  .then(function(){ flushPendingIce(); return peerConnection.createAnswer(); })
+  .then(function(){ return peerConnection.createAnswer(); })
   .then(function(answer){ return peerConnection.setLocalDescription(answer); })
   .then(function(){
     socket.emit('answerCall',{signal:peerConnection.localDescription,to:savedData.from});
-    _callState='connected';
+    flushPendingIce(); // flush AFTER both descriptions set
+    _callState='ringing'; // ICE oniceconnectionstatechange will set 'connected'
   })
   .catch(function(e){
     console.error('acceptCall error:',e);
@@ -5469,10 +5483,9 @@ socket.on('callAccepted',function(signal){
   setCallStatus('Соединение...');
   peerConnection.setRemoteDescription(new RTCSessionDescription(signal))
   .then(function(){
-    flushPendingIce();
-    _callState='connected';
-    startCallTimer();
-    setCallStatus('');
+    flushPendingIce(); // safe to flush here - local desc already set by createOffer
+    // НЕ ставим 'connected' здесь — oniceconnectionstatechange сам поставит
+    setCallStatus('Соединение...');
   })
   .catch(function(e){ console.error('callAccepted setRemoteDescription:',e); });
 });
@@ -5506,9 +5519,10 @@ socket.on('callEnded',function(data){
 // ── Завершить звонок ──────────────────────────────────────
 function endCall(){
   var dur=getDuration();
+  // Сохраняем партнёра ДО cleanupCall, который обнуляет callPartnerLogin
   var partner=callPartnerLogin||(incomingCallData?incomingCallData.from:null);
-  if(partner) socket.emit('hangUp',{to:partner,duration:dur});
-  cleanupCall();
+  cleanupCall(); // сначала чистим локально
+  if(partner) socket.emit('hangUp',{to:partner,duration:dur}); // потом уведомляем
 }
 window.endCall=endCall;
 

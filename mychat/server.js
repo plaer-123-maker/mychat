@@ -2326,6 +2326,28 @@ io.on('connection', (socket) => {
     if (socket.username) addLog('logout', socket.username, 'Logout', ip);
     if (socket.userLogin) {
       pool.query('UPDATE users SET last_seen=$1 WHERE login=$2', [Date.now(), socket.userLogin]).catch(()=>{});
+
+      // Если пользователь был в звонке — уведомить собеседника
+      const callInfo = activeCalls.get(socket.userLogin);
+      if (callInfo) {
+        const partnerSocket = findSocketByLogin(callInfo.calleeLogin);
+        if (partnerSocket) partnerSocket.emit('callEnded', { reason: 'hangup' });
+        // Очистить таймер автосброса
+        const t = callTimeouts.get(socket.userLogin);
+        if (t) { clearTimeout(t.timeout); callTimeouts.delete(socket.userLogin); }
+        activeCalls.delete(socket.userLogin);
+      }
+      // Также проверяем — вдруг этот пользователь был callee в чужом звонке
+      for (const [callerLogin, info] of activeCalls.entries()) {
+        if (info.calleeLogin === socket.userLogin) {
+          const callerSocket = findSocketByLogin(callerLogin);
+          if (callerSocket) callerSocket.emit('callEnded', { reason: 'hangup' });
+          const t = callTimeouts.get(callerLogin);
+          if (t) { clearTimeout(t.timeout); callTimeouts.delete(callerLogin); }
+          activeCalls.delete(callerLogin);
+          break;
+        }
+      }
     }
     onlineUsers.delete(socket.id); socketUsers.delete(socket.id);
     sendOnlineToAll();
