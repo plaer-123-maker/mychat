@@ -3822,13 +3822,18 @@ socket.on('roomData',function(data){
     var msgs=data.messages||[];
     if(!msgs.length){_roomAllLoaded=true;return;}
     var prevH=md.scrollHeight;
-    var beforeCount=md.children.length;
+    var tmpDiv3=document.createElement('div');
+    tmpDiv3.style.display='none';
+    document.body.appendChild(tmpDiv3);
+    tmpDiv3.id='messages';
+    md.id='messages_real';
     msgs.forEach(function(m){addRoomMsg(m);});
-    var all=Array.from(md.children);
-    var newEls=all.slice(beforeCount);
-    var firstOld=all[0];
-    newEls.forEach(function(el){md.removeChild(el);});
-    newEls.forEach(function(el){md.insertBefore(el,firstOld);});
+    tmpDiv3.id='';
+    md.id='messages';
+    document.body.removeChild(tmpDiv3);
+    var frag3=document.createDocumentFragment();
+    while(tmpDiv3.firstChild)frag3.appendChild(tmpDiv3.firstChild);
+    md.insertBefore(frag3,md.firstChild);
     md.scrollTop=md.scrollHeight-prevH;
     if(msgs[0])_roomOldestId=msgs[0].id;
     if(data.has_more===false)_roomAllLoaded=true;
@@ -3961,13 +3966,18 @@ socket.on('privateHistory',function(d){
     _pmLoadingMore=false;
     if(!msgs||msgs.length===0){_pmAllLoaded=true;return;}
     var prevH=md.scrollHeight;
-    var beforeCount=md.children.length;
+    var tmpDiv2=document.createElement('div');
+    tmpDiv2.style.display='none';
+    document.body.appendChild(tmpDiv2);
+    tmpDiv2.id='messages';
+    md.id='messages_real';
     msgs.forEach(function(m){addPM(m);});
-    var all=Array.from(md.children);
-    var newEls=all.slice(beforeCount);
-    var firstOld=all[0];
-    newEls.forEach(function(el){md.removeChild(el);});
-    newEls.forEach(function(el){md.insertBefore(el,firstOld);});
+    tmpDiv2.id='';
+    md.id='messages';
+    document.body.removeChild(tmpDiv2);
+    var frag2=document.createDocumentFragment();
+    while(tmpDiv2.firstChild)frag2.appendChild(tmpDiv2.firstChild);
+    md.insertBefore(frag2,md.firstChild);
     md.scrollTop=md.scrollHeight-prevH;
     if(msgs[0])_pmOldestId=msgs[0].id;
     if(!hasMore)_pmAllLoaded=true;
@@ -4126,18 +4136,21 @@ socket.on('messageHistory',function(data){
     _generalLoadingMore=false;
     if(!msgs||msgs.length===0){_generalAllLoaded=true;return;}
     var prevH=md.scrollHeight;
-    // Render new msgs to temp container, then prepend all at once
-    var tmp=document.createElement('div');
+    // Рендерим во временный контейнер чтобы не трогать md
+    var tmpDiv=document.createElement('div');
+    tmpDiv.style.display='none';
+    document.body.appendChild(tmpDiv);
+    // Подменяем messages на tmpDiv пока рендерим
+    tmpDiv.id='messages';
+    md.id='messages_real';
     msgs.forEach(function(m){addMsg(m);});
-    // addMsg appends to md — move newly appended to front
-    var all=Array.from(md.children);
-    var oldCount=all.length-msgs.length;
-    var newEls=all.slice(oldCount);
-    var oldEls=all.slice(0,oldCount);
-    // Remove new els from end, prepend them to front
-    newEls.forEach(function(el){md.removeChild(el);});
-    var firstOld=md.firstChild;
-    newEls.forEach(function(el){md.insertBefore(el,firstOld);});
+    tmpDiv.id='';
+    md.id='messages';
+    document.body.removeChild(tmpDiv);
+    // Теперь вставляем всё из tmpDiv в начало md
+    var frag=document.createDocumentFragment();
+    while(tmpDiv.firstChild)frag.appendChild(tmpDiv.firstChild);
+    md.insertBefore(frag,md.firstChild);
     md.scrollTop=md.scrollHeight-prevH;
     if(msgs[0])_generalOldestId=msgs[0].id;
     if(!hasMore)_generalAllLoaded=true;
