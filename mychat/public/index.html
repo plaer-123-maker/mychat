@@ -31,10 +31,20 @@ async function initCapacitorPush() {
 }
 document.addEventListener('DOMContentLoaded', function() {
   if (!window.isCapacitorApp) return;
-  // Fix file downloads on Android
+  // Fix file downloads on Android via Capacitor Browser plugin
   document.addEventListener('click', function(e) {
     var a = e.target.closest('a[download]');
-    if (a && a.href) { e.preventDefault(); window.open(a.href, '_system'); }
+    if (!a || !a.href) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Try Capacitor Browser (opens in in-app browser with download support)
+    var cap = window.Capacitor;
+    if (cap && cap.Plugins && cap.Plugins.Browser) {
+      cap.Plugins.Browser.open({ url: a.href, presentationStyle: 'popover' });
+    } else {
+      // Fallback: open in system browser
+      window.open(a.href, '_system');
+    }
   }, true);
   // Fix status bar
   var cap = window.Capacitor;
@@ -3576,8 +3586,12 @@ var onlineLogins = new Set();
 socket.on('unreadNotification',function(d){
   if(currentView==='pm'&&currentPrivateLogin===d.from)return;
   if(currentView==='private'||currentView==='pm'||currentView==='all')socket.emit('getMyChats');
-  // Push notification
-  sendNotification(d.nickname||'Новое сообщение','Написал тебе в MyChat');
+  // Push notification - always send on mobile (Capacitor), web only when not focused
+  if(window.isCapacitorApp){
+    sendNotification(d.nickname||'Новое сообщение', d.text||'Написал тебе в MyChat');
+  } else if(!document.hasFocus()){
+    sendNotification(d.nickname||'Новое сообщение', d.text||'Написал тебе в MyChat');
+  }
 });
 
 socket.on('myRooms',function(rooms){
@@ -3587,9 +3601,22 @@ socket.on('myRooms',function(rooms){
   renderChatList();
 });
 
+var _generalOldestId = null, _generalLoadingMore = false, _generalAllLoaded = false;
+var _pmOldestId = null, _pmLoadingMore = false, _pmAllLoaded = false;
+var _roomOldestId = null, _roomLoadingMore = false, _roomAllLoaded = false;
+
+function setupScrollPagination(containerEl, loadMoreFn) {
+  containerEl.addEventListener('scroll', function() {
+    if(containerEl.scrollTop < 80 && !containerEl._loadingMore && !containerEl._allLoaded) {
+      loadMoreFn();
+    }
+  });
+}
+
 function openGeneral(){
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  _generalOldestId=null;_generalLoadingMore=false;_generalAllLoaded=false;
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
   document.getElementById('chatTitle').textContent='Общий чат';
@@ -3601,10 +3628,20 @@ function openGeneral(){
   var _mdg=document.getElementById('messages');
   _mdg.innerHTML='';
   _mdg.dataset.loading='general';
+  _mdg._loadingMore=false;_mdg._allLoaded=false;
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
-  _pmToken++; _roomToken++; // invalidate any pending PM/room responses
+  _pmToken++; _roomToken++;
   _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
-  socket.emit('getGeneralHistory');
+  socket.emit('getGeneralHistory', {});
+  // Setup scroll-up to load more
+  _mdg.onscroll = function() {
+    if(_mdg.scrollTop < 100 && !_generalLoadingMore && !_generalAllLoaded && _generalOldestId) {
+      _generalLoadingMore=true;
+      var loader=document.createElement('div');loader.id='load-more-indicator';loader.style.cssText='text-align:center;padding:8px;color:var(--text-muted);font-size:13px;';loader.textContent='Загрузка...';
+      _mdg.prepend(loader);
+      socket.emit('getGeneralHistory',{before_id:_generalOldestId});
+    }
+  };
 }
 window.openGeneral=openGeneral;
 
@@ -3716,6 +3753,17 @@ function openPM(login,nickname){
   var _md=document.getElementById('messages');
   _md.innerHTML='<div class="empty-list">Загрузка...</div>';
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
+  _pmOldestId=null;_pmLoadingMore=false;_pmAllLoaded=false;
+  var _md2=document.getElementById('messages');
+  _md2._loadingMore=false;_md2._allLoaded=false;
+  _md2.onscroll=function(){
+    if(_md2.scrollTop<100&&!_pmLoadingMore&&!_pmAllLoaded&&_pmOldestId&&currentView==='pm'){
+      _pmLoadingMore=true;_md2._loadingMore=true;
+      var loader=document.createElement('div');loader.id='load-more-indicator';loader.style.cssText='text-align:center;padding:8px;color:var(--text-muted);font-size:13px;';loader.textContent='Загрузка...';
+      _md2.prepend(loader);
+      var tk=_pmToken;socket.emit('getPrivateHistory',{login:currentPrivateLogin,token:tk,before_id:_pmOldestId});
+    }
+  };
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
   socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
@@ -3868,14 +3916,42 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
-  // Only render if this response matches the currently open PM chat
   if(currentView !== 'pm') return;
   if(currentPrivateLogin !== d.otherLogin) return;
+  var msgs = d.messages || [];
+  var hasMore = d.has_more !== false && msgs.length >= 50;
   var md=document.getElementById('messages');
+  var loader=document.getElementById('load-more-indicator');
+  if(loader)loader.remove();
+  if(_pmLoadingMore){
+    _pmLoadingMore=false;md._loadingMore=false;
+    if(!msgs||msgs.length===0){_pmAllLoaded=true;md._allLoaded=true;return;}
+    var prevH=md.scrollHeight;
+    for(var i=msgs.length-1;i>=0;i--){
+      var tmp=document.createElement('div');
+      addPM(msgs[i]);
+      // addPM appends to md, we need to move it to front
+    }
+    // Better: render to fragment then prepend
+    var existingChildren=Array.from(md.children);
+    var newChildren=Array.from(md.children).filter(function(el){return !existingChildren.includes(el);});
+    // Actually rebuild: save current HTML, prepend new
+    var existHTML=md.innerHTML;
+    md.innerHTML='';
+    msgs.forEach(function(m){addPM(m);});
+    var newHTML=md.innerHTML;
+    md.innerHTML=newHTML+existHTML;
+    md.scrollTop=md.scrollHeight-prevH;
+    if(msgs[0])_pmOldestId=msgs[0].id;
+    if(!hasMore){_pmAllLoaded=true;md._allLoaded=true;}
+    return;
+  }
   md.innerHTML='';
-  if(d.messages.length===0)md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';
-  else d.messages.forEach(function(m){addPM(m);});
+  if(!msgs||msgs.length===0){md.innerHTML='<div class="empty-list">Начните диалог 👋</div>';return;}
+  msgs.forEach(function(m){addPM(m);});
   md.scrollTop=md.scrollHeight;
+  if(msgs[0])_pmOldestId=msgs[0].id;
+  _pmAllLoaded=!hasMore;md._allLoaded=!hasMore;
 });
 socket.on('rateLimited',function(d){
   // Show non-intrusive toast notification
@@ -4012,14 +4088,40 @@ function delPM(id){socket.emit('deletePrivateMessage',id);}
 window.delPM=delPM;
 
 /* ── GENERAL CHAT ── */
-socket.on('messageHistory',function(msgs){
+socket.on('messageHistory',function(data){
+  // Support both array (old) and {msgs, has_more} (new)
+  var msgs = Array.isArray(data) ? data : (data.msgs || data);
+  var hasMore = Array.isArray(data) ? (msgs.length>=50) : (data.has_more !== false);
   if(currentView!=='general')return;
   var md=document.getElementById('messages');
-  if(md.dataset.loading!=='general')return; // switched away before response
+  var loader=document.getElementById('load-more-indicator');
+  if(loader)loader.remove();
+  if(_generalLoadingMore){
+    // Prepend older messages
+    _generalLoadingMore=false; md._loadingMore=false;
+    if(!msgs||msgs.length===0){ _generalAllLoaded=true; md._allLoaded=true; return; }
+    var prevH=md.scrollHeight;
+    var frag=document.createDocumentFragment();
+    var tempDiv=document.createElement('div');
+    msgs.forEach(function(m){
+      var tmp=document.createElement('div');
+      tempDiv.innerHTML=''; // reuse
+      addMsgToContainer(m,tempDiv);
+      while(tempDiv.firstChild)frag.appendChild(tempDiv.firstChild);
+    });
+    md.prepend(frag);
+    md.scrollTop=md.scrollHeight-prevH; // keep scroll position
+    if(msgs[0])_generalOldestId=msgs[0].id;
+    if(!hasMore){_generalAllLoaded=true;md._allLoaded=true;}
+    return;
+  }
+  if(md.dataset.loading!=='general')return;
   md.innerHTML='';
-  if(msgs.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
-  else msgs.forEach(function(m){addMsg(m);});
+  if(!msgs||msgs.length===0){md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';return;}
+  msgs.forEach(function(m){addMsg(m);});
   md.scrollTop=md.scrollHeight;
+  if(msgs[0])_generalOldestId=msgs[0].id;
+  _generalAllLoaded=!hasMore;md._allLoaded=!hasMore;
 });
 socket.on('chatMessage',function(msg){
   if(currentView!=='general')return;
@@ -4125,7 +4227,10 @@ function showReactionPanel(msgId,msgType,anchorEl,replyUser,replyText,canDelete)
   if(left<8)left=8;if(left+pw>window.innerWidth-8)left=window.innerWidth-pw-8;
   var top=rect.top-66;if(top<8)top=rect.bottom+8;
   panel.style.left=left+'px';panel.style.top=top+'px';
-  setTimeout(function(){document.addEventListener('click',closeReactionPanel,{once:true});document.addEventListener('touchstart',closeReactionPanel,{once:true,passive:true});},50);
+  setTimeout(function(){
+    function outsideClose1(e){if(activePanel&&!activePanel.contains(e.target)){closeReactionPanel();document.removeEventListener('pointerdown',outsideClose1);}}
+    document.addEventListener('pointerdown',outsideClose1);
+  },100);
 }
 window.showReactionPanel=showReactionPanel;
 
@@ -5104,18 +5209,34 @@ function startCall(userToCall,type){
 window.startCall=startCall;
 
 var incomingCallCountdown=null;
+var _callRingAudio = null;
+function startRinging(){
+  stopRinging();
+  try {
+    _callRingAudio = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAA'); // placeholder - browser will use system sound
+  } catch(e){}
+  // Vibrate on mobile
+  if(navigator.vibrate){ var _vib=setInterval(function(){navigator.vibrate([400,200,400]);},1200); window._vibInterval=_vib; }
+}
+function stopRinging(){
+  if(_callRingAudio){try{_callRingAudio.pause();}catch(e){} _callRingAudio=null;}
+  if(window._vibInterval){clearInterval(window._vibInterval);navigator.vibrate&&navigator.vibrate(0);}
+}
 socket.on('incomingCall',function(d){
   incomingCallData=d;earlyCandidates=[];
   activeCallType=d.callType;callPartnerLogin=d.from;callPartnerNick=d.fromNickname;
+  // Close any existing overlay
+  document.getElementById('callOverlay').classList.remove('show');
   // Populate incoming call modal
   document.getElementById('incomingCallerName').textContent=d.fromNickname;
   document.getElementById('incomingCallType').textContent=d.callType==='video'?'📹 Видеозвонок':'📞 Аудиозвонок';
   var avEl=document.getElementById('incomingCallAvatar');
   var av=avatarCache[d.from]||null;
   if(av)avEl.innerHTML='<img src="'+av+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
-  else{avEl.innerHTML='<span>'+d.fromNickname[0].toUpperCase()+'</span>';avEl.style.fontSize='36px';avEl.style.background='var(--accent)';}
+  else{avEl.innerHTML='';avEl.style.fontSize='36px';avEl.style.background='var(--accent)';avEl.textContent=d.fromNickname[0].toUpperCase();}
   document.getElementById('incomingCallModal').classList.add('show');
-  // Countdown timer — server will auto-reject at 20s
+  startRinging();
+  // Countdown timer
   clearInterval(incomingCallCountdown);
   var sec=20;
   var timerEl=document.getElementById('incomingCallTimer');
@@ -5129,6 +5250,7 @@ socket.on('incomingCall',function(d){
 
 function acceptCall(){
   clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
+  stopRinging();
   document.getElementById('incomingCallModal').classList.remove('show');
   showCallOverlay();
   setCallAudioUI(callPartnerNick, avatarCache[callPartnerLogin]||null, incomingCallData.callType);
@@ -5152,6 +5274,7 @@ window.acceptCall=acceptCall;
 
 function rejectCall(){
   clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
+  stopRinging();
   // Callee explicitly rejects — send hangUp so server logs it as missed
   if(incomingCallData) socket.emit('hangUp',{to:incomingCallData.from,duration:0,rejected:true});
   document.getElementById('incomingCallModal').classList.remove('show');
@@ -5161,8 +5284,18 @@ window.rejectCall=rejectCall;
 
 socket.on('callAccepted',function(signal){
   if(!peerConnection)return;
+  // Hide any "calling..." state and show connected overlay
+  document.getElementById('incomingCallModal').classList.remove('show');
+  var callingStatus = document.getElementById('callStatus');
+  if(callingStatus) callingStatus.textContent = '🔗 Соединение...';
   peerConnection.setRemoteDescription(new RTCSessionDescription(signal))
-  .then(function(){flushPendingIce();})
+  .then(function(){
+    flushPendingIce();
+    // Mark call as started - start timer
+    if(!callStartTime){ callStartTime=Date.now(); clearInterval(callTimerInterval); callTimerInterval=setInterval(function(){ var el=document.getElementById('callTimer'); if(el)el.textContent=formatDuration(Date.now()-callStartTime); },1000); }
+    var callingStatus2 = document.getElementById('callStatus');
+    if(callingStatus2) callingStatus2.textContent = '';
+  })
   .catch(function(e){console.error('setRemoteDescription error',e);});
 });
 
@@ -5177,8 +5310,8 @@ socket.on('iceCandidate',function(candidate){
 });
 
 socket.on('callEnded',function(data){
-  // Hide incoming call modal if we didn't answer yet (timeout or caller hung up)
   clearInterval(incomingCallCountdown);document.getElementById('incomingCallTimer').textContent='';
+  stopRinging();
   document.getElementById('incomingCallModal').classList.remove('show');
   var partner=callPartnerLogin||(incomingCallData?incomingCallData.from:null);
   if(data&&data.reason==='timeout'&&!peerConnection){
@@ -5838,7 +5971,16 @@ window.showReactionPanel = function(msgId, msgType, anchorEl, replyUser, replyTe
   if (left < 8) left = 8; if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
   var top = rect.top - panel.offsetHeight - 8; if (top < 8) top = rect.bottom + 8;
   panel.style.left = left + 'px'; panel.style.top = top + 'px';
-  setTimeout(function() { document.addEventListener('click', closeReactionPanel, { once: true }); document.addEventListener('touchstart', closeReactionPanel, { once: true, passive: true }); }, 50);
+  setTimeout(function() {
+    function outsideClose(e) {
+      if(activePanel && !activePanel.contains(e.target)) {
+        closeReactionPanel();
+        document.removeEventListener('pointerdown', outsideClose);
+      }
+    }
+    document.addEventListener('pointerdown', outsideClose);
+    window._panelOutsideClose = outsideClose;
+  }, 100);
 };
 
 function openVerifySettings() {
