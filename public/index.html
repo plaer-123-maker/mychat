@@ -3027,9 +3027,17 @@ showAuthStep('main');
 document.getElementById('loginBtn').addEventListener('click', function() {
   var l = document.getElementById('loginLogin').value.trim();
   var p = document.getElementById('loginPassword').value.trim();
-  document.getElementById('loginError').textContent = '';
-  if (!l || !p) { document.getElementById('loginError').textContent = 'Заполни все поля'; return; }
+  var errEl = document.getElementById('loginError');
+  errEl.textContent = '';
+  if (!l || !p) { errEl.textContent = 'Заполни все поля'; return; }
+  var btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.textContent = 'Входим...';
   socket.emit('login', { login: l, password: p });
+  // Разблокировать если authError
+  var _restoreBtn = function() { btn.disabled = false; btn.textContent = 'Войти →'; };
+  socket.once('authError', _restoreBtn);
+  socket.once('authSuccess', _restoreBtn);
 });
 ['loginLogin','loginPassword'].forEach(function(id) {
   var el = document.getElementById(id);
@@ -4117,23 +4125,28 @@ socket.on('messageHistory',function(data){
   if(_generalLoadingMore){
     _generalLoadingMore=false;
     if(!msgs||msgs.length===0){_generalAllLoaded=true;return;}
-    var prevH=md.scrollHeight;
+    // Фильтруем дубликаты — не вставляем то что уже есть в DOM
+    var _existingIds={};
+    md.querySelectorAll('[id^="msg-"]').forEach(function(el){_existingIds[el.id]=1;});
+    var newMsgs=msgs.filter(function(m){return !_existingIds['msg-'+m.id];});
+    if(!newMsgs.length){if(!hasMore)_generalAllLoaded=true;return;}
     var prevScrollTop=md.scrollTop;
-    // Рендерим во временный скрытый контейнер
+    var prevH=md.scrollHeight;
+    // Рендерим через id-swap (надёжно работает в отличие от tmpDiv trick)
+    md.id='messages_bak';
     var tmpDiv=document.createElement('div');
-    tmpDiv.style.cssText='position:absolute;left:-9999px;visibility:hidden;';
+    tmpDiv.id='messages';
+    tmpDiv.style.cssText='position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none;';
     document.body.appendChild(tmpDiv);
-    // Используем оверрайд getElementById только для addMsg
-    var _origGetById=document.getElementById.bind(document);
-    document.getElementById=function(id){if(id==='messages')return tmpDiv;return _origGetById(id);};
-    msgs.forEach(function(m){addMsg(m);});
-    document.getElementById=_origGetById;
+    newMsgs.forEach(function(m){addMsg(m);});
+    tmpDiv.id='';
+    md.id='messages';
     document.body.removeChild(tmpDiv);
-    // Вставляем из tmpDiv в начало md одним блоком
+    // Переносим из tmpDiv в начало md
     var frag=document.createDocumentFragment();
     while(tmpDiv.firstChild)frag.appendChild(tmpDiv.firstChild);
     md.insertBefore(frag,md.firstChild);
-    // Восстанавливаем позицию скролла — компенсируем добавленную высоту
+    // Компенсируем сдвиг скролла точно
     md.scrollTop=prevScrollTop+(md.scrollHeight-prevH);
     if(msgs[0])_generalOldestId=msgs[0].id;
     if(!hasMore)_generalAllLoaded=true;
@@ -4155,7 +4168,10 @@ socket.on('messageHistory',function(data){
 socket.on('chatMessage',function(msg){
   if(currentView!=='general')return;
   var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
-  addMsg(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
+  var _md=document.getElementById('messages');
+  var _atBottom=(_md.scrollHeight-_md.scrollTop-_md.clientHeight)<150;
+  addMsg(msg);
+  if(_atBottom) _md.scrollTop=_md.scrollHeight;
 });
 socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 
