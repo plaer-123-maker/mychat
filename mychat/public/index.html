@@ -3810,11 +3810,33 @@ socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=nu
 socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
 
+var _roomOldestId=null,_roomLoadingMore=false,_roomAllLoaded=false;
 socket.on('roomData',function(data){
-  // Only render if this response matches the currently requested room
   if(Number(currentRoomId) !== Number(data.room.id)) return;
   var md=document.getElementById('messages');
+  var loader=document.getElementById('load-more-indicator');
+  if(loader)loader.remove();
+  // Подгрузка старых сообщений (скролл вверх)
+  if(_roomLoadingMore){
+    _roomLoadingMore=false;
+    var msgs=data.messages||[];
+    if(!msgs.length){_roomAllLoaded=true;return;}
+    var prevH=md.scrollHeight;
+    var beforeCount=md.children.length;
+    msgs.forEach(function(m){addRoomMsg(m);});
+    var all=Array.from(md.children);
+    var newEls=all.slice(beforeCount);
+    var firstOld=all[0];
+    newEls.forEach(function(el){md.removeChild(el);});
+    newEls.forEach(function(el){md.insertBefore(el,firstOld);});
+    md.scrollTop=md.scrollHeight-prevH;
+    if(msgs[0])_roomOldestId=msgs[0].id;
+    if(data.has_more===false)_roomAllLoaded=true;
+    return;
+  }
+  // Первичная загрузка
   currentView='room';currentRoomData=data;
+  _roomOldestId=null;_roomLoadingMore=false;_roomAllLoaded=false;
   setActiveTab('tabRooms');
   document.getElementById('mainChat').classList.add('show');
   document.getElementById('noChat').style.display='none';
@@ -3827,9 +3849,21 @@ socket.on('roomData',function(data){
   document.getElementById('chatHeaderBtns').innerHTML=btns+'<button onclick="openSecretTimerModal()" title="Самоудаление сообщений">🔥</button><button onclick="openMsgSearch()" title="Поиск (Ctrl+F)">🔍</button>';
   document.getElementById('inputArea').style.display=(data.room.type==='channel'&&data.myRole!=='admin')?'none':'flex';
   md.innerHTML='';
-  if(data.messages.length===0)md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';
-  else data.messages.forEach(function(m){addRoomMsg(m);});
+  var msgs=data.messages||[];
+  if(!msgs.length){md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';}
+  else{msgs.forEach(function(m){addRoomMsg(m);});if(msgs[0])_roomOldestId=msgs[0].id;}
   md.scrollTop=md.scrollHeight;
+  if(data.has_more===false)_roomAllLoaded=true;
+  // Скролл вверх = подгрузка
+  md.onscroll=function(){
+    if(md.scrollTop<100&&!_roomLoadingMore&&!_roomAllLoaded&&_roomOldestId&&currentView==='room'){
+      _roomLoadingMore=true;
+      var loader2=document.createElement('div');loader2.id='load-more-indicator';
+      loader2.style.cssText='text-align:center;padding:8px;color:var(--text-muted);font-size:13px;';
+      loader2.textContent='Загрузка...';md.prepend(loader2);
+      socket.emit('openRoom',{roomId:currentRoomId,before_id:_roomOldestId});
+    }
+  };
   socket.emit('getMyRooms');
 });
 
@@ -3924,26 +3958,19 @@ socket.on('privateHistory',function(d){
   var loader=document.getElementById('load-more-indicator');
   if(loader)loader.remove();
   if(_pmLoadingMore){
-    _pmLoadingMore=false;md._loadingMore=false;
-    if(!msgs||msgs.length===0){_pmAllLoaded=true;md._allLoaded=true;return;}
+    _pmLoadingMore=false;
+    if(!msgs||msgs.length===0){_pmAllLoaded=true;return;}
     var prevH=md.scrollHeight;
-    for(var i=msgs.length-1;i>=0;i--){
-      var tmp=document.createElement('div');
-      addPM(msgs[i]);
-      // addPM appends to md, we need to move it to front
-    }
-    // Better: render to fragment then prepend
-    var existingChildren=Array.from(md.children);
-    var newChildren=Array.from(md.children).filter(function(el){return !existingChildren.includes(el);});
-    // Actually rebuild: save current HTML, prepend new
-    var existHTML=md.innerHTML;
-    md.innerHTML='';
+    var beforeCount=md.children.length;
     msgs.forEach(function(m){addPM(m);});
-    var newHTML=md.innerHTML;
-    md.innerHTML=newHTML+existHTML;
+    var all=Array.from(md.children);
+    var newEls=all.slice(beforeCount);
+    var firstOld=all[0];
+    newEls.forEach(function(el){md.removeChild(el);});
+    newEls.forEach(function(el){md.insertBefore(el,firstOld);});
     md.scrollTop=md.scrollHeight-prevH;
     if(msgs[0])_pmOldestId=msgs[0].id;
-    if(!hasMore){_pmAllLoaded=true;md._allLoaded=true;}
+    if(!hasMore)_pmAllLoaded=true;
     return;
   }
   md.innerHTML='';
@@ -4089,7 +4116,6 @@ window.delPM=delPM;
 
 /* ── GENERAL CHAT ── */
 socket.on('messageHistory',function(data){
-  // Support both array (old) and {msgs, has_more} (new)
   var msgs = Array.isArray(data) ? data : (data.msgs || data);
   var hasMore = Array.isArray(data) ? (msgs.length>=50) : (data.has_more !== false);
   if(currentView!=='general')return;
@@ -4097,22 +4123,24 @@ socket.on('messageHistory',function(data){
   var loader=document.getElementById('load-more-indicator');
   if(loader)loader.remove();
   if(_generalLoadingMore){
-    // Prepend older messages
-    _generalLoadingMore=false; md._loadingMore=false;
-    if(!msgs||msgs.length===0){ _generalAllLoaded=true; md._allLoaded=true; return; }
+    _generalLoadingMore=false;
+    if(!msgs||msgs.length===0){_generalAllLoaded=true;return;}
     var prevH=md.scrollHeight;
-    var frag=document.createDocumentFragment();
-    var tempDiv=document.createElement('div');
-    msgs.forEach(function(m){
-      var tmp=document.createElement('div');
-      tempDiv.innerHTML=''; // reuse
-      addMsgToContainer(m,tempDiv);
-      while(tempDiv.firstChild)frag.appendChild(tempDiv.firstChild);
-    });
-    md.prepend(frag);
-    md.scrollTop=md.scrollHeight-prevH; // keep scroll position
+    // Render new msgs to temp container, then prepend all at once
+    var tmp=document.createElement('div');
+    msgs.forEach(function(m){addMsg(m);});
+    // addMsg appends to md — move newly appended to front
+    var all=Array.from(md.children);
+    var oldCount=all.length-msgs.length;
+    var newEls=all.slice(oldCount);
+    var oldEls=all.slice(0,oldCount);
+    // Remove new els from end, prepend them to front
+    newEls.forEach(function(el){md.removeChild(el);});
+    var firstOld=md.firstChild;
+    newEls.forEach(function(el){md.insertBefore(el,firstOld);});
+    md.scrollTop=md.scrollHeight-prevH;
     if(msgs[0])_generalOldestId=msgs[0].id;
-    if(!hasMore){_generalAllLoaded=true;md._allLoaded=true;}
+    if(!hasMore)_generalAllLoaded=true;
     return;
   }
   if(md.dataset.loading!=='general')return;
@@ -4121,7 +4149,7 @@ socket.on('messageHistory',function(data){
   msgs.forEach(function(m){addMsg(m);});
   md.scrollTop=md.scrollHeight;
   if(msgs[0])_generalOldestId=msgs[0].id;
-  _generalAllLoaded=!hasMore;md._allLoaded=!hasMore;
+  _generalAllLoaded=!hasMore;
 });
 socket.on('chatMessage',function(msg){
   if(currentView!=='general')return;
