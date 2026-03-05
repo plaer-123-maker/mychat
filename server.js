@@ -338,10 +338,9 @@ async function initDB() {
     created_at BIGINT DEFAULT 0
   )`);
 
-  // Performance indexes
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id DESC)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_logins_id ON private_messages(from_login,to_login,id DESC)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_room_id ON room_messages(room_id,id DESC)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_id ON private_messages(id DESC)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_id ON room_messages(room_id, id DESC)'); } catch(e) {}
   // === NEW FEATURES ===
   // Verification badge
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false'); } catch(e) {}
@@ -1158,20 +1157,15 @@ io.on('connection', (socket) => {
     if (!socket.userLogin) return;
     try {
       const before_id = opts && opts.before_id ? parseInt(opts.before_id) : null;
-      let msgs;
+      let result;
       if (before_id) {
-        msgs = await pool.query(
-          'SELECT id,username,user_login,text,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice,vip_emoji FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50',
-          [before_id]
-        );
-        msgs = { rows: msgs.rows.reverse() };
+        result = await pool.query('SELECT * FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
+        result = { rows: result.rows.reverse() };
       } else {
-        msgs = await pool.query(
-          'SELECT id,username,user_login,text,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice,vip_emoji FROM messages ORDER BY id DESC LIMIT 50'
-        );
-        msgs = { rows: msgs.rows.reverse() };
+        result = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
+        result = { rows: result.rows.reverse() };
       }
-      socket.emit('messageHistory', { msgs: msgs.rows.map(fixMsgImages), has_more: msgs.rows.length === 50 });
+      socket.emit('messageHistory', { msgs: result.rows.map(fixMsgImages), has_more: result.rows.length === 50 });
     } catch(e) { console.error(e); }
   });
 
@@ -1368,16 +1362,10 @@ io.on('connection', (socket) => {
     try {
       let res;
       if (before_id) {
-        res = await pool.query(
-          'SELECT id,from_login,to_login,from_nickname,text,type,timestamp,read,read_at,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50',
-          [socket.userLogin, otherLogin, before_id]
-        );
-        res = { rows: res.rows.reverse() };
+        const r = await pool.query('SELECT * FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
+        res = { rows: r.rows.reverse() };
       } else {
-        res = await pool.query(
-          'SELECT id,from_login,to_login,from_nickname,text,type,timestamp,read,read_at,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50',
-          [socket.userLogin, otherLogin]
-        );
+        res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
       }
       const now = Date.now();
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
@@ -1418,7 +1406,7 @@ io.on('connection', (socket) => {
       } else {
         socket.emit('newPrivateMessage', msgToSend);
         var target = findSocketByLogin(data.toLogin);
-        var _previewTxt = msgToSend.type==='voice'?'🎤 Голосовое':msgToSend.type==='file'?('📎 '+(msgToSend.file_name||'Файл')):msgToSend.type==='image'?'📷 Фото':(msgToSend.text?decryptText(msgToSend.text).substring(0,80):'Сообщение'); if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username, text: _previewTxt }); } else { sendFCMPush(socket.userLogin === msgToSend.from_login ? msgToSend.to_login : msgToSend.from_login, socket.username||socket.userLogin, _previewTxt, { chatLogin: socket.userLogin, chatNick: socket.username||socket.userLogin }); }
+        var _prevTxt = msgToSend.type==='voice'?'🎤 Голосовое':msgToSend.type==='file'?('📎 '+(msgToSend.file_name||'Файл')):msgToSend.type==='image'?'📷 Фото':(msgToSend.text?decryptText(msgToSend.text).substring(0,80):''); if (target) { target.emit('newPrivateMessage', msgToSend); target.emit('unreadNotification', { from: socket.userLogin, nickname: socket.username, text: _prevTxt }); } else { sendFCMPush(msgToSend.to_login||data.toLogin, socket.username||socket.userLogin, _prevTxt||'Новое сообщение', { chatLogin: socket.userLogin, chatNick: socket.username||socket.userLogin }); }
         // Send FCM push if user is offline
         if (!target) { sendFCMPush(toLogin, socket.username || socket.userLogin, 'Написал тебе в MyChat', { chatLogin: socket.userLogin, chatNick: socket.username }); }
       }
@@ -1522,7 +1510,14 @@ io.on('connection', (socket) => {
       if (member.rows.length === 0) return socket.emit('chatError', 'Вы не участник этой комнаты');
       var room = await pool.query('SELECT * FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return socket.emit('chatError', 'Комната не найдена');
-      const room_before_id = (typeof data === 'object' && data && data.before_id) ? parseInt(data.before_id) : null; let msgs; if(room_before_id){ const rm = await pool.query('SELECT id,room_id,from_login,from_nickname,text,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice FROM room_messages WHERE room_id=$1 AND id < $2 ORDER BY id DESC LIMIT 50',[roomId,room_before_id]); msgs={rows:rm.rows.reverse()}; } else { const rm = await pool.query('SELECT id,room_id,from_login,from_nickname,text,type,timestamp,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,image,voice FROM room_messages WHERE room_id=$1 ORDER BY id ASC LIMIT 50',[roomId]); msgs=rm; }
+      const room_before_id = (typeof data === 'object' && data && data.before_id) ? parseInt(data.before_id) : null;
+      let msgs;
+      if (room_before_id) {
+        const rm = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 AND id < $2 ORDER BY id DESC LIMIT 50', [roomId, room_before_id]);
+        msgs = { rows: rm.rows.reverse() };
+      } else {
+        msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY id ASC LIMIT 50', [roomId]);
+      }
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
       socket.join('room_' + roomId);
       socket.emit('roomData', { room: room.rows[0], myRole: member.rows[0].role, messages: msgs.rows.map(fixMsgImages), members: members.rows, token });
