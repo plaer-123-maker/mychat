@@ -3003,6 +3003,596 @@ function sendNotification(title, body, icon) {
   try { new Notification(title, { body: body, icon: icon || '/favicon.ico' }); } catch(e) {}
 }
 
+(function(){var token=localStorage.getItem('mychat_token');if(token)socket.emit('autoLogin',token);})();
+
+/* ── AUTH ── */
+// ── NEW AUTH SYSTEM ───────────────────────────────────────
+var _pendingRegLogin = null;
+var _googleSetupData = null;
+
+function showAuthStep(step) {
+  ['authStepMain','authStepLogin','authStepRegister','authStepEmailCode','authStepGoogleSetup','authStepTelegramSetup'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  var map = {'main':'authStepMain','login':'authStepLogin','register':'authStepRegister','emailcode':'authStepEmailCode','googlesetup':'authStepGoogleSetup','telegramsetup':'authStepTelegramSetup'};
+  if (map[step]) document.getElementById(map[step]).style.display = 'block';
+  ['authError','loginError','registerError','emailCodeError','googleSetupError','telegramSetupError'].forEach(function(id){
+    var el = document.getElementById(id); if (el) el.textContent = '';
+  });
+}
+showAuthStep('main');
+
+// Login
+document.getElementById('loginBtn').addEventListener('click', function() {
+  var l = document.getElementById('loginLogin').value.trim();
+  var p = document.getElementById('loginPassword').value.trim();
+  document.getElementById('loginError').textContent = '';
+  if (!l || !p) { document.getElementById('loginError').textContent = 'Заполни все поля'; return; }
+  socket.emit('login', { login: l, password: p });
+});
+['loginLogin','loginPassword'].forEach(function(id) {
+  var el = document.getElementById(id);
+  if (el) el.addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
+});
+
+// Register
+document.getElementById('registerBtn').addEventListener('click', function() {
+  var e = document.getElementById('regEmail').value.trim();
+  var l = document.getElementById('regLogin').value.trim();
+  var n = document.getElementById('regNickname').value.trim();
+  var p = document.getElementById('regPassword').value.trim();
+  var p2 = document.getElementById('regPassword2').value.trim();
+  var err = document.getElementById('registerError');
+  err.textContent = '';
+  if (!e) { err.textContent = 'Введи email'; return; }
+  if (!l) { err.textContent = 'Введи логин'; return; }
+  if (!n) { err.textContent = 'Введи отображаемое имя'; return; }
+  if (!p) { err.textContent = 'Введи пароль'; return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { err.textContent = 'Неверный формат email'; return; }
+  if (p !== p2) { err.textContent = 'Пароли не совпадают'; return; }
+  if (p.length < 6) { err.textContent = 'Пароль минимум 6 символов'; return; }
+  var btn = document.getElementById('registerBtn');
+  btn.disabled = true;
+  btn.textContent = 'Отправляем код...';
+  socket.emit('register', { login: l, password: p, nickname: n, email: e });
+});
+
+// Email code verification
+socket.on('emailVerificationRequired', function(d) {
+  var btn = document.getElementById('registerBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Создать аккаунт →'; }
+  _pendingRegLogin = d.login;
+  document.getElementById('emailCodeHint').textContent = 'Мы отправили 6-значный код на ' + d.email;
+  showAuthStep('emailcode');
+  setTimeout(function() { var f = document.querySelector('.code-digit'); if (f) f.focus(); }, 100);
+});
+
+document.querySelectorAll('.code-digit').forEach(function(input, i, all) {
+  input.addEventListener('input', function() {
+    this.value = this.value.replace(/[^0-9]/g, '');
+    if (this.value && i < all.length - 1) all[i + 1].focus();
+    if (this.value && i === all.length - 1) document.getElementById('confirmCodeBtn').click();
+  });
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Backspace' && !this.value && i > 0) all[i - 1].focus();
+  });
+  input.addEventListener('paste', function(e) {
+    e.preventDefault();
+    var txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    txt.split('').forEach(function(ch, idx) { if (all[idx]) all[idx].value = ch; });
+    var last = Math.min(txt.length, all.length - 1);
+    if (all[last]) all[last].focus();
+  });
+});
+
+document.getElementById('confirmCodeBtn').addEventListener('click', function() {
+  var code = Array.from(document.querySelectorAll('.code-digit')).map(function(i){ return i.value; }).join('');
+  document.getElementById('emailCodeError').textContent = '';
+  if (code.length !== 6) { document.getElementById('emailCodeError').textContent = 'Введи все 6 цифр'; return; }
+  socket.emit('confirmEmailCode', { login: _pendingRegLogin, code: code });
+});
+
+socket.on('emailCodeError', function(msg) {
+  document.getElementById('emailCodeError').textContent = msg;
+});
+
+document.getElementById('resendCodeLink').addEventListener('click', function() {
+  if (!_pendingRegLogin) return;
+  socket.emit('resendEmailCode', { login: _pendingRegLogin });
+  this.textContent = 'Отправлено!';
+  var lnk = this;
+  setTimeout(function() { lnk.textContent = 'Отправить код ещё раз'; }, 30000);
+});
+
+socket.on('emailCodeResent', function() {
+  document.getElementById('emailCodeError').textContent = '';
+  document.querySelectorAll('.code-digit').forEach(function(i) { i.value = ''; });
+  var f = document.querySelector('.code-digit'); if (f) f.focus();
+});
+
+// Google OAuth
+socket.on('googleNeedSetup', function(d) {
+  _googleSetupData = d;
+  document.getElementById('googleSetupNickname').value = d.suggestedName || '';
+  showAuthStep('googlesetup');
+});
+
+document.getElementById('googleSetupBtn').addEventListener('click', function() {
+  if (!_googleSetupData) return;
+  var l = document.getElementById('googleSetupLogin').value.trim();
+  var n = document.getElementById('googleSetupNickname').value.trim();
+  document.getElementById('googleSetupError').textContent = '';
+  if (!l || !n) { document.getElementById('googleSetupError').textContent = 'Заполни все поля'; return; }
+  socket.emit('googleRegisterSetup', { googleId: _googleSetupData.googleId, email: _googleSetupData.email, login: l, nickname: n });
+});
+
+// ── GOOGLE SETUP ──
+
+// ── TELEGRAM SETUP ──
+var _telegramSetupData = null;
+
+socket.on('telegramNeedSetup', function(d) {
+  _telegramSetupData = d;
+  document.getElementById('telegramSetupLogin').value = (d.tgUsername || '').toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+  document.getElementById('telegramSetupNickname').value = d.suggestedName || '';
+  showAuthStep('telegramsetup');
+});
+
+document.getElementById('telegramSetupBtn').addEventListener('click', function() {
+  if (!_telegramSetupData) return;
+  var l = document.getElementById('telegramSetupLogin').value.trim();
+  var n = document.getElementById('telegramSetupNickname').value.trim();
+  document.getElementById('telegramSetupError').textContent = '';
+  if (!l || !n) { document.getElementById('telegramSetupError').textContent = 'Заполни все поля'; return; }
+  socket.emit('telegramRegisterSetup', { tgId: _telegramSetupData.tgId, login: l, nickname: n });
+});
+
+// ── TELEGRAM WIDGET INIT ──
+function initTelegramAuth() {
+  var botName = window.TELEGRAM_BOT_NAME_PUB;
+  if (!botName) return;
+  document.getElementById('telegramBtnWrap').style.display = 'block';
+  document.getElementById('oauthBtns').style.display = 'block';
+  document.getElementById('oauthDivider').style.display = 'flex';
+
+  document.getElementById('telegramSignInBtn').addEventListener('click', function() {
+    // Open Telegram Login Widget in popup
+    var w = 550, h = 450;
+    var left = (window.screen.width - w) / 2;
+    var top = (window.screen.height - h) / 2;
+    var authUrl = 'https://oauth.telegram.org/auth?bot_id=' + window.TELEGRAM_BOT_ID_PUB +
+      '&origin=' + encodeURIComponent(window.location.origin) +
+      '&request_access=write&return_to=' + encodeURIComponent(window.location.origin + '/tg-callback');
+    var popup = window.open(authUrl, 'TelegramAuth', 'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top);
+    window._tgAuthPopup = popup;
+  });
+}
+
+// Telegram sends data via postMessage from widget
+window.addEventListener('message', function(e) {
+  if (!e.data || e.data.type !== 'telegram_auth') return;
+  socket.emit('telegramAuth', e.data.data);
+});
+
+// Also handle Telegram widget callback (widget calls window.onTelegramAuth)
+window.onTelegramAuth = function(user) {
+  socket.emit('telegramAuth', user);
+};
+
+// ── GOOGLE AUTH INIT ──
+window.doGoogleLogin = function() {
+  if (!window.GOOGLE_CLIENT_ID_PUB) {
+    alert('Вход через Google не настроен. Добавь GOOGLE_CLIENT_ID в Railway Variables.');
+    return;
+  }
+  var nonce = Math.random().toString(36).slice(2);
+  var url = 'https://accounts.google.com/o/oauth2/v2/auth'
+    + '?client_id=' + encodeURIComponent(window.GOOGLE_CLIENT_ID_PUB)
+    + '&redirect_uri=' + encodeURIComponent(window.location.origin)
+    + '&response_type=token%20id_token'
+    + '&scope=openid%20email%20profile'
+    + '&nonce=' + nonce
+    + '&prompt=select_account';
+  var w=500,h=620,left=Math.round((screen.width-w)/2),top=Math.round((screen.height-h)/2);
+  var popup=window.open(url,'googleLogin','width='+w+',height='+h+',left='+left+',top='+top);
+  var timer=setInterval(function(){
+    try {
+      if(!popup||popup.closed){clearInterval(timer);return;}
+      var href=popup.location.href;
+      if(href&&href.indexOf(window.location.origin)===0){
+        clearInterval(timer);
+        var hash=popup.location.hash||'';
+        popup.close();
+        var m=hash.match(/[#&]id_token=([^&]+)/);
+        if(m){socket.emit('googleAuth',{idToken:decodeURIComponent(m[1])});}
+        else{alert('Не удалось получить токен. Попробуй ещё раз.');}
+      }
+    }catch(e){}
+  },300);
+};
+
+function initGoogleAuth(){
+  if(typeof google!=='undefined'&&google.accounts&&window.GOOGLE_CLIENT_ID_PUB){
+    try{google.accounts.id.initialize({client_id:window.GOOGLE_CLIENT_ID_PUB,use_fedcm_for_prompt:false,callback:function(r){socket.emit('googleAuth',{idToken:r.credential});}});}catch(e){}
+  }
+}
+setTimeout(initGoogleAuth,1000);
+
+socket.on('authSuccess',function(d){
+  myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
+  myAvatar=d.avatar||null;myUsername=d.username||null;
+  myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;myVerified=d.verified||false;
+  myAuthMethod=d.authMethod||null;myGoogleEmail=d.googleEmail||null;
+  if(myVipEmoji)vipEmojiCache[myLogin]=myVipEmoji;
+  if(d.verified)verifiedCache[d.login]=true;
+  if(d.vip_emoji)vipEmojiCache[d.login]=d.vip_emoji;
+  if(d.avatar)avatarCache[d.login]=d.avatar;
+  if(d.token)localStorage.setItem('mychat_token',d.token);
+  document.getElementById('authOverlay').classList.add('hidden');
+  document.getElementById('appContainer').classList.add('active');
+  if(myRole==='admin'||myRole==='moderator')document.getElementById('adminPanelBtn').style.display='flex';
+  if(customBgData) applyBackground('custom', customBgData);
+  else if(currentBgId !== 'none') applyBackground(currentBgId, null);
+  socket.emit('getPinnedChats');
+  socket.emit('getMutedChats');
+  if (!localStorage.getItem('notif_dismissed')) initNotifications();
+  // Init Capacitor push notifications
+  if (window.isCapacitorApp) initCapacitorPush();
+  // Send push token if already have one
+  if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
+  switchToGeneral();
+  socket.emit('getMyChats');
+  socket.emit('getMyRooms');
+  // Check if email is attached
+  socket.emit('getMyEmail');
+});
+socket.on('authError',function(m){
+  localStorage.removeItem('mychat_token');
+  // Сбрасываем кнопку регистрации если была заблокирована
+  var regBtn = document.getElementById('registerBtn');
+  if (regBtn && regBtn.disabled) { regBtn.disabled = false; regBtn.textContent = 'Создать аккаунт →'; }
+  var shown = false;
+  ['loginError','registerError','googleSetupError'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el && el.offsetParent !== null && !shown) { el.textContent = m; shown = true; }
+  });
+  if (!shown) {
+    var ae = document.getElementById('authError'); if (ae) ae.textContent = m;
+    var le = document.getElementById('loginError'); if (le) le.textContent = m;
+  }
+});
+
+/* ── READ RECEIPTS ── */
+socket.on('messagesRead',function(d){
+  d.msgIds.forEach(function(id){
+    var el=document.querySelector('#pm-'+id+' .msg-time');
+    if(el){ el.innerHTML=el.innerHTML.replace(/<span class="msg-checks[^"]*">.*?<\/span>/,'')+'<span class="msg-checks check-double">✓✓</span>'; }
+  });
+});
+
+/* ── LAST SEEN / ONLINE STATUS ── */
+socket.on('lastSeenResult',function(d){
+  lastSeenCache[d.login]=d;
+  // Update green dot tracking for non-admin users
+  if(d.isOnline) onlineLogins.add(d.login);
+  else onlineLogins.delete(d.login);
+  updateHeaderStatus(d.login);
+  // Refresh chat list green dot for this user
+  if(['private','pm','all'].includes(currentView)) renderChatList();
+});
+
+function updateHeaderStatus(login){
+  if(currentView!=='pm'||currentPrivateLogin!==login)return;
+  var onlineEl=document.getElementById('onlineInfo');
+  if(!onlineEl)return;
+  var d=lastSeenCache[login];
+  var isOnline=onlineLogins.has(login);
+  if(d&&d.hidden){onlineEl.innerHTML='<span class="status-text offline">был(а) недавно</span>';return;}
+  if(isOnline){onlineEl.innerHTML='<span class="status-text">● в сети</span>';return;}
+  if(d&&d.last_seen){onlineEl.innerHTML='<span class="status-text offline">был(а) '+formatLastSeen(d.last_seen)+'</span>';return;}
+  onlineEl.innerHTML='';
+}
+
+/* ── VIP SOCKET HANDLERS ── */
+socket.on('vipActivateResult',function(d){
+  if(d.ok){
+    myVipUntil=d.until;
+    var err=document.getElementById('vipCodeError');if(err)err.textContent='';
+    openVipSettings();
+  } else {
+    var err=document.getElementById('vipCodeError');if(err)err.textContent=d.msg||'Ошибка';
+  }
+});
+socket.on('vipEmojiResult',function(d){
+  if(d.ok){
+    myVipEmoji=d.emoji||null;
+    vipEmojiCache[myLogin]=d.emoji||null;
+    document.querySelectorAll('.my-nick-display').forEach(function(el){
+      el.innerHTML=getNickWithEmoji(myLogin,myNickname);
+    });
+  }
+});
+
+socket.on('userVipUpdated',function(d){
+  if(!d.login) return;
+  vipEmojiCache[d.login]=d.vip_emoji||null;
+  // If it's our own update, sync local state
+  if(d.login===myLogin){
+    myVipUntil=d.vip_until||0;
+    myVipEmoji=d.vip_emoji||null;
+  }
+  renderChatList();
+});
+socket.on('kicked',function(m){localStorage.removeItem('mychat_token');alert(m);location.reload();});
+socket.on('nicknameChanged',function(n){myNickname=n;});
+socket.on('avatarChanged',function(av){myAvatar=av;if(av)avatarCache[myLogin]=av;else delete avatarCache[myLogin];});
+socket.on('usernameChanged',function(un){myUsername=un;});
+socket.on('userAvatarUpdated',function(d){if(d.avatar)avatarCache[d.login]=d.avatar;else delete avatarCache[d.login];
+  // refresh visible chat avatars
+  document.querySelectorAll('[data-avatar-login="'+d.login+'"]').forEach(function(el){renderAvatarInEl(el,d.login,el.dataset.avatarNick||'?');});
+});
+socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
+socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
+function showError(m){var e=document.getElementById('chatError');if(!e)return;e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);}
+window.showError=showError;
+socket.on('onlineUsers',function(d){
+  // Track online logins for green dots (server sends count for all, users list for admins)
+  // We use lastSeenResult for individual online status, but also track count
+  if(d.isAdmin) {
+    onlineLogins.clear();
+    (d.users||[]).forEach(function(u){ onlineLogins.add(u.login); });
+    if(['private','pm','all'].includes(currentView)) renderChatList();
+  }
+  // Always update online count
+  if(currentView==='general'){var el=document.getElementById('onlineInfo');el.textContent=d.isAdmin?(d.count+' онлайн'):(d.count>1?d.count+' онлайн':''); }
+});
+
+/* ── TYPING ── */
+var typingSet=new Set();
+socket.on('userTyping',function(d){if(currentView==='general'){typingSet.add(d.nickname);showTyping();}});
+socket.on('userStopTyping',function(d){typingSet.delete(d.nickname);showTyping();});
+socket.on('privateUserTyping',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)document.getElementById('typingIndicator').textContent=d.nickname+' печатает...';});
+socket.on('privateUserStopTyping',function(d){if(currentView==='pm'&&currentPrivateLogin===d.from)document.getElementById('typingIndicator').textContent='';});
+socket.on('roomUserTyping',function(d){if(currentView==='room'&&currentRoomId==d.roomId){typingSet.add(d.nickname);showTyping();}});
+socket.on('roomUserStopTyping',function(d){if(currentView==='room'&&currentRoomId==d.roomId){typingSet.delete(d.nickname);showTyping();}});
+function showTyping(){var el=document.getElementById('typingIndicator');if(typingSet.size===0){el.textContent='';return;}var a=Array.from(typingSet);el.textContent=a.join(', ')+(a.length>1?' печатают...':' печатает...');}
+
+/* ── TABS ── */
+document.getElementById('tabAll').addEventListener('click',function(){switchToAll();});
+document.getElementById('tabGeneral').addEventListener('click',function(){switchToGeneral();});
+document.getElementById('tabPrivate').addEventListener('click',function(){switchToPrivate();});
+document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
+function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
+
+function switchToAll(){
+  _pmToken++; _roomToken++;
+  currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  setActiveTab('tabAll');
+  document.getElementById('searchInput').value='';
+  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('noChat').style.display='flex';
+  var _msgDivA=document.getElementById('messages');
+  _msgDivA.innerHTML='';
+  _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
+  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  renderAllChats();
+}
+
+function renderAllChats(){
+  if(currentView!=='all')return;
+  renderChatList();
+}
+
+function switchToGeneral(){
+  clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
+  _pmToken++; _roomToken++;
+  currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  document.getElementById('dialogBgBtn').style.display='none';
+  setActiveTab('tabGeneral');
+  document.getElementById('searchInput').value='';
+  document.getElementById('sidebarList').innerHTML='<div class="chat-item active" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
+  if(window.innerWidth>640){openGeneral();}else{document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='';}
+}
+function switchToPrivate(){
+  _roomToken++;
+  currentView='private';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  setActiveTab('tabPrivate');
+  document.getElementById('searchInput').value='';
+  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('noChat').style.display='flex';
+  var _msgDiv=document.getElementById('messages');_msgDiv.innerHTML='';
+  _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
+  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  if(latestChats&&latestChats.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
+  socket.emit('getMyChats');
+  // Fallback: if no response in 3s, show empty state
+  setTimeout(function(){if(currentView==='private'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}},3000);
+}
+function switchToRooms(){
+  _pmToken++; _roomToken++;
+  currentView='rooms';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
+  setActiveTab('tabRooms');
+  document.getElementById('searchInput').value='';
+  if(window.innerWidth<=640)document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('noChat').style.display='flex';
+  var _msgDivR=document.getElementById('messages');
+  _msgDivR.innerHTML='';
+  _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
+  if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
+  if(latestRooms&&latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
+  socket.emit('getMyRooms');
+}
+
+document.getElementById('searchInput').addEventListener('input',function(){
+  var q=this.value.trim();clearTimeout(searchTimeout);
+  if(!q){if(currentView==='private')socket.emit('getMyChats');else if(currentView==='rooms')socket.emit('getMyRooms');return;}
+  searchTimeout=setTimeout(function(){if(currentView==='private')socket.emit('searchUser',q);else if(currentView==='rooms')socket.emit('searchRooms',q);},300);
+});
+socket.on('searchResults',function(users){
+  if(currentView!=='private')return;var list=document.getElementById('sidebarList');
+  if(users.length===0){list.innerHTML='<div class="empty-list">Никого не найдено</div>';return;}
+  var html='';users.forEach(function(u){
+    if(u.avatar)avatarCache[u.login]=u.avatar;
+    var dn=(u.nickname||u.login||'?');
+    var avHtml=u.avatar?'<div class="avatar" style="background:none;padding:0;"><img src="'+u.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"></div>':'<div class="avatar">'+dn[0].toUpperCase()+'</div>';
+    var subline=u.username?'@'+u.username:'Написать';
+    var safeLogin = u.login.replace(/'/g, "\\'");
+    var safeNick = dn.replace(/'/g, "\\'");
+    html+='<div class="chat-item" onclick="openPM(\''+safeLogin+'\',\''+safeNick+'\')">'+'<div class="avatar" style="background:none;padding:0;">'.replace('>','')+avHtml+'<div class="info"><div class="name">'+dn+'</div><div class="last">'+subline+'</div></div></div>';
+  });
+  list.innerHTML=html;
+});
+socket.on('roomSearchResults',function(rooms){
+  if(currentView!=='rooms')return;var list=document.getElementById('sidebarList');
+  if(rooms.length===0){list.innerHTML='<div class="empty-list">Ничего не найдено</div>';return;}
+  var html='';rooms.forEach(function(r){var icon=r.type==='channel'?'📢':'👥';html+='<div class="chat-item" onclick="joinAndOpenRoom('+r.id+')"><div class="avatar">'+icon+'</div><div class="info"><div class="name">'+r.name+'</div><div class="last">Войти</div></div><div class="tag">'+r.type+'</div></div>';});
+  list.innerHTML=html;
+});
+
+// Store latest chats/rooms for unified view
+var latestChats=[], latestRooms=[];
+
+function buildChatItem(c, isPinned, chatType) {
+  if(c.avatar) avatarCache[c.login||''] = c.avatar;
+  if(c.vip_emoji && c.login) vipEmojiCache[c.login] = c.vip_emoji;
+  if(c.verified && c.login) verifiedCache[c.login] = true;
+  var lastText='';
+  if(c.lastMsg){
+    if(c.lastMsg.type==='image') lastText='📷 Фото';
+    else if(c.lastMsg.type==='video') lastText='📹 Видео';
+    else if(c.lastMsg.type==='file') lastText='📄 Файл: '+(c.lastMsg.text||'');
+    else if(c.lastMsg.type==='sticker') lastText='🎭 Стикер '+c.lastMsg.text;
+    else if(c.lastMsg.type==='voice') lastText='🎤 Голосовое';
+    else if(c.lastMsg.type==='video_note') lastText='⏺ Кружочек';
+    else if(c.lastMsg.type==='call') lastText='📞 Звонок';
+    else {
+      var t = c.lastMsg.text||'';
+      // Hide raw call JSON from preview
+      if(t.startsWith('{') && t.includes('callType')) { try { var p=JSON.parse(t); lastText=p.answered?'📞 Звонок':'📞 Пропущенный звонок'; } catch(e) { lastText='📞 Звонок'; } }
+      else lastText=t;
+    }
+  }
+  var isOnline = c.login && onlineLogins.has(c.login);
+  var avHtml;
+  if(chatType==='room'){
+    avHtml='<div class="avatar">'+(c.type==='channel'?'📢':'👥')+'</div>';
+  } else {
+    avHtml = c.avatar
+      ? '<div class="avatar" style="background:none;padding:0;"><img src="'+c.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"><div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>'
+      : '<div class="avatar">'+(c.nickname||c.login||'?')[0].toUpperCase()+'<div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>';
+  }
+  var nameHtml = getNickWithEmoji(c.login||'', c.name||c.nickname||'');
+  var pinClass = isPinned ? ' pinned' : '';
+  var pinIcon = isPinned ? '<span class="pin-icon">📌</span>' : '';
+  var metaHtml = '';
+  if(c.unread>0) metaHtml+='<div class="badge">'+c.unread+'</div>';
+  if(c.lastMsg&&c.lastMsg.timestamp) metaHtml='<div class="time">'+formatTime(c.lastMsg.timestamp)+'</div>'+metaHtml;
+  var typeBadge = chatType==='room' ? '<span class="chat-type-badge">'+(c.type||'group')+'</span>' : '';
+  
+  var safeLogin = c.login ? c.login.replace(/'/g, "\\'").replace(/"/g, "&quot;") : '';
+  var safeNick = (c.name||c.nickname||'').replace(/'/g, "\\'").replace(/"/g, "&quot;");
+  
+  var onclickFn = chatType==='room'
+    ? 'openRoom('+c.id+')'
+    : 'openPM(\''+safeLogin+'\',\''+safeNick+'\')'; 
+    
+  var isActive = chatType==='room' ? currentRoomId==c.id : currentPrivateLogin===c.login;
+  return '<div class="chat-item'+(isActive?' active':'')+pinClass+'" onclick="'+onclickFn+'" oncontextmenu="showMuteMenu(event,\''+chatType+'\','+(chatType==='room'?c.id:'\''+c.login+'\'')+')" data-chattype="'+chatType+'" data-chatid="'+(chatType==='room'?c.id:c.login)+'">'
+    + avHtml
+    + '<div class="info"><div class="name">'+nameHtml+pinIcon+typeBadge+'</div><div class="last">'+lastText+'</div></div>'
+    + (metaHtml?'<div class="meta">'+metaHtml+'</div>':'')
+    + '</div>';
+}
+
+function renderChatList() {
+  if(document.getElementById('searchInput').value.trim()) return;
+  var list = document.getElementById('sidebarList');
+  if(!list) return;
+  // Сразу очищаем sidebar — старый контент другой вкладки не должен оставаться
+  if(currentView==='private'||currentView==='pm'||currentView==='rooms'||currentView==='room'||currentView==='all'){
+    list.innerHTML='';
+  }
+  var html = '';
+  if(currentView==='private'||currentView==='pm') {
+    var pinned = latestChats.filter(function(c){ return isPinned('pm', c.login); });
+    var unpinned = latestChats.filter(function(c){ return !isPinned('pm', c.login); });
+    if(pinned.length>0){ html+='<div class="pinned-section-title">📌 Закреплённые</div>'; pinned.forEach(function(c){html+=buildChatItem(c,true,'pm');}); }
+    if(unpinned.length===0&&pinned.length===0){html='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}
+    else unpinned.forEach(function(c){html+=buildChatItem(c,false,'pm');});
+    list.innerHTML=html;
+  } else if(currentView==='rooms'||currentView==='room') {
+    var pinned = latestRooms.filter(function(r){ return isPinned('room', r.id); });
+    var unpinned = latestRooms.filter(function(r){ return !isPinned('room', r.id); });
+    if(pinned.length>0){ html+='<div class="pinned-section-title">📌 Закреплённые</div>'; pinned.forEach(function(r){html+=buildChatItem(r,true,'room');}); }
+    if(unpinned.length===0&&pinned.length===0){html='<div class="empty-list">Нет групп. Создай ➕ или найди через поиск</div>';}
+    else unpinned.forEach(function(r){html+=buildChatItem(r,false,'room');});
+    list.innerHTML=html;
+  } else if(currentView==='all') {
+    var allItems=[];
+    pinnedChats.forEach(function(p){
+      if(p.chat_type==='pm'){var c=latestChats.find(function(x){return x.login===p.chat_id;});if(c)allItems.push({item:c,type:'pm',pinned:true});}
+      else{var r=latestRooms.find(function(x){return String(x.id)===String(p.chat_id);});if(r)allItems.push({item:r,type:'room',pinned:true});}
+    });
+    // General chat first
+    html += '<div class="chat-item'+(currentView==='general'?' active':'')+'" onclick="openGeneral()"><div class="avatar">💬</div><div class="info"><div class="name">Общий чат</div><div class="last">Все пользователи</div></div></div>';
+    if(allItems.length>0){html+='<div class="pinned-section-title">📌 Закреплённые</div>';allItems.forEach(function(a){html+=buildChatItem(a.item,true,a.type);});}
+    // Then rest
+    var pinnedLogins = pinnedChats.filter(function(p){return p.chat_type==='pm';}).map(function(p){return p.chat_id;});
+    var pinnedRoomIds = pinnedChats.filter(function(p){return p.chat_type==='room';}).map(function(p){return String(p.chat_id);});
+    latestChats.filter(function(c){return !pinnedLogins.includes(c.login);}).forEach(function(c){html+=buildChatItem(c,false,'pm');});
+    latestRooms.filter(function(r){return !pinnedRoomIds.includes(String(r.id));}).forEach(function(r){html+=buildChatItem(r,false,'room');});
+    list.innerHTML=html;
+  }
+}
+
+socket.on('myChats',function(chats){
+  latestChats=chats;
+  window._myChatsCache = chats; // cache for forward modal
+  if(currentView==='private'||currentView==='pm'||currentView==='all'){
+    if(!document.getElementById('searchInput').value.trim()) renderChatList();
+  }
+});
+
+socket.on('clearUnreadBadge',function(d){
+  // Immediately zero out the unread badge for opened chat
+  var chat = latestChats.find(function(c){return c.login===d.login;});
+  if(chat){ chat.unread=0; renderChatList(); }
+});
+var onlineLogins = new Set();
+
+socket.on('unreadNotification',function(d){
+  if(currentView==='pm'&&currentPrivateLogin===d.from)return;
+  if(currentView==='private'||currentView==='pm'||currentView==='all')socket.emit('getMyChats');
+  // Push notification - always send on mobile (Capacitor), web only when not focused
+  if(window.isCapacitorApp){
+    sendNotification(d.nickname||'Новое сообщение', d.text||'Написал тебе в MyChat');
+  } else if(!document.hasFocus()){
+    sendNotification(d.nickname||'Новое сообщение', d.text||'Написал тебе в MyChat');
+  }
+});
+
+socket.on('myRooms',function(rooms){
+  latestRooms=rooms;
+  if(currentView!=='rooms'&&currentView!=='room'&&currentView!=='all')return;
+  if(document.getElementById('searchInput').value.trim())return;
+  renderChatList();
+});
+
+var _generalOldestId = null, _generalLoadingMore = false, _generalAllLoaded = false, _generalInitialLoading = false;
+var _pmOldestId = null, _pmLoadingMore = false, _pmAllLoaded = false;
+var _roomOldestId = null, _roomLoadingMore = false, _roomAllLoaded = false;
+
+function setupScrollPagination(containerEl, loadMoreFn) {
+  containerEl.addEventListener('scroll', function() {
+    if(containerEl.scrollTop < 80 && !containerEl._loadingMore && !containerEl._allLoaded) {
+      loadMoreFn();
+    }
+  });
+}
+
+
+
 // ═══════════════════════════════════════════════════════════
 // CALL SYSTEM — полностью переписано
 // ═══════════════════════════════════════════════════════════
