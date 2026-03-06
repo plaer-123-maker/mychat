@@ -454,6 +454,8 @@ const onlineUsers = new Map();
 const socketUsers = new Map();
 const activeCalls = new Map();   // callerLogin -> { calleeLogin, callType, answered }
 const callTimeouts = new Map();  // callerLogin -> { timeout, calleeLogin }
+// Group calls: roomId -> { participants: Set<login>, callType: 'audio'|'video' }
+const groupCalls = new Map();
 
 // ── IMAGE SERIALIZATION HELPERS ──────────────────────────
 // Images can be a single base64 string or array of base64 strings
@@ -1150,6 +1152,111 @@ io.on('connection', (socket) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
     if (targetSocket) targetSocket.emit('iceCandidate', candidate);
+  });
+
+  // ═══════════════════════════════════════════
+  // GROUP CALL (mesh, like Telegram voice chats)
+  // ═══════════════════════════════════════════
+
+  // Join or start a group call in a room
+  socket.on('joinGroupCall', async ({ roomId, callType }) => {
+    if (!socket.userLogin) return;
+    roomId = Number(roomId);
+    // Verify user is a member of this room
+    try {
+      const mb = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      if (!mb.rows.length) return;
+    } catch(e) { return; }
+
+    if (!groupCalls.has(roomId)) {
+      groupCalls.set(roomId, { participants: new Set(), callType: callType || 'audio' });
+    }
+    const gc = groupCalls.get(roomId);
+    const alreadyIn = gc.participants.has(socket.userLogin);
+    if (alreadyIn) return;
+
+    // Tell the joining user who is already in the call
+    const existing = [...gc.participants];
+    socket.emit('groupCallJoined', {
+      roomId,
+      participants: existing,
+      callType: gc.callType
+    });
+
+    // Tell everyone already in the call that a new participant joined
+    existing.forEach(login => {
+      const s = findSocketByLogin(login);
+      if (s) s.emit('groupCallParticipantJoined', {
+        roomId,
+        login: socket.userLogin,
+        nickname: socket.username
+      });
+    });
+
+    gc.participants.add(socket.userLogin);
+
+    // Notify all room members that a call is active (so they can join)
+    socket.to('room_' + roomId).emit('groupCallActive', {
+      roomId,
+      callType: gc.callType,
+      participants: [...gc.participants].map(l => ({ login: l })),
+      startedBy: socket.username
+    });
+  });
+
+  // Leave group call
+  socket.on('leaveGroupCall', ({ roomId }) => {
+    if (!socket.userLogin) return;
+    roomId = Number(roomId);
+    const gc = groupCalls.get(roomId);
+    if (!gc) return;
+    gc.participants.delete(socket.userLogin);
+    // Tell remaining participants
+    gc.participants.forEach(login => {
+      const s = findSocketByLogin(login);
+      if (s) s.emit('groupCallParticipantLeft', { roomId, login: socket.userLogin });
+    });
+    if (gc.participants.size === 0) {
+      groupCalls.delete(roomId);
+      // Notify room that call ended
+      io.to('room_' + roomId).emit('groupCallEnded', { roomId });
+    }
+  });
+
+  // Group call signaling: offer/answer/ice between specific participants
+  socket.on('groupCallOffer', ({ roomId, to, signal }) => {
+    if (!socket.userLogin) return;
+    const s = findSocketByLogin(to);
+    if (s) s.emit('groupCallOffer', { from: socket.userLogin, fromNick: socket.username, roomId, signal });
+  });
+
+  socket.on('groupCallAnswer', ({ roomId, to, signal }) => {
+    if (!socket.userLogin) return;
+    const s = findSocketByLogin(to);
+    if (s) s.emit('groupCallAnswer', { from: socket.userLogin, roomId, signal });
+  });
+
+  socket.on('groupCallIce', ({ to, candidate }) => {
+    if (!socket.userLogin) return;
+    const s = findSocketByLogin(to);
+    if (s) s.emit('groupCallIce', { from: socket.userLogin, candidate });
+  });
+
+  // Get active group call info for a room
+  socket.on('getGroupCallInfo', ({ roomId }) => {
+    if (!socket.userLogin) return;
+    roomId = Number(roomId);
+    const gc = groupCalls.get(roomId);
+    if (gc) {
+      socket.emit('groupCallActive', {
+        roomId,
+        callType: gc.callType,
+        participants: [...gc.participants].map(l => ({ login: l })),
+        startedBy: null
+      });
+    } else {
+      socket.emit('groupCallEnded', { roomId });
+    }
   });
 
   // === GENERAL CHAT ===
@@ -2327,6 +2434,21 @@ io.on('connection', (socket) => {
     if (socket.userLogin) {
       pool.query('UPDATE users SET last_seen=$1 WHERE login=$2', [Date.now(), socket.userLogin]).catch(()=>{});
 
+      // Если пользователь был в групповом звонке — убрать его
+      for (const [roomId, gc] of groupCalls) {
+        if (gc.participants.has(socket.userLogin)) {
+          gc.participants.delete(socket.userLogin);
+          gc.participants.forEach(login => {
+            const s = findSocketByLogin(login);
+            if (s) s.emit('groupCallParticipantLeft', { roomId, login: socket.userLogin });
+          });
+          if (gc.participants.size === 0) {
+            groupCalls.delete(roomId);
+            io.to('room_' + roomId).emit('groupCallEnded', { roomId });
+          }
+          break;
+        }
+      }
       // Если пользователь был в звонке — уведомить собеседника
       const callInfo = activeCalls.get(socket.userLogin);
       if (callInfo) {
