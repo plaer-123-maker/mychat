@@ -3720,10 +3720,10 @@ socket.on('roomUserStopTyping',function(d){if(currentView==='room'&&currentRoomI
 function showTyping(){var el=document.getElementById('typingIndicator');if(typingSet.size===0){el.textContent='';return;}var a=Array.from(typingSet);el.textContent=a.join(', ')+(a.length>1?' печатают...':' печатает...');}
 
 /* ── TABS ── */
-document.getElementById('tabAll').addEventListener('click',function(){switchToAll();});
-document.getElementById('tabGeneral').addEventListener('click',function(){switchToGeneral();});
-document.getElementById('tabPrivate').addEventListener('click',function(){switchToPrivate();});
-document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
+document.getElementById('tabAll').addEventListener('click',function(){if(currentView==='ghost'){var rid=_ghostRoomId;ghostCleanup();if(rid)socket.emit('ghostLeave',{roomId:rid});}switchToAll();});
+document.getElementById('tabGeneral').addEventListener('click',function(){if(currentView==='ghost'){var rid=_ghostRoomId;ghostCleanup();if(rid)socket.emit('ghostLeave',{roomId:rid});}switchToGeneral();});
+document.getElementById('tabPrivate').addEventListener('click',function(){if(currentView==='ghost'){var rid=_ghostRoomId;ghostCleanup();if(rid)socket.emit('ghostLeave',{roomId:rid});}switchToPrivate();});
+document.getElementById('tabRooms').addEventListener('click',function(){if(currentView==='ghost'){var rid=_ghostRoomId;ghostCleanup();if(rid)socket.emit('ghostLeave',{roomId:rid});}switchToRooms();});
 function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
 
 // Throttled versions — avoid hammering server on every event
@@ -3972,6 +3972,7 @@ function setupScrollPagination(containerEl, loadMoreFn) {
 
 
 function openGeneral(){
+  if(currentView==='ghost'&&_ghostRoomId){var rid=_ghostRoomId;ghostCleanup();socket.emit('ghostLeave',{roomId:rid});}
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   currentView='general';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
   _generalOldestId=null;_generalLoadingMore=false;_generalAllLoaded=false;_generalInitialLoading=false;
@@ -4102,6 +4103,7 @@ socket.on('userProfile', function(p){
 });
 
 function openPM(login,nickname){
+  if(currentView==='ghost'&&_ghostRoomId){var rid=_ghostRoomId;ghostCleanup();socket.emit('ghostLeave',{roomId:rid});}
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   // Request last seen status
   socket.emit('getLastSeen',{login:login});
@@ -4147,6 +4149,7 @@ function openPM(login,nickname){
 window.openPM=openPM;
 
 function openRoom(roomId){
+  if(currentView==='ghost'&&_ghostRoomId){var rid=_ghostRoomId;ghostCleanup();socket.emit('ghostLeave',{roomId:rid});}
   clearReply(); if(typeof cancelEdit === 'function') cancelEdit();
   roomId=Number(roomId);
   currentView='room';currentRoomId=roomId;currentPrivateLogin=null;currentRoomData=null;typingSet.clear();
@@ -5560,6 +5563,13 @@ document.getElementById('passSave').addEventListener('click',function(){
 socket.on('passwordResult',function(m){if(m==='ok'){document.getElementById('passSuccess').textContent='Пароль изменён!';setTimeout(function(){document.getElementById('passModal').classList.remove('show');},1500);}else document.getElementById('passError').textContent=m;});
 
 document.getElementById('mobileBackBtn').addEventListener('click',function(){
+  if(currentView==='ghost'){
+    // Ghost chat — must destroy history for everyone
+    var rid=_ghostRoomId;
+    ghostCleanup();
+    if(rid) socket.emit('ghostLeave',{roomId:rid});
+    return;
+  }
   document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';
   if(currentView==='pm'){currentView='private';currentPrivateLogin=null;emitGetMyChats();}
   else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;emitGetMyRooms();}
