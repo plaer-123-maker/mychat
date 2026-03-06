@@ -6490,20 +6490,38 @@ window.ghostBackToMain = ghostBackToMain;
 // Create a Ghost Chat room
 function ghostCreateChat() {
   socket.emit('ghostCreate');
+  // Show step immediately with loading state
   ghostShowStep('ghostStep2Create');
-  document.getElementById('ghostCodeDisplay').textContent = '......';
+  document.getElementById('ghostCodeDisplay').textContent = '...';
+  document.getElementById('ghostCodeDisplay').style.letterSpacing = '4px';
   document.getElementById('ghostWaitingLabel').style.display = 'block';
+  document.getElementById('ghostWaitingLabel').textContent = '⏳ Генерируем код...';
 }
 window.ghostCreateChat = ghostCreateChat;
 
 function ghostCopyCode() {
-  if(!_ghostCode) return;
-  if(navigator.clipboard) {
-    navigator.clipboard.writeText(_ghostCode).then(function(){ showGhostToast('Код скопирован!'); });
+  if(!_ghostCode) { showGhostToast('Код ещё не готов, подождите...'); return; }
+  var codeToCopy = _ghostCode.replace(/\s/g, ''); // strip spaces
+  var copied = false;
+  // Try modern clipboard API first
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(codeToCopy).then(function(){
+      showGhostToast('✅ Код ' + codeToCopy + ' скопирован!');
+    }).catch(function(){
+      fallbackCopy();
+    });
   } else {
+    fallbackCopy();
+  }
+  function fallbackCopy(){
     var el = document.createElement('textarea');
-    el.value = _ghostCode; document.body.appendChild(el); el.select(); document.execCommand('copy'); el.remove();
-    showGhostToast('Код скопирован!');
+    el.value = codeToCopy;
+    el.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    try { document.execCommand('copy'); showGhostToast('✅ Код ' + codeToCopy + ' скопирован!'); }
+    catch(e) { showGhostToast('Код: ' + codeToCopy + ' (скопируйте вручную)'); }
+    el.remove();
   }
 }
 window.ghostCopyCode = ghostCopyCode;
@@ -6641,7 +6659,17 @@ window.sendMsg = function() {
 // Server confirms room created, sends code
 socket.on('ghostCreated', function(d){
   _ghostCode = d.code;
-  document.getElementById('ghostCodeDisplay').textContent = d.code;
+  var display = document.getElementById('ghostCodeDisplay');
+  if(display){
+    // Show code with spaces between digits for readability
+    display.textContent = d.code.split('').join(' ');
+    display.style.letterSpacing = '8px';
+  }
+  var waitLabel = document.getElementById('ghostWaitingLabel');
+  if(waitLabel){
+    waitLabel.style.display = 'block';
+    waitLabel.textContent = '⏳ Ожидаем собеседника...';
+  }
 });
 
 // Server: someone joined (for creator)
