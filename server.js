@@ -1448,23 +1448,16 @@ io.on('connection', (socket) => {
     const sanitized = String(text||'').slice(0, 4000).replace(/<[^>]*>/g, '');
     if (!sanitized) return;
 
-    const anonId = room.anonMap[socket.userLogin] || 'Ghost';
-    const msg = {
-      fromLogin: socket.userLogin,
-      fromNick: socket.username,
-      anonId,
-      text: sanitized,
-      anon: !!anon,
-      time: Date.now()
-    };
-    room.messages.push(msg);
+    const senderLogin = socket.userLogin;
+    const anonId = room.anonMap[senderLogin] || 'Ghost';
 
-    // Send to both participants
-    [room.creator, room.partner].forEach(login => {
-      if (!login) return;
-      const s = findSocketByLogin(login);
+    // Send to both participants — each receives the real sender login
+    // so client can detect isMe correctly
+    [room.creator, room.partner].forEach(recipientLogin => {
+      if (!recipientLogin) return;
+      const s = findSocketByLogin(recipientLogin);
       if (s) s.emit('ghostMessage', {
-        fromLogin: login === socket.userLogin ? socket.userLogin : '???',
+        fromLogin: senderLogin,   // always the real sender — client checks vs myLogin
         fromNick: socket.username,
         anonId,
         text: sanitized,

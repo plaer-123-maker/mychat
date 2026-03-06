@@ -5362,6 +5362,13 @@ document.addEventListener('keydown',function(e){
 
 document.getElementById('sendBtn').addEventListener('click',function(){
   var text=document.getElementById('msgInput').value.trim();if(!text)return;
+  // Ghost Chat
+  if(currentView==='ghost'){
+    if(!_ghostRoomId){ return; }
+    socket.emit('ghostMessage', { roomId: _ghostRoomId, text: text, anon: _ghostAnon });
+    document.getElementById('msgInput').value='';
+    return;
+  }
   // Edit mode
   if(editingMsgId){
     socket.emit('editMessage',{msgType:editingMsgType,msgId:editingMsgId,newText:text});
@@ -6648,12 +6655,7 @@ function sendGhostMsg() {
   socket.emit('ghostMessage', { roomId: _ghostRoomId, text: text, anon: _ghostAnon });
 }
 
-// Hook into send button for ghost chat
-var _origSendMsg = window.sendMsg;
-window.sendMsg = function() {
-  if(currentView === 'ghost') { sendGhostMsg(); return; }
-  if(_origSendMsg) _origSendMsg();
-};
+// Ghost message sending is handled directly in sendBtn click handler above
 
 // ─── Socket events ────────────────────────────────────────
 // Server confirms room created, sends code
@@ -6699,16 +6701,23 @@ socket.on('ghostError', function(d){
 socket.on('ghostMessage', function(d){
   if(currentView !== 'ghost' || !_inGhostChat) return;
   var md = document.getElementById('messages');
-  var isMe = d.fromLogin === myLogin;
-  var displayName = d.anon ? (isMe ? _ghostAnonId : 'Ghost #????') : d.fromNick;
-  if(isMe) displayName = _ghostAnon ? _ghostAnonId : (myNickname || myLogin);
+  var isMe = (d.fromLogin === myLogin);
+
+  // Display name: use anonId from server (already assigned per-user)
+  // In anon mode show anonId, in non-anon show real nickname
+  var displayName;
+  if(d.anon) {
+    displayName = d.anonId || 'Ghost';
+  } else {
+    displayName = isMe ? (myNickname || myLogin) : (d.fromNick || d.fromLogin);
+  }
 
   var div = document.createElement('div');
   div.className = 'message ' + (isMe ? 'own' : 'their');
   div.style.cssText = 'user-select:none;-webkit-user-select:none;';
   div.innerHTML =
     '<div class="msg-bubble" oncontextmenu="return false;" ondragstart="return false;">' +
-      (!isMe ? '<div class="msg-sender" style="color:#a855f7;">' + escHtml(displayName||'Ghost') + '</div>' : '') +
+      (!isMe ? '<div class="msg-sender" style="color:#a855f7;">' + escHtml(displayName) + '</div>' : '') +
       '<div class="msg-text">' + escHtml(d.text) + '</div>' +
       '<div class="msg-meta"><span class="msg-time">' + formatTime(new Date()) + '</span>' +
         (d.anon ? ' <span class="msg-anon-badge">👤 anon</span>' : '') +
