@@ -5660,356 +5660,422 @@ window.switchCamera=switchCamera;
 // ═══════════════════════════════════════════════════════
 var gcRoomId=null, gcCallType='audio';
 var gcLocalStream=null;
-var gcPeers={};  // login -> RTCPeerConnection
+// gcPeers[login] = { pc: RTCPeerConnection, audioEl: HTMLAudioElement, iceBuffer: [] }
+var gcPeers={};
 var gcTimerInterval=null, gcStartTime=0;
 var gcMicOn=true, gcVideoOn=false;
 var gcFacingMode='user';
 
-function gcGetRtcConfig(){return rtcConfig;}
+function gcGetRtcConfig(){ return rtcConfig; }
 
-// Join a group call in current room
+// ─── Join / Start ────────────────────────────────────
 function joinGroupCall(callType){
-  if(!currentRoomId){alert('Откройте группу сначала');return;}
-  if(gcRoomId){alert('Вы уже в групповом звонке');return;}
-  if(peerConnection){alert('Завершите текущий звонок');return;}
-  gcCallType=callType||'audio';
-  gcVideoOn=(callType==='video');
-  gcRoomId=currentRoomId;
-  // Get media first
+  if(!currentRoomId){ alert('Откройте группу сначала'); return; }
+  if(gcRoomId){ alert('Вы уже в групповом звонке'); return; }
+  if(peerConnection){ alert('Завершите текущий личный звонок'); return; }
+  gcCallType = callType || 'audio';
+  gcVideoOn  = (callType === 'video');
+  gcRoomId   = currentRoomId;
+
   navigator.mediaDevices.getUserMedia({
-    audio:true,
-    video:gcVideoOn?{facingMode:gcFacingMode,width:{ideal:640},height:{ideal:480}}:false
+    audio: true,
+    video: gcVideoOn ? { facingMode: gcFacingMode, width:{ideal:640}, height:{ideal:480} } : false
   })
   .then(function(stream){
-    gcLocalStream=stream;
+    gcLocalStream = stream;
     document.getElementById('groupCallOverlay').classList.add('show');
-    document.getElementById('gcRoomName').textContent=
-      (currentRoomData&&currentRoomData.name)||('Группа #'+gcRoomId);
-    gcUpdateGrid();
-    // Tell server we're joining
-    socket.emit('joinGroupCall',{roomId:gcRoomId,callType:gcCallType});
+    document.getElementById('gcRoomName').textContent =
+      (currentRoomData && currentRoomData.name) || ('Группа #' + gcRoomId);
+    gcRenderMyTile();
+    socket.emit('joinGroupCall', { roomId: gcRoomId, callType: gcCallType });
   })
   .catch(function(e){
-    gcRoomId=null;
-    alert('Нет доступа к микрофону: '+e.message);
+    gcRoomId = null;
+    alert('Нет доступа к микрофону: ' + e.message);
   });
 }
-window.joinGroupCall=joinGroupCall;
+window.joinGroupCall = joinGroupCall;
 
-// Server confirms we joined and gives us list of existing participants
-socket.on('groupCallJoined',function(d){
-  gcStartTime=Date.now();
+// ─── Server: joined, here are existing participants ──
+socket.on('groupCallJoined', function(d){
+  gcStartTime = Date.now();
   clearInterval(gcTimerInterval);
-  gcTimerInterval=setInterval(function(){
-    var sec=Math.floor((Date.now()-gcStartTime)/1000);
-    var m=Math.floor(sec/60),s=sec%60;
-    document.getElementById('gcDuration').textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
-  },1000);
-  // Connect to each existing participant
+  gcTimerInterval = setInterval(function(){
+    var sec = Math.floor((Date.now()-gcStartTime)/1000);
+    var m = Math.floor(sec/60), s = sec%60;
+    document.getElementById('gcDuration').textContent =
+      (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+  }, 1000);
+
+  // WE are the newcomer → send offer to each existing participant
   d.participants.forEach(function(login){
-    gcCreatePeer(login, true); // true = we are the initiator (send offer)
+    gcInitPeer(login, true);   // true = we are initiator → send offer
   });
-  gcUpdateGrid();
 });
 
-// A new participant joined — they will send us an offer
-socket.on('groupCallParticipantJoined',function(d){
-  if(d.login===myLogin) return;
-  // They will send us offer (they are initiator), we just prepare
-  gcUpdateGrid();
+// ─── Server: someone else just joined → WE send them offer ──
+socket.on('groupCallParticipantJoined', function(d){
+  if(!gcRoomId) return;
+  if(d.login === myLogin) return;
+  // We are existing → we send offer to the newcomer
+  gcInitPeer(d.login, true);
+  gcUpdateNickOnTile(d.login, d.nickname);
 });
 
-// Received offer from a participant
-socket.on('groupCallOffer',function(d){
-  if(!gcRoomId||d.login===myLogin) return;
-  var pc=gcCreatePeer(d.login, false);
-  pc.setRemoteDescription(new RTCSessionDescription(d.signal))
-  .then(function(){return pc.createAnswer();})
-  .then(function(a){return pc.setLocalDescription(a);})
+// ─── Receive offer → create peer, send answer ────────
+socket.on('groupCallOffer', function(d){
+  if(!gcRoomId) return;
+  var from = d.from;  // server sends 'from', not 'login'
+  if(from === myLogin) return;
+  var peer = gcInitPeer(from, false);  // false = not initiator
+  peer.pc.setRemoteDescription(new RTCSessionDescription(d.signal))
+  .then(function(){ return peer.pc.createAnswer(); })
+  .then(function(a){ return peer.pc.setLocalDescription(a); })
   .then(function(){
-    socket.emit('groupCallAnswer',{roomId:gcRoomId,to:d.login,signal:pc.localDescription});
-    gcFlushIce(d.login);
+    socket.emit('groupCallAnswer', { roomId: gcRoomId, to: from, signal: peer.pc.localDescription });
+    gcFlushIce(from);
   })
-  .catch(function(e){console.error('gcOffer error',e);});
+  .catch(function(e){ console.error('[GC] offer error:', e); });
 });
 
-// Received answer from a participant
-socket.on('groupCallAnswer',function(d){
+// ─── Receive answer → set remote description ────────
+socket.on('groupCallAnswer', function(d){
   if(!gcRoomId) return;
-  var pc=gcPeers[d.login];
-  if(!pc) return;
-  pc.setRemoteDescription(new RTCSessionDescription(d.signal))
-  .then(function(){gcFlushIce(d.login);})
-  .catch(function(e){console.error('gcAnswer error',e);});
+  var from = d.from;  // server sends 'from'
+  var peer = gcPeers[from];
+  if(!peer) return;
+  peer.pc.setRemoteDescription(new RTCSessionDescription(d.signal))
+  .then(function(){ gcFlushIce(from); })
+  .catch(function(e){ console.error('[GC] answer error:', e); });
 });
 
-// ICE candidate for group call
-socket.on('groupCallIce',function(d){
+// ─── ICE candidate ───────────────────────────────────
+socket.on('groupCallIce', function(d){
   if(!gcRoomId) return;
-  var pc=gcPeers[d.login];
-  if(pc&&pc.remoteDescription){
-    pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch(function(){});
+  var from = d.from;  // server sends 'from'
+  var peer = gcPeers[from];
+  if(peer && peer.pc.remoteDescription){
+    peer.pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch(function(){});
+  } else if(peer){
+    peer.iceBuffer.push(d.candidate);
   } else {
-    // Buffer it
-    if(!gcPeers['_ice_'+d.login]) gcPeers['_ice_'+d.login]=[];
-    gcPeers['_ice_'+d.login].push(d.candidate);
+    // Peer not yet created — buffer globally
+    if(!gcPeers['_pre_'+from]) gcPeers['_pre_'+from] = [];
+    gcPeers['_pre_'+from].push(d.candidate);
   }
 });
 
-// Participant left
-socket.on('groupCallParticipantLeft',function(d){
-  if(gcPeers[d.login]){
-    try{gcPeers[d.login].close();}catch(e){}
-    delete gcPeers[d.login];
-  }
-  // Remove their tile
-  var tile=document.getElementById('gc-tile-'+d.login);
-  if(tile) tile.remove();
+// ─── Participant left ────────────────────────────────
+socket.on('groupCallParticipantLeft', function(d){
+  gcRemovePeer(d.login);
   gcUpdateGridLayout();
 });
 
-// Group call ended by server (everyone left)
-socket.on('groupCallEnded',function(d){
-  if(d.roomId===gcRoomId) gcCleanup(false);
-  // Remove join bar if visible
-  var bar=document.getElementById('gcJoinBar_'+d.roomId);
+// ─── Group call ended by server ──────────────────────
+socket.on('groupCallEnded', function(d){
+  if(d.roomId === gcRoomId) gcCleanup();
+  var bar = document.getElementById('gcJoinBar_'+d.roomId);
   if(bar) bar.remove();
 });
 
-// Active call notification (someone is calling in a room we're in)
-socket.on('groupCallActive',function(d){
-  if(d.roomId===gcRoomId) return; // we're already in it
-  // Show join bar in room chat if we're currently viewing that room
+// ─── Active call banner (someone else started a call) ─
+socket.on('groupCallActive', function(d){
+  if(d.roomId === gcRoomId) return;
   gcShowJoinBar(d);
 });
 
 function gcShowJoinBar(d){
-  var barId='gcJoinBar_'+d.roomId;
+  var barId = 'gcJoinBar_'+d.roomId;
   if(document.getElementById(barId)) return;
-  var bar=document.createElement('div');
-  bar.className='gc-join-bar';bar.id=barId;
-  var count=(d.participants&&d.participants.length)||0;
-  bar.innerHTML='<div class="gc-join-pulse"></div>'+
-    '<div class="gc-join-text">Активный звонок<div class="gc-join-sub">'+count+' участник'+(count===1?'':'ов')+'</div></div>'+
+  var bar = document.createElement('div');
+  bar.className = 'gc-join-bar'; bar.id = barId;
+  var count = (d.participants && d.participants.length) || 0;
+  bar.innerHTML =
+    '<div class="gc-join-pulse"></div>'+
+    '<div class="gc-join-text">Активный звонок'+
+    '<div class="gc-join-sub">'+count+' участник'+(count===1?'':'ов')+'</div></div>'+
     '<button class="gc-join-btn" onclick="joinGroupCall(\'audio\')">Войти</button>';
-  // Show in messages area if we're in that room
-  if(currentView==='room'&&currentRoomId===d.roomId){
-    var md=document.getElementById('messages');
-    if(md) md.parentNode.insertBefore(bar,md);
+  if(currentView==='room' && currentRoomId===d.roomId){
+    var md = document.getElementById('messages');
+    if(md) md.parentNode.insertBefore(bar, md);
   }
 }
 
-// Create RTCPeerConnection for a group call participant
-var gcIceBuffers={};
-function gcCreatePeer(login, isInitiator){
-  if(gcPeers[login]){ try{gcPeers[login].close();}catch(e){} }
-  var pc=new RTCPeerConnection(gcGetRtcConfig());
-  gcPeers[login]=pc;
-  gcIceBuffers[login]=[];
-  // Add local tracks
+// ─── Core: create/get peer entry ────────────────────
+function gcInitPeer(login, isInitiator){
+  // Return existing if already connected
+  if(gcPeers[login] && !isInitiator){
+    return gcPeers[login];
+  }
+  // Close old if re-creating
+  if(gcPeers[login]){
+    try{ gcPeers[login].pc.close(); }catch(e){}
+    if(gcPeers[login].audioEl){
+      gcPeers[login].audioEl.pause();
+      gcPeers[login].audioEl.remove();
+    }
+  }
+
+  var pc = new RTCPeerConnection(gcGetRtcConfig());
+  var audioEl = document.createElement('audio');
+  audioEl.autoplay = true;
+  audioEl.style.display = 'none';
+  document.body.appendChild(audioEl);
+
+  var peer = { pc: pc, audioEl: audioEl, iceBuffer: [], mediaStream: new MediaStream() };
+  gcPeers[login] = peer;
+
+  // Add pre-buffered ICE
+  var pre = gcPeers['_pre_'+login];
+  if(pre){ peer.iceBuffer = pre; delete gcPeers['_pre_'+login]; }
+
+  // Add local tracks to this connection
   if(gcLocalStream){
-    gcLocalStream.getTracks().forEach(function(t){pc.addTrack(t,gcLocalStream);});
+    gcLocalStream.getTracks().forEach(function(t){ pc.addTrack(t, gcLocalStream); });
   }
-  pc.onicecandidate=function(e){
-    if(e.candidate) socket.emit('groupCallIce',{to:login,candidate:e.candidate});
+
+  pc.onicecandidate = function(e){
+    if(e.candidate) socket.emit('groupCallIce', { to: login, candidate: e.candidate });
   };
-  pc.ontrack=function(e){
-    gcAddRemoteTile(login, e.streams[0]||null, e.track);
+
+  // ontrack: add each incoming track to the peer's MediaStream
+  pc.ontrack = function(e){
+    var track = e.track;
+    // Add to combined stream
+    peer.mediaStream.addTrack(track);
+
+    if(track.kind === 'audio'){
+      // Play audio through hidden <audio> element
+      audioEl.srcObject = peer.mediaStream;
+      audioEl.play().catch(function(){});
+    }
+    if(track.kind === 'video'){
+      // Show video in tile
+      gcEnsureVideoTile(login, peer.mediaStream);
+    }
+    // If audio-only call, still show tile (avatar)
+    gcEnsureTile(login);
   };
-  pc.oniceconnectionstatechange=function(){
-    if(pc.iceConnectionState==='failed') try{pc.restartIce();}catch(er){}
+
+  pc.oniceconnectionstatechange = function(){
+    var s = pc.iceConnectionState;
+    console.log('[GC] ICE '+login+':', s);
+    if(s === 'failed'){ try{ pc.restartIce(); }catch(er){} }
+    if(s === 'connected' || s === 'completed'){
+      gcMarkTileConnected(login);
+    }
   };
+
   if(isInitiator){
-    pc.createOffer({offerToReceiveAudio:true,offerToReceiveVideo:true})
-    .then(function(o){return pc.setLocalDescription(o);})
+    pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true })
+    .then(function(o){ return pc.setLocalDescription(o); })
     .then(function(){
-      socket.emit('groupCallOffer',{roomId:gcRoomId,to:login,signal:pc.localDescription});
+      socket.emit('groupCallOffer', { roomId: gcRoomId, to: login, signal: pc.localDescription });
     })
-    .catch(function(e){console.error('gcOffer create error',e);});
+    .catch(function(e){ console.error('[GC] createOffer error:', e); });
   }
-  return pc;
+
+  return peer;
 }
 
 function gcFlushIce(login){
-  var buf=gcIceBuffers[login]||[];
-  var pc=gcPeers[login];
-  if(!pc||!pc.remoteDescription) return;
-  buf.forEach(function(c){pc.addIceCandidate(new RTCIceCandidate(c)).catch(function(){});});
-  gcIceBuffers[login]=[];
-  // Also flush old-style buffer
-  var old=gcPeers['_ice_'+login];
-  if(old&&old.length){
-    old.forEach(function(c){pc.addIceCandidate(new RTCIceCandidate(c)).catch(function(){});});
-    delete gcPeers['_ice_'+login];
+  var peer = gcPeers[login];
+  if(!peer || !peer.pc.remoteDescription) return;
+  var buf = peer.iceBuffer.splice(0);
+  buf.forEach(function(c){
+    peer.pc.addIceCandidate(new RTCIceCandidate(c)).catch(function(){});
+  });
+}
+
+function gcRemovePeer(login){
+  var peer = gcPeers[login];
+  if(!peer) return;
+  try{ peer.pc.close(); }catch(e){}
+  if(peer.audioEl){ peer.audioEl.pause(); peer.audioEl.remove(); }
+  delete gcPeers[login];
+  var tile = document.getElementById('gc-tile-'+login);
+  if(tile) tile.remove();
+}
+
+// ─── Tile management ─────────────────────────────────
+function gcEnsureTile(login){
+  var tileId = 'gc-tile-'+login;
+  if(document.getElementById(tileId)) return;
+  var tile = document.createElement('div');
+  tile.className = 'gc-tile'; tile.id = tileId;
+  // Avatar placeholder
+  var av = document.createElement('div'); av.className = 'gc-tile-avatar';
+  av.textContent = (login[0]||'?').toUpperCase();
+  if(avatarCache && avatarCache[login]){
+    av.innerHTML = '<img src="'+avatarCache[login]+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+  }
+  tile.appendChild(av);
+  var nm = document.createElement('div'); nm.className = 'gc-tile-name'; nm.textContent = login;
+  tile.appendChild(nm);
+  var mic = document.createElement('div'); mic.className = 'gc-tile-mic'; mic.textContent = '🎤';
+  tile.appendChild(mic);
+  document.getElementById('gcGrid').appendChild(tile);
+  gcUpdateGridLayout();
+}
+
+function gcEnsureVideoTile(login, stream){
+  gcEnsureTile(login);
+  var tile = document.getElementById('gc-tile-'+login);
+  if(!tile) return;
+  var vid = tile.querySelector('video');
+  if(!vid){
+    vid = document.createElement('video');
+    vid.autoplay = true; vid.playsInline = true; vid.muted = false;
+    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+    tile.insertBefore(vid, tile.firstChild);
+  }
+  vid.srcObject = stream;
+  vid.play().catch(function(){});
+}
+
+function gcMarkTileConnected(login){
+  var tile = document.getElementById('gc-tile-'+login);
+  if(tile) tile.classList.add('connected');
+}
+
+function gcUpdateNickOnTile(login, nick){
+  var tile = document.getElementById('gc-tile-'+login);
+  if(tile){
+    var nm = tile.querySelector('.gc-tile-name');
+    if(nm && nick) nm.textContent = nick;
   }
 }
 
-// Add or update remote participant tile
-function gcAddRemoteTile(login, stream, track){
-  var tileId='gc-tile-'+login;
-  var tile=document.getElementById(tileId);
-  if(!tile){
-    tile=document.createElement('div');
-    tile.className='gc-tile';tile.id=tileId;
-    var av=document.createElement('div');av.className='gc-tile-avatar';
-    av.textContent=(login[0]||'?').toUpperCase();
-    tile.appendChild(av);
-    var nm=document.createElement('div');nm.className='gc-tile-name';nm.textContent=login;
-    tile.appendChild(nm);
-    var mic=document.createElement('div');mic.className='gc-tile-mic';mic.textContent='🎤';
-    tile.appendChild(mic);
-    document.getElementById('gcGrid').appendChild(tile);
-    gcUpdateGridLayout();
-  }
-  if(track&&track.kind==='video'){
-    var vid=tile.querySelector('video');
-    if(!vid){
-      vid=document.createElement('video');
-      vid.autoplay=true;vid.playsInline=true;
-      vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
-      tile.insertBefore(vid,tile.firstChild);
-    }
-    if(stream) vid.srcObject=stream;
-    else { var ms=new MediaStream([track]); vid.srcObject=ms; }
-  }
-}
-
-// Rebuild grid
-function gcUpdateGrid(){
-  var grid=document.getElementById('gcGrid');
+// Render own tile
+function gcRenderMyTile(){
+  var grid = document.getElementById('gcGrid');
   if(!grid) return;
-  // My tile
-  var myTileId='gc-tile-'+myLogin;
-  if(!document.getElementById(myTileId)){
-    var tile=document.createElement('div');
-    tile.className='gc-tile me';tile.id=myTileId;
-    if(gcLocalStream&&gcVideoOn){
-      var vid=document.createElement('video');
-      vid.autoplay=true;vid.playsInline=true;vid.muted=true;
-      vid.srcObject=gcLocalStream;
-      vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;';
-      tile.appendChild(vid);
-    } else {
-      var av=document.createElement('div');av.className='gc-tile-avatar';
-      av.style.fontSize='32px';
-      if(myAvatar) av.innerHTML='<img src="'+myAvatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
-      else av.textContent=(myNickname[0]||'?').toUpperCase();
-      tile.appendChild(av);
-    }
-    var nm=document.createElement('div');nm.className='gc-tile-name';nm.textContent='Вы';
-    tile.appendChild(nm);
-    var mic=document.createElement('div');mic.className='gc-tile-mic';mic.textContent=gcMicOn?'🎤':'🔇';
-    tile.appendChild(mic);
-    grid.insertBefore(tile,grid.firstChild);
+  var myTileId = 'gc-tile-'+myLogin;
+  var tile = document.getElementById(myTileId);
+  if(!tile){
+    tile = document.createElement('div');
+    tile.className = 'gc-tile me connected'; tile.id = myTileId;
+    grid.insertBefore(tile, grid.firstChild);
   }
+  tile.innerHTML = '';
+  if(gcLocalStream && gcVideoOn){
+    var vid = document.createElement('video');
+    vid.autoplay=true; vid.playsInline=true; vid.muted=true;
+    vid.srcObject = gcLocalStream;
+    vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+    tile.appendChild(vid);
+  } else {
+    var av = document.createElement('div'); av.className='gc-tile-avatar';
+    if(myAvatar) av.innerHTML='<img src="'+myAvatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
+    else av.textContent = (myNickname[0]||'?').toUpperCase();
+    tile.appendChild(av);
+  }
+  var nm = document.createElement('div'); nm.className='gc-tile-name'; nm.textContent='Вы';
+  tile.appendChild(nm);
+  var mic = document.createElement('div'); mic.className='gc-tile-mic'; mic.textContent=gcMicOn?'🎤':'🔇';
+  tile.appendChild(mic);
   gcUpdateGridLayout();
 }
 
 function gcUpdateGridLayout(){
-  var grid=document.getElementById('gcGrid');
+  var grid = document.getElementById('gcGrid');
   if(!grid) return;
-  var n=grid.children.length;
-  grid.className='gc-grid gc-'+(Math.min(n,9));
+  var n = grid.children.length;
+  grid.className = 'gc-grid gc-'+(Math.min(n,9)||1);
 }
 
+// ─── Controls ────────────────────────────────────────
 function gcToggleMic(){
   if(!gcLocalStream) return;
-  gcMicOn=!gcMicOn;
-  gcLocalStream.getAudioTracks().forEach(function(t){t.enabled=gcMicOn;});
-  document.getElementById('gcMicBtn').textContent=gcMicOn?'🎤':'🔇';
-  // Update my tile mic indicator
-  var myTile=document.getElementById('gc-tile-'+myLogin);
-  if(myTile){var mic=myTile.querySelector('.gc-tile-mic');if(mic)mic.textContent=gcMicOn?'🎤':'🔇';}
+  gcMicOn = !gcMicOn;
+  gcLocalStream.getAudioTracks().forEach(function(t){ t.enabled = gcMicOn; });
+  document.getElementById('gcMicBtn').textContent = gcMicOn ? '🎤' : '🔇';
+  document.getElementById('gcMicBtn').style.background = gcMicOn ? 'rgba(255,255,255,0.15)' : '#c0392b';
+  var myTile = document.getElementById('gc-tile-'+myLogin);
+  if(myTile){ var mic=myTile.querySelector('.gc-tile-mic'); if(mic) mic.textContent=gcMicOn?'🎤':'🔇'; }
 }
-window.gcToggleMic=gcToggleMic;
+window.gcToggleMic = gcToggleMic;
 
 function gcToggleVideo(){
   if(!gcLocalStream) return;
-  gcVideoOn=!gcVideoOn;
-  gcLocalStream.getVideoTracks().forEach(function(t){t.enabled=gcVideoOn;});
-  document.getElementById('gcVideoBtn').style.background=gcVideoOn?'var(--accent)':'rgba(255,255,255,0.15)';
+  gcVideoOn = !gcVideoOn;
+  gcLocalStream.getVideoTracks().forEach(function(t){ t.enabled = gcVideoOn; });
+  document.getElementById('gcVideoBtn').style.background = gcVideoOn ? 'var(--accent)' : 'rgba(255,255,255,0.15)';
+  gcRenderMyTile();
 }
-window.gcToggleVideo=gcToggleVideo;
+window.gcToggleVideo = gcToggleVideo;
 
 async function gcSwitchCamera(){
   if(!gcLocalStream) return;
-  var next=gcFacingMode==='user'?'environment':'user';
+  var next = gcFacingMode==='user' ? 'environment' : 'user';
   try{
-    var oldVT=gcLocalStream.getVideoTracks()[0];
-    if(oldVT){gcLocalStream.removeTrack(oldVT);oldVT.stop();}
-    var ns=await navigator.mediaDevices.getUserMedia({
-      audio:false,
-      video:{facingMode:{exact:next},width:{ideal:640},height:{ideal:480}}
+    var oldVT = gcLocalStream.getVideoTracks()[0];
+    if(oldVT){ gcLocalStream.removeTrack(oldVT); oldVT.stop(); }
+    var ns = await navigator.mediaDevices.getUserMedia({
+      audio:false, video:{ facingMode:{exact:next}, width:{ideal:640}, height:{ideal:480} }
     }).catch(function(){
-      return navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:next}});
+      return navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:next}});
     });
-    gcFacingMode=next;
-    var nvt=ns.getVideoTracks()[0];
-    Object.values(gcPeers).forEach(function(pc){
-      if(typeof pc.getSenders==='function'){
-        var s=pc.getSenders().find(function(s){return s.track&&s.track.kind==='video';});
-        if(s) s.replaceTrack(nvt);
-      }
+    gcFacingMode = next;
+    var nvt = ns.getVideoTracks()[0];
+    Object.values(gcPeers).forEach(function(peer){
+      if(!peer || !peer.pc || typeof peer.pc.getSenders !== 'function') return;
+      var s = peer.pc.getSenders().find(function(s){ return s.track && s.track.kind==='video'; });
+      if(s) s.replaceTrack(nvt);
     });
     gcLocalStream.addTrack(nvt);
-    var myTile=document.getElementById('gc-tile-'+myLogin);
-    if(myTile){var vid=myTile.querySelector('video');if(vid){vid.srcObject=null;vid.srcObject=gcLocalStream;}}
-  }catch(e){alert('Не удалось переключить камеру: '+e.message);}
+    gcRenderMyTile();
+  }catch(e){ alert('Не удалось переключить камеру: '+e.message); }
 }
-window.gcSwitchCamera=gcSwitchCamera;
+window.gcSwitchCamera = gcSwitchCamera;
 
 function minimizeGroupCall(){
   document.getElementById('groupCallOverlay').classList.remove('show');
-  // Show mini bar
   document.getElementById('callMiniBar').classList.add('show');
-  document.getElementById('callMiniName').textContent=(currentRoomData&&currentRoomData.name)||'Групповой звонок';
-  document.getElementById('callMiniTime').textContent='';
+  document.getElementById('callMiniName').textContent = (currentRoomData&&currentRoomData.name)||'Групповой звонок';
+  document.getElementById('callMiniTime').textContent = '';
 }
-window.minimizeGroupCall=minimizeGroupCall;
+window.minimizeGroupCall = minimizeGroupCall;
 
 function leaveGroupCall(){
   if(!gcRoomId) return;
-  socket.emit('leaveGroupCall',{roomId:gcRoomId});
-  gcCleanup(true);
+  socket.emit('leaveGroupCall', { roomId: gcRoomId });
+  gcCleanup();
 }
-window.leaveGroupCall=leaveGroupCall;
+window.leaveGroupCall = leaveGroupCall;
 
-function gcCleanup(hideOverlay){
+function gcCleanup(){
   clearInterval(gcTimerInterval); gcTimerInterval=null; gcStartTime=0;
+  // Close all peers and remove audio elements
   Object.keys(gcPeers).forEach(function(k){
-    if(k.startsWith('_ice_')) return;
-    try{gcPeers[k].close();}catch(e){}
+    if(k.startsWith('_pre_')) return;
+    var peer = gcPeers[k];
+    if(peer && peer.pc){ try{ peer.pc.close(); }catch(e){} }
+    if(peer && peer.audioEl){ peer.audioEl.pause(); peer.audioEl.remove(); }
   });
-  gcPeers={};gcIceBuffers={};
-  if(gcLocalStream){gcLocalStream.getTracks().forEach(function(t){t.stop();});gcLocalStream=null;}
-  if(hideOverlay||true){
-    document.getElementById('groupCallOverlay').classList.remove('show');
-    document.getElementById('callMiniBar').classList.remove('show');
-  }
-  var grid=document.getElementById('gcGrid');
-  if(grid) grid.innerHTML='';
-  gcRoomId=null;gcVideoOn=false;gcMicOn=true;
+  gcPeers = {};
+  if(gcLocalStream){ gcLocalStream.getTracks().forEach(function(t){ t.stop(); }); gcLocalStream=null; }
+  document.getElementById('groupCallOverlay').classList.remove('show');
+  document.getElementById('callMiniBar').classList.remove('show');
+  var grid = document.getElementById('gcGrid');
+  if(grid) grid.innerHTML = '';
+  gcRoomId=null; gcVideoOn=false; gcMicOn=true;
 }
 
-// Override expandCall to handle group call mini bar
-var _origExpandCall=window.expandCall;
-window.expandCall=function(){
+// Override expandCall / mini-end for group calls
+var _origExpandCall = window.expandCall;
+window.expandCall = function(){
   if(gcRoomId){
     document.getElementById('groupCallOverlay').classList.add('show');
     document.getElementById('callMiniBar').classList.remove('show');
-  } else if(_origExpandCall) _origExpandCall();
+  } else if(_origExpandCall){ _origExpandCall(); }
 };
-// Override endCall mini bar button to handle group call too
-var _origMiniEnd=null;
 (function(){
-  var btn=document.querySelector('.call-mini-end');
-  if(btn){
-    btn.onclick=function(e){
-      e.stopPropagation();
-      if(gcRoomId) leaveGroupCall();
-      else endCall();
-    };
-  }
+  var btn = document.querySelector('.call-mini-end');
+  if(btn) btn.onclick = function(e){
+    e.stopPropagation();
+    if(gcRoomId) leaveGroupCall(); else endCall();
+  };
 })();
 
 /* ── VIDEO NOTES ── */
