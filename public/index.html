@@ -3727,17 +3727,18 @@ document.getElementById('tabRooms').addEventListener('click',function(){switchTo
 function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
 
 // Throttled versions — avoid hammering server on every event
+// Throttled chat list reloads — avoids hammering server on every event
 function emitGetMyChats(force){
   var now=Date.now();
   if(!force && now-_lastChatsLoad < _CHAT_CACHE_TTL) return;
   _lastChatsLoad=now;
-  emitGetMyChats();
+  socket.emit('getMyChats');
 }
 function emitGetMyRooms(force){
   var now=Date.now();
   if(!force && now-_lastRoomsLoad < _CHAT_CACHE_TTL) return;
   _lastRoomsLoad=now;
-  emitGetMyRooms();
+  socket.emit('getMyRooms');
 }
 
 function switchToAll(){
