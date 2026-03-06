@@ -346,6 +346,12 @@ async function initDB() {
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_id ON private_messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_id ON room_messages(room_id, id DESC)'); } catch(e) {}
+  // Indexes critical for getMyChats performance
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_from ON private_messages(from_login)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_to ON private_messages(to_login)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_from_to_ts ON private_messages(from_login, to_login, timestamp DESC)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_unread ON private_messages(to_login, read) WHERE read=false'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_members ON room_members(user_login)'); } catch(e) {}
   // === NEW FEATURES ===
   // Verification badge
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false'); } catch(e) {}
@@ -1650,6 +1656,17 @@ io.on('connection', (socket) => {
     } catch(e) {}
   });
 
+  // Lightweight avatar-only fetch for sidebar lazy loading
+  socket.on('getAvatarOnly', async (login) => {
+    if (!socket.userLogin || !login) return;
+    try {
+      const res = await pool.query('SELECT login, avatar FROM users WHERE login=$1', [login]);
+      if (res.rows.length > 0) {
+        socket.emit('avatarOnly', { login: res.rows[0].login, avatar: res.rows[0].avatar || null });
+      }
+    } catch(e) {}
+  });
+
   socket.on('searchRooms', async (query) => {
     if (!query) return;
     try {
@@ -1661,40 +1678,66 @@ io.on('connection', (socket) => {
   socket.on('getMyChats', async () => {
     if (!socket.userLogin) return;
     try {
-      // Get all chats with last message and unread count in efficient queries
-      const res = await pool.query(
-        'SELECT DISTINCT CASE WHEN from_login=$1 THEN to_login ELSE from_login END as other_login FROM private_messages WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login',
-        [socket.userLogin]
+      // Single query: get last message + unread count per conversation
+      const res = await pool.query(`
+        SELECT
+          other_login,
+          text, type, timestamp, from_login,
+          unread_count
+        FROM (
+          SELECT
+            CASE WHEN from_login=$1 THEN to_login ELSE from_login END AS other_login,
+            text, type, timestamp, from_login,
+            COUNT(*) FILTER (WHERE to_login=$1 AND read=false) OVER (
+              PARTITION BY LEAST(from_login,to_login), GREATEST(from_login,to_login)
+            ) AS unread_count,
+            ROW_NUMBER() OVER (
+              PARTITION BY LEAST(from_login,to_login), GREATEST(from_login,to_login)
+              ORDER BY timestamp DESC
+            ) AS rn
+          FROM private_messages
+          WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login
+        ) t
+        WHERE rn = 1
+        ORDER BY timestamp DESC
+        LIMIT 100
+      `, [socket.userLogin]);
+
+      if (res.rows.length === 0) return socket.emit('myChats', []);
+
+      const logins = res.rows.map(r => r.other_login);
+
+      // Fetch user info WITHOUT avatar (avatars sent separately via getUserProfile)
+      const users = await pool.query(
+        'SELECT login, nickname, username, vip_emoji, vip_until, verified FROM users WHERE login = ANY($1)',
+        [logins]
       );
-      var logins = res.rows.map(r => r.other_login).filter(l => l !== socket.userLogin);
-      if (logins.length === 0) return socket.emit('myChats', []);
-      // Fetch all user info in one query
-      var users = await pool.query('SELECT login, nickname, avatar, username, vip_emoji, vip_until, verified FROM users WHERE login = ANY($1)', [logins]);
-      // Fetch last messages for all chats in one query using DISTINCT ON
-      var lastMsgs = await pool.query(
-        'SELECT DISTINCT ON (LEAST(from_login,to_login), GREATEST(from_login,to_login)) from_login, to_login, text, type, timestamp FROM private_messages WHERE (from_login=$1 OR to_login=$1) AND from_login!=to_login ORDER BY LEAST(from_login,to_login), GREATEST(from_login,to_login), timestamp DESC',
-        [socket.userLogin]
-      );
-      // Fetch unread counts in one query
-      var unreadRes = await pool.query(
-        'SELECT from_login, COUNT(*) as c FROM private_messages WHERE to_login=$1 AND read=false GROUP BY from_login',
-        [socket.userLogin]
-      );
-      var unreadMap = {};
-      unreadRes.rows.forEach(r => { unreadMap[r.from_login] = parseInt(r.c); });
-      var lastMsgMap = {};
-      lastMsgs.rows.forEach(r => {
-        var other = r.from_login === socket.userLogin ? r.to_login : r.from_login;
-        lastMsgMap[other] = r;
-      });
-      var chats = users.rows.map(u => {
-        var lastMsg = lastMsgMap[u.login] || null;
-        if (lastMsg && lastMsg.text && lastMsg.text.startsWith('{')) {
-          try { var parsed = JSON.parse(lastMsg.text); if (parsed.callType) lastMsg = Object.assign({}, lastMsg, {text: parsed.answered ? '📞 Звонок' : '📞 Пропущенный звонок'}); } catch(e) {}
+      const userMap = {};
+      users.rows.forEach(u => { userMap[u.login] = u; });
+
+      const chats = res.rows.map(row => {
+        const u = userMap[row.other_login] || { login: row.other_login, nickname: row.other_login };
+        let lastText = row.text;
+        // Decrypt last message text
+        if (lastText) {
+          try { lastText = decryptText(lastText); } catch(e) {}
+          if (lastText && lastText.startsWith('{') && lastText.includes('callType')) {
+            try { const p = JSON.parse(lastText); lastText = p.answered ? '📞 Звонок' : '📞 Пропущенный звонок'; } catch(e) {}
+          }
         }
-        return { login: u.login, nickname: u.nickname, username: u.username || null, avatar: u.avatar || null, lastMsg, unread: unreadMap[u.login] || 0, vip_emoji: (u.vip_until > Date.now() ? u.vip_emoji : null) || null, vip_until: u.vip_until || 0, verified: u.verified || false };
+        return {
+          login: u.login,
+          nickname: u.nickname,
+          username: u.username || null,
+          avatar: null, // NOT sent here — client uses avatarCache or requests separately
+          lastMsg: { text: lastText, type: row.type, timestamp: row.timestamp, from_login: row.from_login },
+          unread: parseInt(row.unread_count) || 0,
+          vip_emoji: (u.vip_until > Date.now() ? u.vip_emoji : null) || null,
+          vip_until: u.vip_until || 0,
+          verified: u.verified || false
+        };
       });
-      chats.sort(function(a,b) { return (b.lastMsg?b.lastMsg.timestamp:0) - (a.lastMsg?a.lastMsg.timestamp:0); });
+
       socket.emit('myChats', chats);
     } catch(e) { console.error(e); socket.emit('myChats', []); }
   });

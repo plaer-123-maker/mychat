@@ -3693,6 +3693,23 @@ socket.on('userAvatarUpdated',function(d){if(d.avatar)avatarCache[d.login]=d.ava
   // refresh visible chat avatars
   document.querySelectorAll('[data-avatar-login="'+d.login+'"]').forEach(function(el){renderAvatarInEl(el,d.login,el.dataset.avatarNick||'?');});
 });
+
+// Lazy avatar response — update cache and re-render sidebar item if visible
+socket.on('avatarOnly', function(d){
+  if(!d.login) return;
+  if(d.avatar) avatarCache[d.login] = d.avatar;
+  // Update sidebar avatar in place without full re-render
+  var item = document.querySelector('.chat-item[data-chatid="'+d.login+'"]');
+  if(item && d.avatar){
+    var av = item.querySelector('.avatar');
+    if(av && !av.querySelector('img')){
+      var online = av.querySelector('.av-online');
+      av.style.background='none'; av.style.padding='0';
+      av.innerHTML='<img src="'+d.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;">'
+        +(online?'<div class="av-online" style="display:'+online.style.display+'"></div>':'');
+    }
+  }
+});
 socket.on('chatCleared',function(){if(currentView==='general')document.getElementById('messages').innerHTML='';});
 socket.on('chatError',function(m){var e=document.getElementById('chatError');e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);});
 function showError(m){var e=document.getElementById('chatError');if(!e)return;e.textContent=m;e.classList.add('show');setTimeout(function(){e.classList.remove('show');},3000);}
@@ -3833,6 +3850,8 @@ var _CHAT_CACHE_TTL = 8000; // ms - don't reload faster than this
 
 function buildChatItem(c, isPinned, chatType) {
   if(c.avatar) avatarCache[c.login||''] = c.avatar;
+  // Use cached avatar if server didn't send it (saves bandwidth)
+  var resolvedAvatar = c.avatar || (c.login ? avatarCache[c.login] : null);
   if(c.vip_emoji && c.login) vipEmojiCache[c.login] = c.vip_emoji;
   if(c.verified && c.login) verifiedCache[c.login] = true;
   var lastText='';
@@ -3856,8 +3875,8 @@ function buildChatItem(c, isPinned, chatType) {
   if(chatType==='room'){
     avHtml='<div class="avatar">'+(c.type==='channel'?'📢':'👥')+'</div>';
   } else {
-    avHtml = c.avatar
-      ? '<div class="avatar" style="background:none;padding:0;"><img src="'+c.avatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"><div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>'
+    avHtml = resolvedAvatar
+      ? '<div class="avatar" style="background:none;padding:0;"><img src="'+resolvedAvatar+'" style="width:48px;height:48px;border-radius:50%;object-fit:cover;"><div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>'
       : '<div class="avatar">'+(c.nickname||c.login||'?')[0].toUpperCase()+'<div class="av-online" style="display:'+(isOnline?'block':'none')+'"></div></div>';
   }
   var nameHtml = getNickWithEmoji(c.login||'', c.name||c.nickname||'');
@@ -3929,6 +3948,20 @@ socket.on('myChats',function(chats){
   window._myChatsCache = chats; // cache for forward modal
   if(currentView==='private'||currentView==='pm'||currentView==='all'){
     if(!document.getElementById('searchInput').value.trim()) renderChatList();
+  }
+  // Lazy-load avatars for users not yet in cache (in batches to avoid overload)
+  var missingAvatars = chats.filter(function(c){ return c.login && !avatarCache[c.login]; }).map(function(c){ return c.login; });
+  if(missingAvatars.length > 0){
+    // Fetch in small batches of 5 with delay to not block the UI
+    var batchSize = 5, delay = 0;
+    for(var i=0; i<missingAvatars.length; i+=batchSize){
+      (function(batch, d){
+        setTimeout(function(){
+          batch.forEach(function(login){ socket.emit('getAvatarOnly', login); });
+        }, d);
+      })(missingAvatars.slice(i, i+batchSize), delay);
+      delay += 300;
+    }
   }
 });
 
