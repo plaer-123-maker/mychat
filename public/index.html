@@ -6588,27 +6588,33 @@ window.openGhostSettings = openGhostSettings;
 function ghostLeaveChat() {
   if(!confirm('Выйти из Ghost Chat? История будет стёрта у ВСЕХ участников.')) return;
   document.getElementById('ghostSettingsModal').style.display = 'none';
-  socket.emit('ghostLeave', { roomId: _ghostRoomId });
-  ghostCleanup();
+  var roomId = _ghostRoomId; // save before cleanup nulls it
+  ghostCleanup(); // wipe UI first
+  socket.emit('ghostLeave', { roomId: roomId }); // then tell server
 }
 window.ghostLeaveChat = ghostLeaveChat;
 
 function ghostCleanup() {
+  // Wipe messages FIRST before nulling state
+  var md = document.getElementById('messages');
+  if(md) md.innerHTML = '';
+
   _ghostCode = null; _ghostRoomId = null; _inGhostChat = false;
   document.getElementById('ghostEntryScreen').style.display = 'none';
   document.getElementById('ghostSettingsModal').style.display = 'none';
-  // If we were viewing ghost chat, go back to main
-  if(currentView === 'ghost') {
-    currentView = 'none';
-    document.getElementById('mainChat').classList.remove('show');
-    document.getElementById('mainChat').classList.remove('ghost-msg-bg');
-    document.getElementById('messages').innerHTML = '';
-    document.getElementById('chatTitle').textContent = '';
-    document.getElementById('inputArea').style.display = 'none';
-    // Remove ghost warn bar
-    var wb = document.getElementById('ghostWarnBar');
-    if(wb) wb.remove();
-  }
+
+  // Remove ghost warn bar
+  var wb = document.getElementById('ghostWarnBar');
+  if(wb) wb.remove();
+
+  // Go back to main regardless of currentView
+  currentView = 'none';
+  document.getElementById('mainChat').classList.remove('show');
+  document.getElementById('mainChat').classList.remove('ghost-msg-bg');
+  document.getElementById('chatTitle').textContent = '';
+  document.getElementById('chatHeaderBtns').innerHTML = '';
+  document.getElementById('onlineInfo').textContent = '';
+  document.getElementById('inputArea').style.display = 'none';
 }
 
 // ─── Open Ghost Chat UI ───────────────────────────────────
@@ -6776,10 +6782,10 @@ socket.on('ghostMessage', function(d){
 
 // Server: partner left — destroy everything
 socket.on('ghostEnded', function(d){
-  showGhostToast('💨 Ghost Chat завершён. История стёрта.');
-  // Wipe messages immediately
+  // Wipe messages immediately BEFORE cleanup changes currentView
   var md = document.getElementById('messages');
   if(md) md.innerHTML = '';
+  showGhostToast('💨 Ghost Chat завершён. История стёрта.');
   ghostCleanup();
 });
 
@@ -6799,7 +6805,8 @@ window.showGhostToast = showGhostToast;
 // Handle page unload — leave ghost chat
 window.addEventListener('beforeunload', function(){
   if(_inGhostChat && _ghostRoomId) {
-    socket.emit('ghostLeave', { roomId: _ghostRoomId });
+    var rid = _ghostRoomId;
+    socket.emit('ghostLeave', { roomId: rid });
   }
 });
 

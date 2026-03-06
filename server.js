@@ -1484,17 +1484,17 @@ io.on('connection', (socket) => {
     const room = ghostRooms.get(code);
     if (!room) return;
 
-    // Notify the other participant
+    // Destroy room first so no new messages can arrive
+    clearTimeout(room.expireTimeout);
+    ghostRooms.delete(code);
+    ghostRoomById.delete(roomId);
+
+    // Notify the OTHER participant — they need to wipe their history
     const other = room.creator === socket.userLogin ? room.partner : room.creator;
     if (other) {
       const otherSocket = findSocketByLogin(other);
       if (otherSocket) otherSocket.emit('ghostEnded', { roomId });
     }
-
-    // Destroy room and all history (just delete the in-memory object)
-    clearTimeout(room.expireTimeout);
-    ghostRooms.delete(code);
-    ghostRoomById.delete(roomId);
   });
 
   // === GENERAL CHAT ===
