@@ -1437,7 +1437,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('ghostMessage', ({ roomId, text, anon }) => {
+  socket.on('ghostMessage', ({ roomId, text, type, anon, voice, image, file_url, file_name, file_size }) => {
     if (!socket.userLogin) return;
     const code = ghostRoomById.get(roomId);
     if (!code) return;
@@ -1445,24 +1445,31 @@ io.on('connection', (socket) => {
     if (!room) return;
     if (room.creator !== socket.userLogin && room.partner !== socket.userLogin) return;
 
-    const sanitized = String(text||'').slice(0, 4000).replace(/<[^>]*>/g, '');
-    if (!sanitized) return;
+    const msgType = type || 'text';
+    const sanitized = text ? String(text).slice(0, 4000).replace(/<[^>]*>/g, '') : '';
 
     const senderLogin = socket.userLogin;
     const anonId = room.anonMap[senderLogin] || 'Ghost';
 
-    // Send to both participants — each receives the real sender login
-    // so client can detect isMe correctly
+    const payload = {
+      fromLogin: senderLogin,
+      fromNick: socket.username,
+      anonId,
+      anon: !!anon,
+      type: msgType,
+      text: sanitized || null,
+      voice: voice || null,
+      image: image || null,
+      file_url: file_url || null,
+      file_name: file_name || null,
+      file_size: file_size || null,
+    };
+
+    // Send to both participants
     [room.creator, room.partner].forEach(recipientLogin => {
       if (!recipientLogin) return;
       const s = findSocketByLogin(recipientLogin);
-      if (s) s.emit('ghostMessage', {
-        fromLogin: senderLogin,   // always the real sender — client checks vs myLogin
-        fromNick: socket.username,
-        anonId,
-        text: sanitized,
-        anon: !!anon
-      });
+      if (s) s.emit('ghostMessage', payload);
     });
   });
 

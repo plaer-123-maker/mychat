@@ -3603,8 +3603,8 @@ socket.on('authSuccess',function(d){
   // Send push token if already have one
   if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
   switchToGeneral();
-  socket.emit('getMyChats');
-  socket.emit('getMyRooms');
+  emitGetMyChats(true);
+  emitGetMyRooms(true);
   // Check if email is attached
   socket.emit('getMyEmail');
 });
@@ -3726,6 +3726,20 @@ document.getElementById('tabPrivate').addEventListener('click',function(){switch
 document.getElementById('tabRooms').addEventListener('click',function(){switchToRooms();});
 function setActiveTab(id){document.querySelectorAll('.sidebar-tabs button').forEach(function(b){b.classList.remove('active');});document.getElementById(id).classList.add('active');}
 
+// Throttled versions — avoid hammering server on every event
+function emitGetMyChats(force){
+  var now=Date.now();
+  if(!force && now-_lastChatsLoad < _CHAT_CACHE_TTL) return;
+  _lastChatsLoad=now;
+  emitGetMyChats();
+}
+function emitGetMyRooms(force){
+  var now=Date.now();
+  if(!force && now-_lastRoomsLoad < _CHAT_CACHE_TTL) return;
+  _lastRoomsLoad=now;
+  emitGetMyRooms();
+}
+
 function switchToAll(){
   _pmToken++; _roomToken++;
   currentView='all';currentPrivateLogin=null;currentRoomId=null;currentRoomData=null;typingSet.clear();
@@ -3766,7 +3780,7 @@ function switchToPrivate(){
   _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   if(latestChats&&latestChats.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
-  socket.emit('getMyChats');
+  emitGetMyChats(true);
   // Fallback: if no response in 3s, show empty state
   setTimeout(function(){if(currentView==='private'&&document.getElementById('sidebarList').innerHTML.indexOf('Загрузка')!==-1){document.getElementById('sidebarList').innerHTML='<div class="empty-list">Нет чатов. Найди через поиск ☝️</div>';}},3000);
 }
@@ -3782,12 +3796,12 @@ function switchToRooms(){
   _expectedPmLogin=null;_expectedPmToken=-1;_expectedRoomId=null;_expectedRoomToken=-1;
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='none';
   if(latestRooms&&latestRooms.length>0){renderChatList();}else{document.getElementById('sidebarList').innerHTML='<div class="empty-list">Загрузка...</div>';}
-  socket.emit('getMyRooms');
+  emitGetMyRooms(true);
 }
 
 document.getElementById('searchInput').addEventListener('input',function(){
   var q=this.value.trim();clearTimeout(searchTimeout);
-  if(!q){if(currentView==='private')socket.emit('getMyChats');else if(currentView==='rooms')socket.emit('getMyRooms');return;}
+  if(!q){if(currentView==='private')emitGetMyChats();else if(currentView==='rooms')emitGetMyRooms();return;}
   searchTimeout=setTimeout(function(){if(currentView==='private')socket.emit('searchUser',q);else if(currentView==='rooms')socket.emit('searchRooms',q);},300);
 });
 socket.on('searchResults',function(users){
@@ -3813,6 +3827,8 @@ socket.on('roomSearchResults',function(rooms){
 
 // Store latest chats/rooms for unified view
 var latestChats=[], latestRooms=[];
+var _lastChatsLoad=0, _lastRoomsLoad=0; // timestamps to debounce reloads
+var _CHAT_CACHE_TTL = 8000; // ms - don't reload faster than this
 
 function buildChatItem(c, isPinned, chatType) {
   if(c.avatar) avatarCache[c.login||''] = c.avatar;
@@ -3924,7 +3940,7 @@ var onlineLogins = new Set();
 
 socket.on('unreadNotification',function(d){
   if(currentView==='pm'&&currentPrivateLogin===d.from)return;
-  if(currentView==='private'||currentView==='pm'||currentView==='all')socket.emit('getMyChats');
+  if(currentView==='private'||currentView==='pm'||currentView==='all')emitGetMyChats();
   // Push notification - always send on mobile (Capacitor), web only when not focused
   if(window.isCapacitorApp){
     sendNotification(d.nickname||'Новое сообщение', d.text||'Написал тебе в MyChat');
@@ -4121,7 +4137,6 @@ function openPM(login,nickname){
     }
   };
   socket.emit('getPrivateHistory',{login:login,token:_myPmToken});
-  socket.emit('getMyChats');
   socket.emit('getUserProfile',login);
   // Dialog background
   currentDialogBg = null;
@@ -4161,10 +4176,10 @@ window.openRoom=openRoom;
 function joinAndOpenRoom(roomId){roomId=Number(roomId);socket.emit('joinRoom',roomId);setTimeout(function(){openRoom(roomId);},500);}
 window.joinAndOpenRoom=joinAndOpenRoom;
 
-socket.on('joinedRoom',function(){if(currentView==='rooms'||currentView==='room')socket.emit('getMyRooms');});
-socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
-socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
-socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}socket.emit('getMyRooms');});
+socket.on('joinedRoom',function(){if(currentView==='rooms'||currentView==='room')emitGetMyRooms();});
+socket.on('leftRoom',function(roomId){if(currentRoomId==roomId){currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}emitGetMyRooms();});
+socket.on('kickedFromRoom',function(roomId){if(currentRoomId==roomId){alert('Вас удалили из комнаты');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}emitGetMyRooms();});
+socket.on('roomDeleted',function(roomId){if(currentRoomId==roomId){alert('Комната удалена');currentRoomId=null;currentRoomData=null;currentView='rooms';document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';}emitGetMyRooms();});
 
 var _roomOldestId=null,_roomLoadingMore=false,_roomAllLoaded=false;
 socket.on('roomData',function(data){
@@ -4231,7 +4246,7 @@ socket.on('roomData',function(data){
       socket.emit('openRoom',{roomId:currentRoomId,before_id:_roomOldestId});
     }
   };
-  socket.emit('getMyRooms');
+  emitGetMyRooms();
 });
 
 socket.on('roomNewMessage',function(msg){
@@ -4419,7 +4434,7 @@ socket.on('newPrivateMessage',function(msg){
     var empty=document.querySelector('#messages .empty-list');if(empty)empty.remove();
     addPM(msg);document.getElementById('messages').scrollTop=document.getElementById('messages').scrollHeight;
   }
-  if(currentView==='private'||currentView==='pm')socket.emit('getMyChats');
+  if(currentView==='private'||currentView==='pm')emitGetMyChats();
 });
 socket.on('privateMessageDeleted',function(d){var el=document.getElementById('pm-'+d.id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 
@@ -5414,7 +5429,8 @@ document.getElementById('photoInput').addEventListener('change',function(){
     var reader=new FileReader();
     reader.onload=function(ev){
       var payload=Object.assign({type:'video',text:file.name,file_url:ev.target.result,file_name:file.name,file_size:file.size},rd);
-      if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
+      if(currentView==='ghost'&&_ghostRoomId){socket.emit('ghostMessage',Object.assign({roomId:_ghostRoomId,anon:_ghostAnon},payload));}
+      else if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
       else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId},payload));
       else if(currentView==='general')socket.emit('chatMessage',payload);
     };
@@ -5449,7 +5465,8 @@ document.getElementById('photoInput').addEventListener('change',function(){
     compressAll(imageFiles,function(images){
       if(!images.length)return;
       var payload=Object.assign({image:images.length===1?images[0]:images,type:'image'},rd);
-      if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
+      if(currentView==='ghost'&&_ghostRoomId){socket.emit('ghostMessage',Object.assign({roomId:_ghostRoomId,anon:_ghostAnon},payload));}
+      else if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin},payload));
       else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId},payload));
       else if(currentView==='general')socket.emit('chatMessage',payload);
     });
@@ -5505,7 +5522,8 @@ document.getElementById('recSend').addEventListener('click',function(){
       var blob=new Blob(audioChunks,{type:'audio/webm'});var reader=new FileReader();
       reader.onload=function(e){
         var rd=replyTo?{reply_to_id:replyTo.id,reply_to_text:replyTo.text,reply_to_user:replyTo.user}:{};
-        if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin,voice:e.target.result,type:'voice'},rd));
+        if(currentView==='ghost'&&_ghostRoomId){socket.emit('ghostMessage',{roomId:_ghostRoomId,voice:e.target.result,type:'voice',anon:_ghostAnon});}
+        else if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',Object.assign({toLogin:currentPrivateLogin,voice:e.target.result,type:'voice'},rd));
         else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',Object.assign({roomId:currentRoomId,voice:e.target.result,type:'voice'},rd));
         else if(currentView==='general')socket.emit('chatMessage',Object.assign({voice:e.target.result,type:'voice'},rd));
         clearReply();
@@ -5542,8 +5560,8 @@ socket.on('passwordResult',function(m){if(m==='ok'){document.getElementById('pas
 
 document.getElementById('mobileBackBtn').addEventListener('click',function(){
   document.getElementById('mainChat').classList.remove('show');document.getElementById('noChat').style.display='flex';document.getElementById('messages').innerHTML='';
-  if(currentView==='pm'){currentView='private';currentPrivateLogin=null;socket.emit('getMyChats');}
-  else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;socket.emit('getMyRooms');}
+  if(currentView==='pm'){currentView='private';currentPrivateLogin=null;emitGetMyChats();}
+  else if(currentView==='room'){currentView='rooms';currentRoomId=null;currentRoomData=null;emitGetMyRooms();}
   else if(currentView==='general')switchToGeneral();
 });
 
@@ -6702,25 +6720,53 @@ socket.on('ghostMessage', function(d){
   if(currentView !== 'ghost' || !_inGhostChat) return;
   var md = document.getElementById('messages');
   var isMe = (d.fromLogin === myLogin);
+  var displayName = d.anon ? d.anonId || 'Ghost' : (isMe ? (myNickname||myLogin) : (d.fromNick||d.fromLogin));
 
-  // Display name: use anonId from server (already assigned per-user)
-  // In anon mode show anonId, in non-anon show real nickname
-  var displayName;
-  if(d.anon) {
-    displayName = d.anonId || 'Ghost';
+  // Build content HTML based on type
+  var contentHtml = '';
+  var t = d.type || 'text';
+  if(t === 'text' || t === 'sticker'){
+    if(t === 'sticker') contentHtml = '<span style="font-size:52px;line-height:1.2;display:block;">'+escHtml(d.text||'')+'</span>';
+    else contentHtml = '<div class="msg-text">'+escHtml(d.text||'')+'</div>';
+  } else if(t === 'image'){
+    var imgSrc = (typeof d.image==='string') ? d.image : (Array.isArray(d.image)?d.image[0]:null);
+    if(imgSrc) contentHtml = '<img src="'+imgSrc+'" style="max-width:240px;max-height:240px;border-radius:12px;display:block;cursor:pointer;" onclick="window.pvSingle&&pvSingle(this.src)">';
+    else contentHtml = '<div class="msg-text">[фото]</div>';
+  } else if(t === 'video'){
+    contentHtml = '<video src="'+(d.file_url||'')+'" controls style="max-width:240px;border-radius:12px;display:block;"></video>';
+    if(d.file_name) contentHtml += '<div style="font-size:12px;color:rgba(255,255,255,0.5);margin-top:4px;">'+escHtml(d.file_name)+'</div>';
+  } else if(t === 'video_note'){
+    contentHtml = typeof renderVideoNote==='function'
+      ? renderVideoNote(d.voice, isMe, null)
+      : '<video src="'+(d.voice||'')+'" controls style="width:160px;height:160px;border-radius:50%;object-fit:cover;display:block;"></video>';
+    if(typeof contentHtml === 'object' && contentHtml && contentHtml.outerHTML) contentHtml = contentHtml.outerHTML;
+  } else if(t === 'voice'){
+    contentHtml = '<audio controls src="'+(d.voice||'')+'" style="max-width:220px;"></audio>';
+  } else if(t === 'file'){
+    contentHtml = '<a href="'+(d.file_url||'#')+'" download="'+(d.file_name||'file')+'" style="color:#a855f7;text-decoration:none;display:flex;align-items:center;gap:8px;">📎 '+escHtml(d.file_name||'Файл')+'</a>';
   } else {
-    displayName = isMe ? (myNickname || myLogin) : (d.fromNick || d.fromLogin);
+    contentHtml = '<div class="msg-text">'+escHtml(d.text||'')+'</div>';
   }
 
   var div = document.createElement('div');
   div.className = 'message ' + (isMe ? 'own' : 'their');
   div.style.cssText = 'user-select:none;-webkit-user-select:none;';
+
+  // For video_note, insert directly
+  if(t === 'video_note' && typeof renderVideoNote === 'function'){
+    var vnWrap = renderVideoNote(d.voice, isMe, null);
+    if(vnWrap && typeof vnWrap === 'object'){
+      div.appendChild(vnWrap);
+      md.appendChild(div); md.scrollTop = md.scrollHeight; return;
+    }
+  }
+
   div.innerHTML =
     '<div class="msg-bubble" oncontextmenu="return false;" ondragstart="return false;">' +
-      (!isMe ? '<div class="msg-sender" style="color:#a855f7;">' + escHtml(displayName) + '</div>' : '') +
-      '<div class="msg-text">' + escHtml(d.text) + '</div>' +
-      '<div class="msg-meta"><span class="msg-time">' + formatTime(new Date()) + '</span>' +
-        (d.anon ? ' <span class="msg-anon-badge">👤 anon</span>' : '') +
+      (!isMe ? '<div class="msg-sender" style="color:#a855f7;">'+escHtml(displayName)+'</div>' : '') +
+      contentHtml +
+      '<div class="msg-meta"><span class="msg-time">'+formatTime(new Date())+'</span>'+
+        (d.anon ? ' <span class="msg-anon-badge">👤 anon</span>' : '')+
       '</div>' +
     '</div>';
   md.appendChild(div);
@@ -6787,7 +6833,8 @@ document.getElementById('vnSend').addEventListener('click',function(){
       var blob=new Blob(vnChunks,{type:'video/webm'});var reader=new FileReader();
       reader.onload=function(e){
         var data=e.target.result;
-        if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',{toLogin:currentPrivateLogin,voice:data,type:'video_note'});
+        if(currentView==='ghost'&&_ghostRoomId){socket.emit('ghostMessage',{roomId:_ghostRoomId,voice:data,type:'video_note',anon:_ghostAnon});}
+        else if(currentView==='pm'&&currentPrivateLogin)socket.emit('privateMessage',{toLogin:currentPrivateLogin,voice:data,type:'video_note'});
         else if(currentView==='room'&&currentRoomId)socket.emit('roomMessage',{roomId:currentRoomId,voice:data,type:'video_note'});
         else if(currentView==='general')socket.emit('chatMessage',{voice:data,type:'video_note'});
       };reader.readAsDataURL(blob);};vnRecorder.stop();}stopVN();
@@ -7526,8 +7573,9 @@ function insertEmoji(emoji) {
 }
 
 function sendSticker(emoji) {
-  var msgObj = { type: 'sticker', text: emoji, timestamp: Date.now() };
-  if (currentView === 'pm' && currentPrivateLogin) {
+  if (currentView === 'ghost' && _ghostRoomId) {
+    socket.emit('ghostMessage', { roomId: _ghostRoomId, text: emoji, type: 'sticker', anon: _ghostAnon });
+  } else if (currentView === 'pm' && currentPrivateLogin) {
     socket.emit('privateMessage', { toLogin: currentPrivateLogin, text: emoji, type: 'sticker' });
   } else if (currentView === 'room' && currentRoomId) {
     socket.emit('roomMessage', { roomId: currentRoomId, text: emoji, type: 'sticker' });
@@ -7566,7 +7614,8 @@ document.getElementById('fileInput').addEventListener('change', function() {
       var isVideo = file.type.startsWith('video/');
       var msgType = isVideo ? 'video' : 'file';
       var payload = { type: msgType, text: file.name, file_url: ev.target.result, file_name: file.name, file_size: file.size };
-      if (currentView === 'pm' && currentPrivateLogin) socket.emit('privateMessage', Object.assign({toLogin: currentPrivateLogin}, payload));
+      if (currentView === 'ghost' && _ghostRoomId) socket.emit('ghostMessage', Object.assign({roomId:_ghostRoomId, anon:_ghostAnon}, payload));
+      else if (currentView === 'pm' && currentPrivateLogin) socket.emit('privateMessage', Object.assign({toLogin: currentPrivateLogin}, payload));
       else if (currentView === 'room' && currentRoomId) socket.emit('roomMessage', Object.assign({roomId: currentRoomId}, payload));
       else if (currentView === 'general') socket.emit('chatMessage', payload);
     };
@@ -7978,7 +8027,7 @@ socket.on('chatHistoryDeleted', function(d) {
     document.getElementById('messages').innerHTML = '<div class="empty-list">История удалена</div>';
   }
   // Refresh chat list
-  socket.emit('getMyChats');
+  emitGetMyChats();
   showError('🗑 История удалена');
 });
 
@@ -8987,7 +9036,9 @@ window.searchGifs = function(query) {
 
 window.sendGif = function(gifUrl) {
   if (!gifUrl) return;
-  if (currentView === 'pm' && currentPrivateLogin) {
+  if (currentView === 'ghost' && _ghostRoomId) {
+    socket.emit('ghostMessage', { roomId: _ghostRoomId, image: gifUrl, type: 'image', anon: _ghostAnon });
+  } else if (currentView === 'pm' && currentPrivateLogin) {
     socket.emit('privateMessage', { toLogin: currentPrivateLogin, image: gifUrl, type: 'image' });
   } else if (currentView === 'room' && currentRoomId) {
     socket.emit('roomMessage', { roomId: currentRoomId, image: gifUrl, type: 'image' });
