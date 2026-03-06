@@ -238,6 +238,7 @@ const googleClient = (GOOGLE_CLIENT_ID && OAuth2Client) ? new OAuth2Client(GOOGL
 
 // Email verification codes (in-memory, short TTL)
 const pendingEmailVerifications = new Map(); // code -> { login, password, nickname, email, expiresAt }
+const pendingLoginCodes = new Map(); // login -> { code, expiresAt, socketId }
 
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -272,8 +273,12 @@ async function initDB() {
     room_id INT NOT NULL,
     user_login VARCHAR(50) NOT NULL,
     role VARCHAR(20) DEFAULT 'member',
+    muted_until BIGINT DEFAULT 0,
+    banned BOOLEAN DEFAULT false,
     UNIQUE(room_id, user_login)
   )`);
+  try { await pool.query('ALTER TABLE room_members ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0'); } catch(e) {}
+  try { await pool.query('ALTER TABLE room_members ADD COLUMN IF NOT EXISTS banned BOOLEAN DEFAULT false'); } catch(e) {}
   await pool.query(`CREATE TABLE IF NOT EXISTS room_messages (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL,
@@ -997,7 +1002,19 @@ io.on('connection', (socket) => {
     } catch(e) { console.error(e); }
   });
 
-  socket.on('login', async ({ login, password }) => {
+  async function completeLogin(socket, user, login, ip) {
+    socket.username = user.nickname; socket.userLogin = login;
+    socket.userRole = login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
+    const token = generateToken();
+    await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
+    onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
+    socketUsers.set(socket.id, socket);
+    socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
+    sendOnlineToAll();
+    await addLog('login', user.nickname, 'Login', ip);
+  }
+
+    socket.on('login', async ({ login, password }) => {
     if (!checkRateLimit(ip, 'login')) return socket.emit('authError', 'Слишком много попыток. Подождите 5 минут.');
     try {
       if (!login || !password) return socket.emit('authError', 'Заполни все поля');
@@ -1006,22 +1023,69 @@ io.on('connection', (socket) => {
       if (res.rows.length === 0) return socket.emit('authError', 'Неверный логин или пароль');
       const user = res.rows[0];
       if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
-      // Проверяем верификацию email (кроме Google/Telegram аккаунтов)
       if (user.auth_method === 'email' && !user.email_verified) {
         return socket.emit('authError', 'Email не подтверждён. Зарегистрируйся заново.');
       }
       const valid = await bcrypt.compare(password, user.password);
       if (!valid) return socket.emit('authError', 'Неверный логин или пароль');
-      socket.username = user.nickname; socket.userLogin = login;
-      socket.userRole = login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
-      const token = generateToken();
-      await pool.query('UPDATE users SET token=$1 WHERE login=$2', [token, login]);
-      onlineUsers.set(socket.id, { nickname: user.nickname, login, ip });
-      socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login, token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
-      sendOnlineToAll();
-      await addLog('login', user.nickname, 'Login', ip);
+
+      // ── 2FA: send email code if email available ──
+      if (EMAIL_ENABLED && user.email && user.email_verified) {
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        pendingLoginCodes.set(login, { code, expiresAt: Date.now() + 10 * 60000, socketId: socket.id, user });
+        // Send email
+        try {
+          const resend = new Resend(process.env.RESEND_API_KEY);
+          await resend.emails.send({
+            from: process.env.EMAIL_FROM || 'noreply@mychat.app',
+            to: user.email,
+            subject: 'MyChat — код входа',
+            html: `<div style="font-family:sans-serif;max-width:400px;margin:0 auto;padding:24px;background:#0d1117;color:#e6edf3;border-radius:12px;">
+              <h2 style="color:#2ea9df;margin-bottom:8px;">🔐 Вход в MyChat</h2>
+              <p>Ваш код подтверждения:</p>
+              <div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#fff;background:#161b22;padding:16px;border-radius:8px;text-align:center;margin:12px 0;">${code}</div>
+              <p style="color:#8b949e;font-size:13px;">Действителен 10 минут. Никому не сообщайте этот код.</p>
+            </div>`
+          });
+        } catch(emailErr) { console.error('Login email error:', emailErr); }
+        return socket.emit('loginEmailCodeRequired', { email: user.email.replace(/(.{2}).+(@.+)/, '$1***$2') });
+      }
+
+      // No email — login directly (Google/Telegram accounts)
+      await completeLogin(socket, user, login, ip);
     } catch (e) { console.error(e); socket.emit('authError', 'Ошибка входа'); }
+  });
+
+  // Verify login email code
+  socket.on('verifyLoginCode', async ({ login, code }) => {
+    if (!checkRateLimit(ip, 'emailCode')) return socket.emit('authError', 'Слишком много попыток.');
+    login = sanitize(login, 50); code = sanitize(code, 10);
+    const pending = pendingLoginCodes.get(login);
+    if (!pending) return socket.emit('authError', 'Код не найден. Войдите заново.');
+    if (Date.now() > pending.expiresAt) { pendingLoginCodes.delete(login); return socket.emit('authError', 'Код истёк. Войдите заново.'); }
+    if (pending.code !== code) return socket.emit('authError', 'Неверный код.');
+    pendingLoginCodes.delete(login);
+    await completeLogin(socket, pending.user, login, ip);
+  });
+
+  // Resend login code
+  socket.on('resendLoginCode', async ({ login }) => {
+    if (!checkRateLimit(ip, 'emailCode')) return socket.emit('authError', 'Слишком много попыток.');
+    login = sanitize(login, 50);
+    const pending = pendingLoginCodes.get(login);
+    if (!pending) return socket.emit('authError', 'Сессия входа не найдена.');
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    pending.code = code; pending.expiresAt = Date.now() + 10 * 60000;
+    try {
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      await resend.emails.send({
+        from: process.env.EMAIL_FROM || 'noreply@mychat.app',
+        to: pending.user.email,
+        subject: 'MyChat — новый код входа',
+        html: `<div style="font-family:sans-serif;padding:24px;background:#0d1117;color:#e6edf3;border-radius:12px;"><h2 style="color:#2ea9df;">🔐 Новый код входа</h2><div style="font-size:36px;font-weight:700;letter-spacing:8px;color:#fff;background:#161b22;padding:16px;border-radius:8px;text-align:center;margin:12px 0;">${code}</div><p style="color:#8b949e;font-size:13px;">Действителен 10 минут.</p></div>`
+      });
+      socket.emit('loginCodeResent', { ok: true });
+    } catch(e) { socket.emit('authError', 'Ошибка отправки.'); }
   });
 
   // === WEBRTC CALLS ===
@@ -1148,7 +1212,41 @@ io.on('connection', (socket) => {
     await saveCallLog({ callerLogin, callerNick, calleeLogin, callType, answered, duration: dur, missed });
   });
 
-  socket.on('iceCandidate', ({ candidate, to }) => {
+  // ── Room member mute ──
+  socket.on('roomMuteMember', async ({ roomId, login, minutes }) => {
+    if (!socket.userLogin) return;
+    roomId = Number(roomId);
+    const me = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+    if (!me.rows.length || me.rows[0].role !== 'admin') return;
+    const until = minutes > 0 ? Date.now() + minutes * 60000 : 0;
+    await pool.query('UPDATE room_members SET muted_until=$1 WHERE room_id=$2 AND user_login=$3', [until, roomId, login]);
+    const s2 = findSocketByLogin(login);
+    if (s2) s2.emit('roomMuted', { roomId, until, by: socket.username });
+    socket.emit('adminDone', until > 0 ? `${login} замучен на ${minutes} мин` : `Мут снят с ${login}`);
+    // Refresh members
+    const members = await pool.query('SELECT rm.user_login, rm.role, rm.muted_until, rm.banned, u.nickname FROM room_members rm JOIN users u ON rm.user_login=u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
+    io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
+  });
+
+  // ── Room member ban ──
+  socket.on('roomBanMember', async ({ roomId, login, banned }) => {
+    if (!socket.userLogin) return;
+    roomId = Number(roomId);
+    const me = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+    if (!me.rows.length || me.rows[0].role !== 'admin') return;
+    const room = await pool.query('SELECT owner_login FROM rooms WHERE id=$1', [roomId]);
+    if (room.rows[0]?.owner_login === login) return; // can't ban owner
+    await pool.query('UPDATE room_members SET banned=$1 WHERE room_id=$2 AND user_login=$3', [!!banned, roomId, login]);
+    if (banned) {
+      const s2 = findSocketByLogin(login);
+      if (s2) { s2.emit('roomBanned', { roomId, by: socket.username }); s2.leave('room_' + roomId); }
+    }
+    const members = await pool.query('SELECT rm.user_login, rm.role, rm.muted_until, rm.banned, u.nickname FROM room_members rm JOIN users u ON rm.user_login=u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
+    io.to('room_' + roomId).emit('roomMembersUpdated', { roomId, members: members.rows });
+    socket.emit('adminDone', banned ? `${login} забанен в группе` : `${login} разбанен`);
+  });
+
+    socket.on('iceCandidate', ({ candidate, to }) => {
     if (!socket.userLogin) return;
     const targetSocket = findSocketByLogin(to);
     if (targetSocket) targetSocket.emit('iceCandidate', candidate);
@@ -1638,8 +1736,10 @@ io.on('connection', (socket) => {
     if (!socket.userLogin || !data.roomId) return;
     var roomId = Number(data.roomId);
     try {
-      var member = await pool.query('SELECT role FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
+      var member = await pool.query('SELECT role, muted_until, banned FROM room_members WHERE room_id=$1 AND user_login=$2', [roomId, socket.userLogin]);
       if (member.rows.length === 0) return;
+      if (member.rows[0].banned) return socket.emit('chatError', 'Вы забанены в этой группе');
+      if (member.rows[0].muted_until > Date.now()) return socket.emit('chatError', 'Вы временно не можете писать в этой группе');
       var room = await pool.query('SELECT type FROM rooms WHERE id=$1', [roomId]);
       if (room.rows.length === 0) return;
       if (room.rows[0].type === 'channel' && member.rows[0].role !== 'admin') return socket.emit('chatError', 'В канале писать может только админ');
@@ -2148,11 +2248,25 @@ io.on('connection', (socket) => {
   socket.on('getStories', async () => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT s.*, (SELECT COUNT(*) FROM story_views WHERE story_id=s.id) as views, (SELECT COUNT(*) FROM story_views WHERE story_id=s.id AND viewer_login=$1) as viewed FROM stories s WHERE s.expires_at>$2 ORDER BY s.timestamp DESC',
-        [socket.userLogin, Date.now()]);
-      socket.emit('storiesData', res.rows);
-    } catch(e) { socket.emit('storiesData', []); }
+      // Get stories: own stories + stories from users who have chatted with me
+      const res = await pool.query(`
+        SELECT s.*, u.nickname, u.avatar, u.verified, u.vip_emoji, u.vip_until
+        FROM stories s JOIN users u ON s.user_login = u.login
+        WHERE s.expires_at > $1
+          AND (
+            s.user_login = $2
+            OR s.user_login IN (
+              SELECT DISTINCT from_login FROM private_messages WHERE to_login=$2
+              UNION
+              SELECT DISTINCT to_login FROM private_messages WHERE from_login=$2
+            )
+          )
+        ORDER BY s.created_at DESC
+      `, [Date.now(), socket.userLogin]);
+      socket.emit('stories', res.rows);
+    } catch(e) { console.error(e); socket.emit('stories', []); }
   });
+
 
   socket.on('viewStory', async ({ storyId }) => {
     if (!socket.userLogin) return;

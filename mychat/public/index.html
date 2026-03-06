@@ -1946,6 +1946,16 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   border-radius:10px;padding:7px 16px;font-size:13px;
   font-weight:700;cursor:pointer;flex-shrink:0;
 }
+
+.toast-msg{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:rgba(30,30,30,0.95);color:#fff;
+  padding:10px 20px;border-radius:20px;font-size:14px;
+  z-index:9999;opacity:0;transition:all 0.3s;pointer-events:none;
+  max-width:80vw;text-align:center;
+  box-shadow:0 4px 20px rgba(0,0,0,0.4);
+}
+.toast-msg.show{opacity:1;transform:translateX(-50%) translateY(0);}
 </style>
 </head>
 <body>
@@ -2017,6 +2027,25 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
       </div>
       <button class="btn" id="registerBtn">Создать аккаунт →</button>
       <div class="auth-hint">На email придёт код подтверждения — без него войти нельзя</div>
+    </div>
+
+    <!-- STEP: Login 2FA email code -->
+    <div id="authStepLoginCode" style="display:none;">
+      <button class="auth-back" onclick="showAuthStep('login')">← Назад</button>
+      <div class="auth-logo">🔐</div>
+      <h2 class="auth-title">Подтверждение входа</h2>
+      <p class="auth-sub" id="loginCodeHint">Код отправлен на вашу почту</p>
+      <div class="error" id="loginCodeError"></div>
+      <div class="code-inputs" id="loginCodeInputs">
+        <input type="text" maxlength="1" class="login-code-digit" data-idx="0">
+        <input type="text" maxlength="1" class="login-code-digit" data-idx="1">
+        <input type="text" maxlength="1" class="login-code-digit" data-idx="2">
+        <input type="text" maxlength="1" class="login-code-digit" data-idx="3">
+        <input type="text" maxlength="1" class="login-code-digit" data-idx="4">
+        <input type="text" maxlength="1" class="login-code-digit" data-idx="5">
+      </div>
+      <button class="btn" id="confirmLoginCodeBtn" style="margin-top:16px;">Подтвердить</button>
+      <div style="text-align:center;margin-top:12px;"><a id="resendLoginCodeLink" style="color:var(--accent);cursor:pointer;font-size:13px;">Отправить ещё раз</a></div>
     </div>
 
     <!-- STEP: Email verification code -->
@@ -3154,7 +3183,7 @@ function showAuthStep(step) {
     var el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  var map = {'main':'authStepMain','login':'authStepLogin','register':'authStepRegister','emailcode':'authStepEmailCode','googlesetup':'authStepGoogleSetup','telegramsetup':'authStepTelegramSetup'};
+  var map = {'main':'authStepMain','login':'authStepLogin','register':'authStepRegister','emailcode':'authStepEmailCode','logincode':'authStepLoginCode','googlesetup':'authStepGoogleSetup','telegramsetup':'authStepTelegramSetup'};
   if (map[step]) document.getElementById(map[step]).style.display = 'block';
   ['authError','loginError','registerError','emailCodeError','googleSetupError','telegramSetupError'].forEach(function(id){
     var el = document.getElementById(id); if (el) el.textContent = '';
@@ -3181,6 +3210,56 @@ document.getElementById('loginBtn').addEventListener('click', function() {
 ['loginLogin','loginPassword'].forEach(function(id) {
   var el = document.getElementById(id);
   if (el) el.addEventListener('keypress', function(e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
+});
+
+// Login 2FA: server requires email code
+var _pendingLoginLogin = '';
+socket.on('loginEmailCodeRequired', function(d) {
+  var btn = document.getElementById('loginBtn');
+  if (btn) { btn.disabled = false; btn.textContent = 'Войти →'; }
+  _pendingLoginLogin = document.getElementById('loginLogin').value.trim();
+  document.getElementById('loginCodeHint').textContent = 'Код отправлен на ' + d.email;
+  document.getElementById('loginCodeError').textContent = '';
+  showAuthStep('logincode');
+  setTimeout(function() { var f = document.querySelector('.login-code-digit'); if (f) f.focus(); }, 100);
+});
+
+// Setup login code digit inputs
+document.querySelectorAll('.login-code-digit').forEach(function(input, i, all) {
+  input.addEventListener('input', function() {
+    this.value = this.value.replace(/[^0-9]/g, '');
+    if (this.value && i < all.length - 1) all[i + 1].focus();
+    if (this.value && i === all.length - 1) document.getElementById('confirmLoginCodeBtn').click();
+  });
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Backspace' && !this.value && i > 0) all[i - 1].focus();
+  });
+  input.addEventListener('paste', function(e) {
+    e.preventDefault();
+    var txt = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+    txt.split('').forEach(function(ch, idx) { if (all[idx]) all[idx].value = ch; });
+    if (txt.length === 6) document.getElementById('confirmLoginCodeBtn').click();
+  });
+});
+
+document.getElementById('confirmLoginCodeBtn').addEventListener('click', function() {
+  var code = Array.from(document.querySelectorAll('.login-code-digit')).map(function(i){return i.value;}).join('');
+  if (code.length < 6) { document.getElementById('loginCodeError').textContent = 'Введи все 6 цифр'; return; }
+  this.disabled = true; this.textContent = 'Проверяем...';
+  var btn = this;
+  socket.emit('verifyLoginCode', { login: _pendingLoginLogin, code: code });
+  socket.once('authError', function(m) { btn.disabled=false; btn.textContent='Подтвердить'; document.getElementById('loginCodeError').textContent = m; });
+  socket.once('authSuccess', function() { btn.disabled=false; btn.textContent='Подтвердить'; });
+});
+
+document.getElementById('resendLoginCodeLink').addEventListener('click', function() {
+  socket.emit('resendLoginCode', { login: _pendingLoginLogin });
+  this.textContent = 'Отправлено!';
+  var el = this;
+  setTimeout(function() { el.textContent = 'Отправить ещё раз'; }, 30000);
+});
+socket.on('loginCodeResent', function() {
+  document.getElementById('loginCodeError').textContent = '';
 });
 
 // Register
@@ -4027,7 +4106,22 @@ socket.on('roomNewMessage',function(msg){
   }
 });
 socket.on('roomMessageDeleted',function(d){if(currentRoomId==d.roomId){var el=document.getElementById('rmsg-'+d.msgId);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}}});
-socket.on('roomMembersUpdated',function(d){if(currentRoomId==d.roomId&&currentRoomData)currentRoomData.members=d.members;});
+socket.on('roomMembersUpdated',function(d){
+  if(currentRoomId==d.roomId&&currentRoomData){
+    currentRoomData.members=d.members;
+    // Refresh settings panel if open
+    if(document.getElementById('roomSettingsModal').classList.contains('show')) openRoomSettings();
+  }
+});
+socket.on('roomMuted',function(d){
+  if(currentRoomId==d.roomId) showToast('Вы замучены в этой группе до '+(d.until?new Date(d.until).toLocaleTimeString():'снято'));
+});
+socket.on('roomBanned',function(d){
+  if(currentRoomId==d.roomId){
+    showToast('Вас забанили в группе');
+    setTimeout(function(){socket.emit('leaveRoom',d.roomId);switchToGeneral();},1500);
+  }
+});
 socket.on('roomSettingsUpdated',function(d){if(currentRoomId==d.roomId&&currentRoomData)currentRoomData.room.comments_enabled=d.comments_enabled;});
 
 function addRoomMsg(msg){
@@ -4077,8 +4171,22 @@ function openRoomSettings(){
   html+='<div class="members-panel"><h4>Участники ('+d.members.length+')</h4>';
   html+='<div style="margin-bottom:8px;display:flex;gap:4px;"><input id="addMemberInput" placeholder="Логин" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:8px;background:var(--bg-input);color:var(--text-primary);outline:none;"><button style="padding:8px 12px;border:none;border-radius:8px;background:#27ae60;color:#fff;cursor:pointer;font-weight:600;" onclick="addMember()">+</button></div>';
   d.members.forEach(function(m){
-    html+='<div class="member-row"><span>'+m.nickname+' ('+m.user_login+') <span class="role '+m.role+'">'+m.role+'</span></span>';
-    if(m.user_login!==d.room.owner_login){html+='<div class="mr-btns">';if(m.role==='member')html+='<button style="background:#9b59b6;" onclick="setRoomRole(\''+m.user_login+'\',\'admin\')">→Админ</button>';else html+='<button style="background:var(--bg-base);" onclick="setRoomRole(\''+m.user_login+'\',\'member\')">→Участник</button>';html+='<button style="background:#c0392b;" onclick="removeMember(\''+m.user_login+'\')">✕</button></div>';}
+    var isMuted = m.muted_until && m.muted_until > Date.now();
+    var isBanned = m.banned;
+    var statusBadge = isBanned ? ' <span style="color:#e94560;font-size:11px;">🚫забанен</span>'
+                    : isMuted  ? ' <span style="color:#f39c12;font-size:11px;">🔇замучен</span>' : '';
+    html+='<div class="member-row"><span>'+m.nickname+' ('+m.user_login+')'+statusBadge+' <span class="role '+m.role+'">'+m.role+'</span></span>';
+    if(m.user_login!==d.room.owner_login && d.myRole==='admin'){
+      html+='<div class="mr-btns">';
+      if(m.role==='member') html+='<button style="background:#9b59b6;" onclick="setRoomRole(\''+m.user_login+'\',\'admin\')">→Админ</button>';
+      else html+='<button style="background:var(--bg-base);" onclick="setRoomRole(\''+m.user_login+'\',\'member\')">→Участник</button>';
+      if(isMuted) html+='<button style="background:#f39c12;" onclick="roomUnmuteMember(\''+m.user_login+'\')">Размут</button>';
+      else html+='<button style="background:#e67e22;" onclick="roomMuteMemberPrompt(\''+m.user_login+'\')">🔇Мут</button>';
+      if(isBanned) html+='<button style="background:#27ae60;" onclick="roomUnbanMember(\''+m.user_login+'\')">Разбан</button>';
+      else html+='<button style="background:#c0392b;" onclick="roomBanMember(\''+m.user_login+'\')">🚫Бан</button>';
+      html+='<button style="background:#7f8c8d;" onclick="removeMember(\''+m.user_login+'\')">✕Кик</button>';
+      html+='</div>';
+    }
     html+='</div>';
   });
   html+='</div>';
@@ -4093,6 +4201,19 @@ window.addMember=addMember;
 function removeMember(login){if(confirm('Удалить '+login+'?'))socket.emit('roomRemoveMember',{roomId:currentRoomId,login:login});}
 window.removeMember=removeMember;
 function setRoomRole(login,role){socket.emit('roomSetRole',{roomId:currentRoomId,login:login,role:role});}
+window.setRoomRole=setRoomRole;
+function roomMuteMemberPrompt(login){
+  var min=prompt('Замутить '+login+' на сколько минут? (0 = снять мут)','30');
+  if(min===null) return;
+  socket.emit('roomMuteMember',{roomId:currentRoomId,login:login,minutes:parseInt(min)||0});
+}
+window.roomMuteMemberPrompt=roomMuteMemberPrompt;
+function roomUnmuteMember(login){socket.emit('roomMuteMember',{roomId:currentRoomId,login:login,minutes:0});}
+window.roomUnmuteMember=roomUnmuteMember;
+function roomBanMember(login){if(confirm('Забанить '+login+' в этой группе?'))socket.emit('roomBanMember',{roomId:currentRoomId,login:login,banned:true});}
+window.roomBanMember=roomBanMember;
+function roomUnbanMember(login){socket.emit('roomBanMember',{roomId:currentRoomId,login:login,banned:false});}
+window.roomUnbanMember=roomUnbanMember;
 window.setRoomRole=setRoomRole;
 function toggleComments(){socket.emit('roomToggleComments',currentRoomId);}
 window.toggleComments=toggleComments;
@@ -4330,6 +4451,7 @@ socket.on('chatMessage',function(msg){
   var _atBottom=(_md.scrollHeight-_md.scrollTop-_md.clientHeight)<150;
   addMsg(msg);
   if(_atBottom) _md.scrollTop=_md.scrollHeight;
+  setTimeout(observeAllLazy,100);
 });
 socket.on('messageDeleted',function(id){var el=document.getElementById('msg-'+id);if(el){var p=el.parentElement;if(p&&p.classList.contains('msg-wrapper'))p.remove();else el.remove();}});
 
@@ -4728,6 +4850,55 @@ function buildLocationHtml(text) {
   return '<div class="geo-msg"><img class="geo-map-preview" src="'+mapUrl+'" alt="Карта" onerror="this.style.display=\'none\'"><div class="geo-info">📍 <a href="'+mapsLink+'" target="_blank" rel="noopener">Открыть на карте</a><div style="font-size:11px;color:var(--text-muted);margin-top:2px;">'+lat+', '+lon+'</div></div></div>';
 }
 window.buildLocationHtml = buildLocationHtml;
+
+// ── Toast notifications ───────────────────────────────
+function showToast(msg, dur){
+  var t=document.getElementById('_toast');
+  if(!t){t=document.createElement('div');t.id='_toast';t.className='toast-msg';document.body.appendChild(t);}
+  t.textContent=msg;
+  clearTimeout(t._timer);
+  // Force reflow
+  t.classList.remove('show');
+  void t.offsetWidth;
+  t.classList.add('show');
+  t._timer=setTimeout(function(){t.classList.remove('show');},dur||3000);
+}
+window.showToast=showToast;
+
+
+// ── Media lazy loading with IntersectionObserver ──────
+var _mediaObserver = null;
+(function initMediaObserver(){
+  if(!('IntersectionObserver' in window)) return;
+  _mediaObserver = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(!entry.isIntersecting) return;
+      var el = entry.target;
+      var src = el.dataset.lazySrc;
+      if(!src) return;
+      if(el.tagName === 'IMG'){
+        el.src = src;
+        el.removeAttribute('data-lazy-src');
+        el.classList.remove('lazy-placeholder');
+      } else if(el.tagName === 'VIDEO'){
+        el.src = src;
+        el.removeAttribute('data-lazy-src');
+        el.load();
+      }
+      _mediaObserver.unobserve(el);
+    });
+  }, { rootMargin: '200px' });
+})();
+
+function lazyObserve(el) {
+  if(_mediaObserver && el.dataset.lazySrc) _mediaObserver.observe(el);
+}
+
+// Call after messages rendered
+function observeAllLazy(){
+  document.querySelectorAll('[data-lazy-src]').forEach(function(el){ lazyObserve(el); });
+}
+
 
 // ═══════════════════════════════════════════════
 // SCHEDULED MESSAGES CLIENT
