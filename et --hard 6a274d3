@@ -1,0 +1,204 @@
+[33mdc22adb[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m ghost chat system
+[33m6a274d3[m ghost chat system
+[33me9e8c2c[m ghost chat system
+[33mf1bf605[m ghost chat system
+[33m1ca8fe1[m ghost chat system
+[33m17b992c[m ghost chat system
+[33m849943c[m ghost chat system
+[33mb3ab62a[m ghost chat system
+[33m080d333[m ghost chat system
+[33m35f1d8a[m Описание изменений
+[33me915e97[m 2FA login, room ban/mute, stories contacts, lazy media
+[33m56d2ed9[m revert to working version
+[33m22b2209[m revert to working version
+[33m9377211[m FCM push v1
+[33m9994973[m FCM push v1
+[33m0c9e5a5[m FCM push v1
+[33m4400535[m revert to working versionwadпгшл
+[33m416e969[m revert to working versionwadпгшл
+[33m04b305d[m revert to working versionwadпгшл
+[33me620436[m revert to working versionwadпгшл
+[33m720cd2e[m revert to working versionwadпгшл
+[33mf7774f7[m revert to working versionwadпгшл
+[33m97d86db[m revert to working versionwadпгшл
+[33ma7079fd[m revert to working versionwad
+[33md0a576f[m FCM push vkjl1
+[33me81e6f7[m FCM push v1fgyjhщшлд
+[33mb34f7f3[m FCM push v1fgyjhщд
+[33mf9151ec[m FCM push v1fgyjh
+[33m8096465[m FCM push notifications роv1
+[33m4959b6b[m FCM push notifications v1
+[33m0af834d[m FCM push notifications v1
+[33m97d33ad[m add push notifications and fixes
+[33m6dcc5f2[m revert to working versiирon
+[33m5f35169[m revert to working version
+[33m6b1b836[m revert to working version
+[33m21cba37[m rollback to working versiojпгшоn
+[33m828fb33[m rollback to working versiojоn
+[33m12f56e4[m rollback to working versiojn
+[33m3959fd3[m fix: robust init with window.onloajd
+[33ma1bbcbd[m fix: robust init with window.onloafgоьлd
+[33m63a5fd4[m fix: robust init with window.onloafgоьлd
+[33mc87088a[m fix: robust init with window.onloafgоьлd
+[33m6e1418f[m fix: robust init with window.onloafgоd
+[33mf24b8e5[m fix: robust init with window.onloafgd
+[33m80a3cdd[m fix: robust init with window.onload
+[33m568c28e[m fix: robust init with window.onloajud
+[33meee82ae[m fix: robust init with window.onload
+[33ma5d4269[m fix: robust init with window.onload
+[33mdc91aa5[m fix: db re-init, files, calls, js syntajx
+[33m1ab3a92[m fix: db re-init, files, calls, js syntajx
+[33ma42e004[m fix: db re-init, files, calls, js syntajx
+[33m98955d3[m fix: db re-init, files, calls, js syntax
+[33m289d906[m switch to resend т
+[33m6007367[m switch to resend
+[33m557eeac[m Update package.json
+[33m9efb5aa[m Update package.json
+[33m4454d2c[m Update package.json
+[33m51744a7[m Update package.json
+[33m7dffbdb[m Delete mychat/package-lock.json
+[33m1d4e2b7[m Delete package-lock.json
+[33mf87f777[m fix: db re-init, files, calls, js syntajkikжшлxрлошошл
+[33m7dadb6c[m fix: db re-init, files, calls, js syntajkikжшлxрлошо
+[33m8ae8fb0[m fix: db re-init, files, calls, js syntajkikжшлxрлош
+[33m2459e89[m fix: db re-init, files, calls, js syntajkikжшлxрл
+[33m5b62994[m fix: db re-init, files, calls, js syntajkikжшлxр
+[33m9e6b9ad[m fix: db re-init, files, calls, js syntajkikжшлx
+[33m2521334[m fix: db re-init, files, calls, js syntajkikжшлx
+[33m0f89e8b[m fix: db re-init, files, calls, js syntajkikжx
+[33m6f2b6d5[m fix: db re-init, files, calls, js syntajkikx
+[33mb4ffd05[m fix: db re-init, files, calls, js syntajkx
+[33m45a2e0f[m fix: robust init with window.onloaжджллdжщддлд
+[33mac4a39f[m fix: robust init with window.onloaжджллdжщддд
+[33mdb0de1c[m fix: robust init with window.onloaжджллdжщдд
+[33mfbd66b9[m fix: robust init with window.onloaжджллdжщд
+[33m8846f4f[m fix: robust init with window.onloaжджллdжщд
+[33mfbbdb4d[m fix: robust init with window.onloaжджллdжщ
+[33m1586339[m fix: robust init with window.onloaжджллdщ
+[33md03f63f[m fix: robust init with window.onloaжджллdщ
+[33m8ca2a58[m fix: robust init with window.onloaжджллd
+[33mc9d70d1[m fix: robust init with window.onloaжджлd
+[33mf9bfd88[m fix: robust init with window.onloaжджd
+[33m3f4ca22[m fix: robust init with window.onloaжджd
+[33ma1d0dfa[m fix: robust init with window.onloaжджd
+[33m0f8489d[m fix: robust init with window.onloaжd
+[33m0c54c40[m fix: robust init with window.onload
+[33ma3ebc88[m beat changes
+[33ma60b024[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржоо
+[33m376568b[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржощд.щшдолжо
+[33m2911894[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржощд.щшдо
+[33m259c5c9[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржощд.о
+[33m4ea34ea[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржощд.о
+[33mfd374b0[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржощдо
+[33m309dc8e[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржощдо
+[33m7e1fa22[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлоржоо
+[33m66adb04[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлорж
+[33mea04863[m fix: WebRTC config and tracks logilcзапргшлвапапрншэшлж
+[33md0e98a5[m fix: WebRTC config and tracks logilcзапргшлвапапрншэж
+[33m3aa9430[m fix: WebRTC config and tracks logilcзапргшлвапапрншж
+[33m4c95476[m fix: WebRTC config and tracks logilcзапргшлвапапрж
+[33m1663da2[m fix: WebRTC config and tracks logilcзапргшлвапапрж
+[33m9ff65de[m fix: WebRTC config and tracks logilcзапргшлвапж
+[33m93a4477[m fix: WebRTC config and tracks logilcзапргшлж
+[33mc91c54b[m fix: WebRTC config and tracks logilcзапрж
+[33m3e87acd[m fix: WebRTC config and tracks logilcзж
+[33m900f4c3[m fix: WebRTC config and tracks logдilc
+[33mf3d9471[m fix: WebRTC config and tracks logilc
+[33m2a9e5eb[m fix: robust init with window.onloachftghndjkjk;lрлoпрор
+[33mc2d5009[m fix: robust init with window.onloachftghndjkjk;lрлoпр
+[33m2be75a2[m fix: robust init with window.onloachftghndjkjk;lрлo
+[33m372b530[m fix: robust init with window.onloachftghndjkjk;lo
+[33mb90d909[m fix: robust init with window.onloachftghnщгнщнщаегопнргопелпншлd
+[33meb333d3[m fix: robust init with window.onloachftghnщгнщнщаегопнргоd
+[33me043ace[m fix: robust init with window.onloachftghnщгнщнщd
+[33m5864790[m fix: robust init with window.onloachftghnd
+[33ma3fb3b5[m fix history switching + image uploaгегноd
+[33m42227bd[m fix history switching + image upload
+[33m6a5c9ca[m fix: bulletproof chat switching + image compression
+[33md2c0d3f[m fix: chat history switching bug + image upload compressioзжшлзn
+[33mb1d5092[m fix: chat history switching bug + image upload compressioзжшлзn
+[33m4bcb786[m fix: chat history switching bug + image upload compression
+[33m41b0a4f[m fix: chat history switching bug + image upload compression
+[33m9fc3547[m profile modal, call history, mini call bar, audio screen, camera ofix
+[33me1682d2[m fix overlap and stories
+[33m95cd2a2[m fix history overlap and stories
+[33m81d7b45[m bugfixes
+[33ma719c0f[m redesign + fix story file input
+[33mf9708f4[m fix story file, add google+telegram oauth
+[33m8c9d13d[m fix: make nodemailer optional
+[33m97b58b7[m update
+[33m51399de[m fix final 7
+[33m1d89b81[m fix final 6
+[33mcbbc4bf[m fix final 5
+[33maecda34[m fix final 4
+[33m05229b8[m fix final 3
+[33m692a7e8[m fix final 2
+[33m6ca61d1[m fix final 21:50 21.02.26
+[33m2233af3[m fix 3
+[33m7a036fc[m fix 2
+[33m76e2229[m fix 1
+[33m1c1d551[m fix photo1
+[33m0fbac2e[m fix photo
+[33m4461b01[m fix camera
+[33m4772bbd[m profile modal, call history, mini call bar, audio screen, camera fix
+[33m37c510a[m fix calls, add avatars and usernames
+[33m591584a[m redesign v2 settings themes backgrounds
+[33m2659b96[m redesign
+[33m03aa4c5[m update
+[33m832d72f[m replies and reactions
+[33m58737eb[m video note centered modal + camera flip
+[33mbf833a0[m add video notes
+[33m6f94848[m fix
+[33m9a77619[m fix problem
+[33m47fdb8d[m fix: robust init with window.onload
+[33mc93a6b7[m fix: robust init with window.onload
+[33mc3e0817[m fix: db re-init, files, calls, js syntax
+[33m67ec1eb[m final fix
+[33m5327578[m full db reset and file fix
+[33mfe0bc21[m fix: safe server, stable 50MB limit, JS fix
+[33m5f4851a[m fix: safe server DB queries + stable 50MB file limit
+[33m820f0b5[m fix: reset file size limit to stable 50MB and fix syntax
+[33mfb90258[m add file support up to 2GB
+[33ma88f30b[m add server url for app
+[33m0f4e884[m add server url for app
+[33m2827cd2[m fix: mobile-to-pc call connection
+[33m7a3e094[m fix: robust webrtc signaling for mobile
+[33m9267f01[m fix mobile sidebar bug
+[33mb35e3b5[m fix: WebRTC config and tracks logic
+[33mc3955b7[m add separate audio/video calls + camera flip
+[33mf2db9a7[m add video calls
+[33m6a8b648[m final: clean DB, clickable general chat, all fixes
+[33m933f622[m fix: force recreate rooms tables
+[33m78bbcd0[m fix: force recreate rooms tables
+[33m8002396[m fix: add missing comments_enabled column to rooms
+[33m1716a14[m fix: rooms creation and display with debug logs
+[33m42d6529[m fix: auto-open room after create, rooms display
+[33m65c46ea[m fix: tabs, rooms list, search, UI overlay
+[33med1f592[m fix: rooms, UI overlay, auto-login
+[33m66ff0ed[m groups and channels
+[33m108377a[m groups and channels
+[33me181ad3[m rollback to working version
+[33m4a6174d[m big update channels avatars video
+[33mc75eda5[m fix admin panel buttons
+[33m0fa51f7[m fix admin and search
+[33m711d5bf[m private messages and typing
+[33m5cd8624[m password change and admin
+[33m0d079f4[m reset password
+[33m946c2a6[m admin panel
+[33m953305d[m fix init db
+[33me4ec190[m keep messages
+[33med18678[m fix database table
+[33m04a03e1[m full chat with voice
+[33mf93a8c8[m fix buttons
+[33m846fd94[m force update
+[33m084242c[m auth final
+[33mc2a9fc2[m auth fix
+[33mf291618[m auth system
+[33mae7fe41[m регистрация и вход
+[33m9c5614a[m update lock
+[33m5971dda[m база данных и удаление
+[33m6ad75c7[m голосовые сообщения
+[33m076a5ab[m добавил фото
+[33mbfed9d3[m add user registration and login
+[33mf9bd97c[m add image sharing
+[33m95e36f9[m first commit
