@@ -1919,6 +1919,11 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   outline:3px solid var(--accent);
 }
 .gc-tile.me{outline:2px solid rgba(255,255,255,0.2);}
+.gc-tile-connecting{
+  position:absolute;top:8px;left:0;right:0;text-align:center;
+  font-size:11px;color:rgba(255,255,255,0.6);z-index:2;
+}
+.gc-tile.connected .gc-tile-connecting{ display:none; }
 .gc-controls{
   height:96px;background:rgba(0,0,0,0.8);
   backdrop-filter:blur(20px);display:flex;
@@ -5831,8 +5836,10 @@ window.switchCamera=switchCamera;
 // ═══════════════════════════════════════════════════════
 var gcRoomId=null, gcCallType='audio';
 var gcLocalStream=null;
-// gcPeers[login] = { pc: RTCPeerConnection, audioEl: HTMLAudioElement, iceBuffer: [] }
+// ─── GROUP CALL STATE ────────────────────────────────
+// gcPeers[login] = { pc, audioEl, mediaStream, iceBuffer[] }
 var gcPeers={};
+var gcNicknames={}; // login -> displayName
 var gcTimerInterval=null, gcStartTime=0;
 var gcMicOn=true, gcVideoOn=false;
 var gcFacingMode='user';
@@ -5878,19 +5885,34 @@ socket.on('groupCallJoined', function(d){
       (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
   }, 1000);
 
-  // WE are the newcomer → send offer to each existing participant
+  // Show tiles for existing participants immediately (with "Подключение..." state)
   d.participants.forEach(function(login){
-    gcInitPeer(login, true);   // true = we are initiator → send offer
+    gcEnsureTile(login);
   });
+  gcUpdateGridLayout();
+  gcUpdateParticipantCount();
+
+  // WE are the newcomer → send offer to each existing participant
+  // Small delay to ensure our stream is ready
+  setTimeout(function(){
+    d.participants.forEach(function(login){
+      gcInitPeer(login, true); // true = we are initiator → send offer
+    });
+  }, 300);
 });
 
 // ─── Server: someone else just joined → WE send them offer ──
 socket.on('groupCallParticipantJoined', function(d){
   if(!gcRoomId) return;
-  if(d.login === myLogin) return;
-  // We are existing → we send offer to the newcomer
-  gcInitPeer(d.login, true);
-  gcUpdateNickOnTile(d.login, d.nickname);
+  var login = d.login;
+  if(login === myLogin) return;
+  if(d.nickname) gcNicknames[login] = d.nickname;
+  // Show tile immediately
+  gcEnsureTile(login);
+  gcUpdateGridLayout();
+  gcUpdateParticipantCount();
+  // We are existing participant → send offer to newcomer
+  gcInitPeer(login, true);
 });
 
 // ─── Receive offer → create peer, send answer ────────
@@ -5923,9 +5945,9 @@ socket.on('groupCallAnswer', function(d){
 // ─── ICE candidate ───────────────────────────────────
 socket.on('groupCallIce', function(d){
   if(!gcRoomId) return;
-  var from = d.from;  // server sends 'from'
+  var from = d.from;
   var peer = gcPeers[from];
-  if(peer && peer.pc.remoteDescription){
+  if(peer && peer.pc.remoteDescription && peer.pc.remoteDescription.type){
     peer.pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch(function(){});
   } else if(peer){
     peer.iceBuffer.push(d.candidate);
@@ -5940,6 +5962,7 @@ socket.on('groupCallIce', function(d){
 socket.on('groupCallParticipantLeft', function(d){
   gcRemovePeer(d.login);
   gcUpdateGridLayout();
+  gcUpdateParticipantCount();
 });
 
 // ─── Group call ended by server ──────────────────────
@@ -5974,11 +5997,11 @@ function gcShowJoinBar(d){
 
 // ─── Core: create/get peer entry ────────────────────
 function gcInitPeer(login, isInitiator){
-  // Return existing if already connected
+  // If peer already exists as non-initiator role, don't recreate
   if(gcPeers[login] && !isInitiator){
     return gcPeers[login];
   }
-  // Close old if re-creating
+  // Close old connection before recreating
   if(gcPeers[login]){
     try{ gcPeers[login].pc.close(); }catch(e){}
     if(gcPeers[login].audioEl){
@@ -5988,19 +6011,26 @@ function gcInitPeer(login, isInitiator){
   }
 
   var pc = new RTCPeerConnection(gcGetRtcConfig());
+
+  // Each peer gets a dedicated <audio> element for remote audio
   var audioEl = document.createElement('audio');
   audioEl.autoplay = true;
+  audioEl.setAttribute('playsinline', '');
   audioEl.style.display = 'none';
   document.body.appendChild(audioEl);
 
-  var peer = { pc: pc, audioEl: audioEl, iceBuffer: [], mediaStream: new MediaStream() };
+  // Use separate streams for audio and video to avoid timing issues
+  var remoteStream = new MediaStream();
+  audioEl.srcObject = remoteStream;
+
+  var peer = { pc: pc, audioEl: audioEl, remoteStream: remoteStream, iceBuffer: [] };
   gcPeers[login] = peer;
 
-  // Add pre-buffered ICE
+  // Transfer any pre-buffered ICE candidates
   var pre = gcPeers['_pre_'+login];
   if(pre){ peer.iceBuffer = pre; delete gcPeers['_pre_'+login]; }
 
-  // Add local tracks to this connection
+  // Add our local tracks to this peer connection
   if(gcLocalStream){
     gcLocalStream.getTracks().forEach(function(t){ pc.addTrack(t, gcLocalStream); });
   }
@@ -6009,36 +6039,50 @@ function gcInitPeer(login, isInitiator){
     if(e.candidate) socket.emit('groupCallIce', { to: login, candidate: e.candidate });
   };
 
-  // ontrack: add each incoming track to the peer's MediaStream
   pc.ontrack = function(e){
     var track = e.track;
-    // Add to combined stream
-    peer.mediaStream.addTrack(track);
+    // Add track to the remote stream
+    remoteStream.addTrack(track);
 
     if(track.kind === 'audio'){
-      // Play audio through hidden <audio> element
-      audioEl.srcObject = peer.mediaStream;
-      audioEl.play().catch(function(){});
+      // Re-attach srcObject to trigger audio playback (some browsers need this)
+      audioEl.srcObject = remoteStream;
+      audioEl.play().catch(function(err){
+        console.log('[GC] audio play blocked, will retry on user gesture:', err);
+      });
     }
     if(track.kind === 'video'){
-      // Show video in tile
-      gcEnsureVideoTile(login, peer.mediaStream);
+      gcEnsureVideoTile(login, remoteStream);
     }
-    // If audio-only call, still show tile (avatar)
+    // Ensure tile exists (shows avatar for audio-only)
     gcEnsureTile(login);
   };
 
   pc.oniceconnectionstatechange = function(){
     var s = pc.iceConnectionState;
-    console.log('[GC] ICE '+login+':', s);
-    if(s === 'failed'){ try{ pc.restartIce(); }catch(er){} }
+    console.log('[GC] ICE ['+login+']:', s);
+    if(s === 'failed'){
+      try{ pc.restartIce(); }catch(er){}
+    }
     if(s === 'connected' || s === 'completed'){
       gcMarkTileConnected(login);
+      // Retry audio play in case it was blocked
+      audioEl.play().catch(function(){});
+    }
+    if(s === 'disconnected'){
+      // Give 4 seconds to reconnect before removing
+      setTimeout(function(){
+        if(pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed'){
+          gcRemovePeer(login);
+          gcUpdateGridLayout();
+          gcUpdateParticipantCount();
+        }
+      }, 4000);
     }
   };
 
   if(isInitiator){
-    pc.createOffer({ offerToReceiveAudio:true, offerToReceiveVideo:true })
+    pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true })
     .then(function(o){ return pc.setLocalDescription(o); })
     .then(function(){
       socket.emit('groupCallOffer', { roomId: gcRoomId, to: login, signal: pc.localDescription });
@@ -6051,7 +6095,8 @@ function gcInitPeer(login, isInitiator){
 
 function gcFlushIce(login){
   var peer = gcPeers[login];
-  if(!peer || !peer.pc.remoteDescription) return;
+  if(!peer) return;
+  if(!peer.pc.remoteDescription || !peer.pc.remoteDescription.type) return;
   var buf = peer.iceBuffer.splice(0);
   buf.forEach(function(c){
     peer.pc.addIceCandidate(new RTCIceCandidate(c)).catch(function(){});
@@ -6062,7 +6107,7 @@ function gcRemovePeer(login){
   var peer = gcPeers[login];
   if(!peer) return;
   try{ peer.pc.close(); }catch(e){}
-  if(peer.audioEl){ peer.audioEl.pause(); peer.audioEl.remove(); }
+  if(peer.audioEl){ peer.audioEl.pause(); peer.audioEl.srcObject = null; peer.audioEl.remove(); }
   delete gcPeers[login];
   var tile = document.getElementById('gc-tile-'+login);
   if(tile) tile.remove();
@@ -6074,19 +6119,29 @@ function gcEnsureTile(login){
   if(document.getElementById(tileId)) return;
   var tile = document.createElement('div');
   tile.className = 'gc-tile'; tile.id = tileId;
-  // Avatar placeholder
+
   var av = document.createElement('div'); av.className = 'gc-tile-avatar';
-  av.textContent = (login[0]||'?').toUpperCase();
+  // Use known nickname or login initial
+  var displayName = gcNicknames[login] || login;
+  av.textContent = (displayName[0]||'?').toUpperCase();
   if(avatarCache && avatarCache[login]){
     av.innerHTML = '<img src="'+avatarCache[login]+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
   }
   tile.appendChild(av);
-  var nm = document.createElement('div'); nm.className = 'gc-tile-name'; nm.textContent = login;
+
+  var nm = document.createElement('div'); nm.className = 'gc-tile-name';
+  nm.textContent = gcNicknames[login] || login;
   tile.appendChild(nm);
+
   var mic = document.createElement('div'); mic.className = 'gc-tile-mic'; mic.textContent = '🎤';
   tile.appendChild(mic);
+
+  // "Подключение..." label until ICE connects
+  var conn = document.createElement('div'); conn.className = 'gc-tile-connecting';
+  conn.textContent = 'Подключение...';
+  tile.appendChild(conn);
+
   document.getElementById('gcGrid').appendChild(tile);
-  gcUpdateGridLayout();
 }
 
 function gcEnsureVideoTile(login, stream){
@@ -6097,7 +6152,7 @@ function gcEnsureVideoTile(login, stream){
   if(!vid){
     vid = document.createElement('video');
     vid.autoplay = true; vid.playsInline = true; vid.muted = false;
-    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+    vid.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px;z-index:1;';
     tile.insertBefore(vid, tile.firstChild);
   }
   vid.srcObject = stream;
@@ -6106,18 +6161,24 @@ function gcEnsureVideoTile(login, stream){
 
 function gcMarkTileConnected(login){
   var tile = document.getElementById('gc-tile-'+login);
-  if(tile) tile.classList.add('connected');
+  if(!tile) return;
+  tile.classList.add('connected');
+  var conn = tile.querySelector('.gc-tile-connecting');
+  if(conn) conn.remove();
 }
 
 function gcUpdateNickOnTile(login, nick){
+  if(nick) gcNicknames[login] = nick;
   var tile = document.getElementById('gc-tile-'+login);
   if(tile){
     var nm = tile.querySelector('.gc-tile-name');
-    if(nm && nick) nm.textContent = nick;
+    if(nm) nm.textContent = nick || login;
+    var av = tile.querySelector('.gc-tile-avatar');
+    if(av && !av.querySelector('img')) av.textContent = (nick||login)[0].toUpperCase();
   }
 }
 
-// Render own tile
+// Render / refresh own tile
 function gcRenderMyTile(){
   var grid = document.getElementById('gcGrid');
   if(!grid) return;
@@ -6133,12 +6194,12 @@ function gcRenderMyTile(){
     var vid = document.createElement('video');
     vid.autoplay=true; vid.playsInline=true; vid.muted=true;
     vid.srcObject = gcLocalStream;
-    vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;';
+    vid.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px;z-index:1;';
     tile.appendChild(vid);
   } else {
     var av = document.createElement('div'); av.className='gc-tile-avatar';
     if(myAvatar) av.innerHTML='<img src="'+myAvatar+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">';
-    else av.textContent = (myNickname[0]||'?').toUpperCase();
+    else av.textContent = (myNickname&&myNickname[0]||myLogin[0]||'?').toUpperCase();
     tile.appendChild(av);
   }
   var nm = document.createElement('div'); nm.className='gc-tile-name'; nm.textContent='Вы';
@@ -6146,6 +6207,7 @@ function gcRenderMyTile(){
   var mic = document.createElement('div'); mic.className='gc-tile-mic'; mic.textContent=gcMicOn?'🎤':'🔇';
   tile.appendChild(mic);
   gcUpdateGridLayout();
+  gcUpdateParticipantCount();
 }
 
 function gcUpdateGridLayout(){
@@ -6153,6 +6215,18 @@ function gcUpdateGridLayout(){
   if(!grid) return;
   var n = grid.children.length;
   grid.className = 'gc-grid gc-'+(Math.min(n,9)||1);
+}
+
+// Show participant count in header
+function gcUpdateParticipantCount(){
+  var grid = document.getElementById('gcGrid');
+  var dur = document.getElementById('gcDuration');
+  if(!grid || !dur) return;
+  var n = grid.children.length;
+  // Only show count if timer hasn't started yet or alongside time
+  if(gcStartTime === 0){
+    dur.textContent = n + ' участни'+(n===1?'к':'ков');
+  }
 }
 
 // ─── Controls ────────────────────────────────────────
