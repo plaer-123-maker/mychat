@@ -461,6 +461,10 @@ const activeCalls = new Map();   // callerLogin -> { calleeLogin, callType, answ
 const callTimeouts = new Map();  // callerLogin -> { timeout, calleeLogin }
 // Group calls: roomId -> { participants: Set<login>, callType: 'audio'|'video' }
 const groupCalls = new Map();
+// Ghost Chats: code -> { roomId, creator: login, partner: login|null, messages: [], anonMap: {} }
+const ghostRooms = new Map();   // code -> room object
+const ghostRoomById = new Map(); // roomId -> code
+let _ghostRoomCounter = 1;
 
 // ── IMAGE SERIALIZATION HELPERS ──────────────────────────
 // Images can be a single base64 string or array of base64 strings
@@ -1355,6 +1359,142 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('groupCallEnded', { roomId });
     }
+  });
+
+  // === GHOST CHAT ===
+  // Helper: generate 6-digit code
+  function genGhostCode() {
+    let code;
+    do { code = String(Math.floor(100000 + Math.random() * 900000)); } while(ghostRooms.has(code));
+    return code;
+  }
+
+  socket.on('ghostCreate', () => {
+    if (!socket.userLogin) return;
+    // Cancel any existing ghost room for this user
+    for (const [code, room] of ghostRooms) {
+      if (room.creator === socket.userLogin && !room.partner) {
+        ghostRooms.delete(code);
+        ghostRoomById.delete(room.roomId);
+      }
+    }
+    const code = genGhostCode();
+    const roomId = 'ghost_' + (_ghostRoomCounter++);
+    ghostRooms.set(code, {
+      roomId, code,
+      creator: socket.userLogin,
+      partner: null,
+      messages: [],
+      anonMap: {},
+      expireTimeout: setTimeout(() => {
+        // Auto-expire after 10 minutes if no one joins
+        ghostRooms.delete(code);
+        ghostRoomById.delete(roomId);
+        socket.emit('ghostError', { message: 'Код истёк — никто не присоединился' });
+      }, 10 * 60 * 1000)
+    });
+    ghostRoomById.set(roomId, code);
+    socket.emit('ghostCreated', { code });
+  });
+
+  socket.on('ghostCancel', ({ code }) => {
+    if (!socket.userLogin) return;
+    const room = ghostRooms.get(code);
+    if (room && room.creator === socket.userLogin && !room.partner) {
+      clearTimeout(room.expireTimeout);
+      ghostRooms.delete(code);
+      ghostRoomById.delete(room.roomId);
+    }
+  });
+
+  socket.on('ghostJoin', ({ code }) => {
+    if (!socket.userLogin) return;
+    const room = ghostRooms.get(code);
+    if (!room) { socket.emit('ghostError', { message: 'Неверный или истёкший код' }); return; }
+    if (room.partner) { socket.emit('ghostError', { message: 'Этот чат уже занят' }); return; }
+    if (room.creator === socket.userLogin) { socket.emit('ghostError', { message: 'Нельзя войти в свой же чат' }); return; }
+
+    clearTimeout(room.expireTimeout);
+    room.partner = socket.userLogin;
+    room.anonMap[socket.userLogin] = 'Ghost #' + Math.floor(Math.random()*9000+1000);
+    room.anonMap[room.creator] = 'Ghost #' + Math.floor(Math.random()*9000+1000);
+
+    // Notify creator (ghostReady)
+    const creatorSocket = findSocketByLogin(room.creator);
+    if (creatorSocket) {
+      creatorSocket.emit('ghostReady', {
+        roomId: room.roomId,
+        code,
+        partnerAnonId: room.anonMap[socket.userLogin]
+      });
+    }
+
+    // Notify joiner (ghostJoined)
+    socket.emit('ghostJoined', {
+      roomId: room.roomId,
+      code,
+      partnerAnonId: room.anonMap[room.creator]
+    });
+  });
+
+  socket.on('ghostMessage', ({ roomId, text, anon }) => {
+    if (!socket.userLogin) return;
+    const code = ghostRoomById.get(roomId);
+    if (!code) return;
+    const room = ghostRooms.get(code);
+    if (!room) return;
+    if (room.creator !== socket.userLogin && room.partner !== socket.userLogin) return;
+
+    const sanitized = String(text||'').slice(0, 4000).replace(/<[^>]*>/g, '');
+    if (!sanitized) return;
+
+    const anonId = room.anonMap[socket.userLogin] || 'Ghost';
+    const msg = {
+      fromLogin: socket.userLogin,
+      fromNick: socket.username,
+      anonId,
+      text: sanitized,
+      anon: !!anon,
+      time: Date.now()
+    };
+    room.messages.push(msg);
+
+    // Send to both participants
+    [room.creator, room.partner].forEach(login => {
+      if (!login) return;
+      const s = findSocketByLogin(login);
+      if (s) s.emit('ghostMessage', {
+        fromLogin: login === socket.userLogin ? socket.userLogin : '???',
+        fromNick: socket.username,
+        anonId,
+        text: sanitized,
+        anon: !!anon
+      });
+    });
+  });
+
+  socket.on('ghostSetAnon', ({ roomId, anon }) => {
+    // Just an acknowledgment — anon state is per-user
+  });
+
+  socket.on('ghostLeave', ({ roomId }) => {
+    if (!socket.userLogin) return;
+    const code = ghostRoomById.get(roomId);
+    if (!code) return;
+    const room = ghostRooms.get(code);
+    if (!room) return;
+
+    // Notify the other participant
+    const other = room.creator === socket.userLogin ? room.partner : room.creator;
+    if (other) {
+      const otherSocket = findSocketByLogin(other);
+      if (otherSocket) otherSocket.emit('ghostEnded', { roomId });
+    }
+
+    // Destroy room and all history (just delete the in-memory object)
+    clearTimeout(room.expireTimeout);
+    ghostRooms.delete(code);
+    ghostRoomById.delete(roomId);
   });
 
   // === GENERAL CHAT ===
@@ -2547,6 +2687,21 @@ io.on('connection', (socket) => {
     if (socket.username) addLog('logout', socket.username, 'Logout', ip);
     if (socket.userLogin) {
       pool.query('UPDATE users SET last_seen=$1 WHERE login=$2', [Date.now(), socket.userLogin]).catch(()=>{});
+
+      // Ghost Chat: if user disconnects, destroy their ghost room
+      for (const [code, room] of ghostRooms) {
+        if (room.creator === socket.userLogin || room.partner === socket.userLogin) {
+          const other = room.creator === socket.userLogin ? room.partner : room.creator;
+          if (other) {
+            const otherSocket = findSocketByLogin(other);
+            if (otherSocket) otherSocket.emit('ghostEnded', { roomId: room.roomId });
+          }
+          clearTimeout(room.expireTimeout);
+          ghostRooms.delete(code);
+          ghostRoomById.delete(room.roomId);
+          break;
+        }
+      }
 
       // Если пользователь был в групповом звонке — убрать его
       for (const [roomId, gc] of groupCalls) {

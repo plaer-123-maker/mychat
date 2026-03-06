@@ -1698,8 +1698,135 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 }
 .msg-highlight.active{background:rgba(255,160,0,0.6);}
 
-/* ── SECRET CHAT ──────────────────── */
+/* ── GHOST CHAT ─────────────────────────────────────────── */
+.ghost-entry-screen{
+  position:fixed;inset:0;z-index:9000;
+  background:radial-gradient(ellipse at 60% 30%, #0d0d1a 0%, #000 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;
+}
+.ghost-logo{
+  font-size:72px;margin-bottom:8px;
+  filter:drop-shadow(0 0 32px rgba(124,58,237,0.9));
+  animation:ghostPulse 2s ease-in-out infinite;
+}
+@keyframes ghostPulse{0%,100%{transform:scale(1);filter:drop-shadow(0 0 32px rgba(124,58,237,0.9));}
+50%{transform:scale(1.08);filter:drop-shadow(0 0 48px rgba(168,85,247,1));}}
+.ghost-title{
+  font-size:28px;font-weight:800;letter-spacing:2px;
+  background:linear-gradient(135deg,#a855f7,#6366f1,#a855f7);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:6px;
+}
+.ghost-sub{font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:40px;letter-spacing:1px;}
+.ghost-features{
+  display:flex;flex-direction:column;gap:12px;margin-bottom:36px;width:min(320px,90vw);
+}
+.ghost-feat{
+  display:flex;align-items:center;gap:12px;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(124,58,237,0.2);
+  border-radius:12px;padding:12px 16px;
+}
+.ghost-feat-icon{font-size:20px;}
+.ghost-feat-text{font-size:13px;color:rgba(255,255,255,0.7);}
+.ghost-btns{display:flex;flex-direction:column;gap:10px;width:min(320px,90vw);}
+.ghost-btn-create{
+  background:linear-gradient(135deg,#7c3aed,#4f46e5);
+  border:none;border-radius:14px;padding:15px;
+  color:#fff;font-size:16px;font-weight:700;cursor:pointer;
+  box-shadow:0 4px 24px rgba(124,58,237,0.5);
+  transition:all 0.2s;
+}
+.ghost-btn-create:hover{transform:translateY(-1px);box-shadow:0 8px 32px rgba(124,58,237,0.7);}
+.ghost-btn-join{
+  background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+  border-radius:14px;padding:15px;
+  color:#fff;font-size:15px;font-weight:600;cursor:pointer;
+  transition:all 0.2s;
+}
+.ghost-btn-join:hover{background:rgba(255,255,255,0.12);}
+.ghost-btn-back{
+  margin-top:8px;background:none;border:none;
+  color:rgba(255,255,255,0.35);font-size:13px;cursor:pointer;
+  padding:8px;
+}
+/* Code display */
+.ghost-code-box{
+  background:rgba(124,58,237,0.12);border:2px solid rgba(124,58,237,0.5);
+  border-radius:16px;padding:20px 28px;text-align:center;width:min(300px,88vw);
+  margin-bottom:20px;
+}
+.ghost-code{
+  font-size:38px;font-weight:900;letter-spacing:10px;
+  background:linear-gradient(135deg,#a855f7,#6366f1);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  font-family:monospace;
+}
+.ghost-code-label{font-size:12px;color:rgba(255,255,255,0.4);margin-top:6px;letter-spacing:1px;}
+.ghost-code-share{
+  font-size:13px;color:rgba(255,255,255,0.5);margin-bottom:24px;
+  text-align:center;max-width:280px;line-height:1.6;
+}
+.ghost-code-warn{
+  font-size:12px;color:#e74c3c;background:rgba(231,76,60,0.1);
+  border:1px solid rgba(231,76,60,0.3);border-radius:8px;
+  padding:8px 14px;margin-bottom:20px;text-align:center;max-width:280px;
+}
+/* Join input */
+.ghost-input{
+  background:rgba(255,255,255,0.07);border:1.5px solid rgba(124,58,237,0.4);
+  border-radius:12px;padding:14px 18px;color:#fff;font-size:22px;
+  font-weight:700;letter-spacing:6px;text-align:center;
+  font-family:monospace;width:min(260px,80vw);outline:none;
+  margin-bottom:12px;
+}
+.ghost-input:focus{border-color:rgba(124,58,237,0.9);box-shadow:0 0 0 3px rgba(124,58,237,0.2);}
+.ghost-input::placeholder{letter-spacing:2px;font-size:16px;font-weight:400;}
+/* Active ghost chat header badge */
+.ghost-active-badge{
+  display:inline-flex;align-items:center;gap:5px;
+  background:rgba(124,58,237,0.2);border:1px solid rgba(124,58,237,0.5);
+  border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;
+  color:#a855f7;letter-spacing:0.5px;
+}
+/* Ghost chat messages style */
+.ghost-msg-bg #messages{background:radial-gradient(ellipse at top,#0d0d1a,#000);}
+.ghost-chat-watermark{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-size:80px;opacity:0.04;pointer-events:none;user-select:none;z-index:0;
+}
+/* Anon badge on message */
+.msg-anon-badge{
+  font-size:10px;color:rgba(124,58,237,0.8);font-weight:700;letter-spacing:0.5px;
+}
+/* Warning bar in ghost chat */
+.ghost-warn-bar{
+  background:rgba(124,58,237,0.1);border-bottom:1px solid rgba(124,58,237,0.25);
+  padding:7px 16px;font-size:12px;color:rgba(255,255,255,0.5);
+  text-align:center;letter-spacing:0.3px;flex-shrink:0;
+}
+/* Settings toggle */
+.ghost-anon-toggle{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:rgba(124,58,237,0.08);
+  border-radius:12px;margin-bottom:8px;cursor:pointer;
+}
+.ghost-anon-toggle span{font-size:14px;color:var(--text-primary);}
+.ghost-toggle-sw{
+  width:36px;height:20px;background:#333;border-radius:20px;
+  position:relative;transition:background 0.2s;flex-shrink:0;
+}
+.ghost-toggle-sw.on{background:linear-gradient(135deg,#7c3aed,#4f46e5);}
+.ghost-toggle-sw::after{
+  content:'';position:absolute;width:14px;height:14px;
+  background:#fff;border-radius:50%;top:3px;left:3px;
+  transition:transform 0.2s;
+}
+.ghost-toggle-sw.on::after{transform:translateX(16px);}
+
+/* ── SECRET CHAT TIMER ──────────────────── */
 .secret-timer-badge{
+
   display:inline-flex;align-items:center;gap:4px;
   background:rgba(231,76,60,0.15);color:#e74c3c;
   border-radius:20px;padding:2px 10px;
@@ -2398,6 +2525,9 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
     <div style="padding:2px 8px 6px;">
       <button onclick="openSavedMessages()" style="width:100%;padding:9px 12px;border:none;border-radius:12px;background:transparent;color:var(--text-secondary);font-size:13px;font-weight:500;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;transition:background 0.15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='transparent'">
         <span style="font-size:16px;">⭐</span> Избранное
+      </button>
+      <button onclick="openGhostEntry()" style="width:100%;padding:9px 12px;border:none;border-radius:12px;background:linear-gradient(135deg,rgba(124,58,237,0.15),rgba(79,70,229,0.1));color:#a855f7;font-size:13px;font-weight:600;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;transition:all 0.2s;border:1px solid rgba(124,58,237,0.2);" onmouseover="this.style.background='linear-gradient(135deg,rgba(124,58,237,0.25),rgba(79,70,229,0.2))'" onmouseout="this.style.background='linear-gradient(135deg,rgba(124,58,237,0.15),rgba(79,70,229,0.1))'">
+        <span style="font-size:16px;">👻</span> Ghost Chat
       </button>
     </div>
     <div class="sidebar-list" id="sidebarList"></div>
@@ -6323,6 +6453,272 @@ window.expandCall = function(){
   };
 })();
 
+/* ══════════════════════════════════════════════
+   👻 GHOST CHAT SYSTEM
+   ══════════════════════════════════════════════ */
+var _ghostCode = null;       // current ghost room code (6 digits)
+var _ghostRoomId = null;     // server ghost room id
+var _ghostAnon = true;       // anonymous mode on by default
+var _ghostAnonId = null;     // generated anon display name
+var _inGhostChat = false;
+
+// Open the Ghost Chat entry screen
+function openGhostEntry() {
+  document.getElementById('ghostEntryScreen').style.display = 'block';
+  ghostShowStep('ghostStep1');
+}
+window.openGhostEntry = openGhostEntry;
+
+function closeGhostEntry() {
+  document.getElementById('ghostEntryScreen').style.display = 'none';
+}
+window.closeGhostEntry = closeGhostEntry;
+
+function ghostShowStep(stepId) {
+  ['ghostStep1','ghostStep2Create','ghostStep2Join'].forEach(function(id){
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById(stepId).style.display = 'flex';
+}
+
+function ghostShowJoin() { ghostShowStep('ghostStep2Join'); document.getElementById('ghostCodeInput').value=''; document.getElementById('ghostJoinError').textContent=''; }
+window.ghostShowJoin = ghostShowJoin;
+
+function ghostBackToMain() { ghostShowStep('ghostStep1'); }
+window.ghostBackToMain = ghostBackToMain;
+
+// Create a Ghost Chat room
+function ghostCreateChat() {
+  socket.emit('ghostCreate');
+  ghostShowStep('ghostStep2Create');
+  document.getElementById('ghostCodeDisplay').textContent = '......';
+  document.getElementById('ghostWaitingLabel').style.display = 'block';
+}
+window.ghostCreateChat = ghostCreateChat;
+
+function ghostCopyCode() {
+  if(!_ghostCode) return;
+  if(navigator.clipboard) {
+    navigator.clipboard.writeText(_ghostCode).then(function(){ showGhostToast('Код скопирован!'); });
+  } else {
+    var el = document.createElement('textarea');
+    el.value = _ghostCode; document.body.appendChild(el); el.select(); document.execCommand('copy'); el.remove();
+    showGhostToast('Код скопирован!');
+  }
+}
+window.ghostCopyCode = ghostCopyCode;
+
+function ghostCancelCreate() {
+  if(_ghostCode) socket.emit('ghostCancel', { code: _ghostCode });
+  _ghostCode = null;
+  ghostShowStep('ghostStep1');
+}
+window.ghostCancelCreate = ghostCancelCreate;
+
+// Join by entering code
+function ghostJoinByCode() {
+  var code = (document.getElementById('ghostCodeInput').value||'').trim();
+  if(code.length !== 6) { document.getElementById('ghostJoinError').textContent = 'Введите 6-значный код'; return; }
+  document.getElementById('ghostJoinError').textContent = '';
+  socket.emit('ghostJoin', { code: code });
+}
+window.ghostJoinByCode = ghostJoinByCode;
+
+// Toggle anon mode
+function ghostToggleAnon() {
+  _ghostAnon = !_ghostAnon;
+  var sw = document.getElementById('ghostAnonToggleSw');
+  if(sw) sw.className = 'ghost-toggle-sw' + (_ghostAnon ? ' on' : '');
+  if(_ghostRoomId) socket.emit('ghostSetAnon', { roomId: _ghostRoomId, anon: _ghostAnon });
+}
+window.ghostToggleAnon = ghostToggleAnon;
+
+function openGhostSettings() {
+  var sw = document.getElementById('ghostAnonToggleSw');
+  if(sw) sw.className = 'ghost-toggle-sw' + (_ghostAnon ? ' on' : '');
+  document.getElementById('ghostSettingsModal').style.display = 'flex';
+}
+window.openGhostSettings = openGhostSettings;
+
+// Leave ghost chat — destroys history for all
+function ghostLeaveChat() {
+  if(!confirm('Выйти из Ghost Chat? История будет стёрта у ВСЕХ участников.')) return;
+  document.getElementById('ghostSettingsModal').style.display = 'none';
+  socket.emit('ghostLeave', { roomId: _ghostRoomId });
+  ghostCleanup();
+}
+window.ghostLeaveChat = ghostLeaveChat;
+
+function ghostCleanup() {
+  _ghostCode = null; _ghostRoomId = null; _inGhostChat = false;
+  document.getElementById('ghostEntryScreen').style.display = 'none';
+  document.getElementById('ghostSettingsModal').style.display = 'none';
+  // If we were viewing ghost chat, go back to main
+  if(currentView === 'ghost') {
+    currentView = 'none';
+    document.getElementById('mainChat').classList.remove('show');
+    document.getElementById('mainChat').classList.remove('ghost-msg-bg');
+    document.getElementById('messages').innerHTML = '';
+    document.getElementById('chatTitle').textContent = '';
+    document.getElementById('inputArea').style.display = 'none';
+    // Remove ghost warn bar
+    var wb = document.getElementById('ghostWarnBar');
+    if(wb) wb.remove();
+  }
+}
+
+// ─── Open Ghost Chat UI ───────────────────────────────────
+function openGhostChatUI(roomId, code, partnerAnonId) {
+  _inGhostChat = true;
+  _ghostRoomId = roomId;
+  closeGhostEntry();
+
+  currentView = 'ghost';
+  currentPrivateLogin = null; currentRoomId = null; currentRoomData = null;
+
+  document.getElementById('mainChat').classList.add('show');
+  document.getElementById('mainChat').classList.add('ghost-msg-bg');
+  document.getElementById('noChat').style.display = 'none';
+  document.getElementById('inputArea').style.display = 'flex';
+
+  // Header
+  document.getElementById('chatTitle').textContent = '👻 Ghost Chat';
+  document.getElementById('chatHeaderBtns').innerHTML =
+    '<button onclick="openGhostSettings()" title="Настройки" style="color:#a855f7;">⚙️</button>';
+  document.getElementById('onlineInfo').innerHTML =
+    '<span class="ghost-active-badge">🔒 Ghost #' + code + '</span>';
+  document.getElementById('typingIndicator').textContent = '';
+
+  // Warning bar
+  var existing = document.getElementById('ghostWarnBar');
+  if(existing) existing.remove();
+  var warnBar = document.createElement('div');
+  warnBar.id = 'ghostWarnBar'; warnBar.className = 'ghost-warn-bar';
+  warnBar.textContent = '👻 Ghost Chat — анонимный • история стирается при выходе любого участника';
+  var chatBox = document.querySelector('.chat-box') || document.getElementById('messages').parentNode;
+  chatBox.insertBefore(warnBar, chatBox.firstChild);
+
+  // Clear messages
+  var md = document.getElementById('messages');
+  md.innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:13px;">👻 Ghost Chat начат. Все сообщения исчезнут при выходе любого из участников.</div>';
+  md.onscroll = null; // no pagination in ghost chat
+
+  // Disable forwarding and context menus for ghost
+  if(window.innerWidth<=640) document.getElementById('mobileBackBtn').style.display='flex';
+
+  // Store partner anon id
+  _ghostAnonId = _ghostAnon ? ('Ghost #' + Math.floor(Math.random()*9000+1000)) : null;
+
+  showGhostToast('Ghost Chat открыт! Оба участника подключены.');
+}
+
+// ─── Prevent context menu / forwarding in ghost chat ─────
+document.addEventListener('contextmenu', function(e){
+  if(currentView === 'ghost') { e.preventDefault(); return false; }
+});
+document.addEventListener('copy', function(e){
+  if(currentView === 'ghost') { e.preventDefault(); showGhostToast('Копирование запрещено в Ghost Chat'); }
+});
+
+// ─── Send ghost message ──────────────────────────────────
+function sendGhostMsg() {
+  var inp = document.getElementById('msgInput');
+  var text = (inp.value||'').trim();
+  if(!text || !_ghostRoomId) return;
+  inp.value = '';
+  var displayName = _ghostAnon ? _ghostAnonId : (myNickname || myLogin);
+  socket.emit('ghostMessage', { roomId: _ghostRoomId, text: text, anon: _ghostAnon });
+}
+
+// Hook into send button for ghost chat
+var _origSendMsg = window.sendMsg;
+window.sendMsg = function() {
+  if(currentView === 'ghost') { sendGhostMsg(); return; }
+  if(_origSendMsg) _origSendMsg();
+};
+
+// ─── Socket events ────────────────────────────────────────
+// Server confirms room created, sends code
+socket.on('ghostCreated', function(d){
+  _ghostCode = d.code;
+  document.getElementById('ghostCodeDisplay').textContent = d.code;
+});
+
+// Server: someone joined (for creator)
+socket.on('ghostReady', function(d){
+  _ghostRoomId = d.roomId;
+  document.getElementById('ghostWaitingLabel').style.display = 'none';
+  // Small delay to show "ready" state then open
+  setTimeout(function(){
+    openGhostChatUI(d.roomId, _ghostCode, d.partnerAnonId);
+  }, 500);
+});
+
+// Server: join accepted (for joiner)
+socket.on('ghostJoined', function(d){
+  _ghostCode = d.code;
+  _ghostRoomId = d.roomId;
+  openGhostChatUI(d.roomId, d.code, d.partnerAnonId);
+});
+
+// Server: join error
+socket.on('ghostError', function(d){
+  var err = document.getElementById('ghostJoinError');
+  if(err) err.textContent = d.message || 'Неверный или истёкший код';
+});
+
+// Receive a ghost message
+socket.on('ghostMessage', function(d){
+  if(currentView !== 'ghost' || !_inGhostChat) return;
+  var md = document.getElementById('messages');
+  var isMe = d.fromLogin === myLogin;
+  var displayName = d.anon ? (isMe ? _ghostAnonId : 'Ghost #????') : d.fromNick;
+  if(isMe) displayName = _ghostAnon ? _ghostAnonId : (myNickname || myLogin);
+
+  var div = document.createElement('div');
+  div.className = 'message ' + (isMe ? 'own' : 'their');
+  div.style.cssText = 'user-select:none;-webkit-user-select:none;';
+  div.innerHTML =
+    '<div class="msg-bubble" oncontextmenu="return false;" ondragstart="return false;">' +
+      (!isMe ? '<div class="msg-sender" style="color:#a855f7;">' + escHtml(displayName||'Ghost') + '</div>' : '') +
+      '<div class="msg-text">' + escHtml(d.text) + '</div>' +
+      '<div class="msg-meta"><span class="msg-time">' + formatTime(new Date()) + '</span>' +
+        (d.anon ? ' <span class="msg-anon-badge">👤 anon</span>' : '') +
+      '</div>' +
+    '</div>';
+  md.appendChild(div);
+  md.scrollTop = md.scrollHeight;
+});
+
+// Server: partner left — destroy everything
+socket.on('ghostEnded', function(d){
+  showGhostToast('💨 Ghost Chat завершён. История стёрта.');
+  // Wipe messages immediately
+  var md = document.getElementById('messages');
+  if(md) md.innerHTML = '';
+  ghostCleanup();
+});
+
+// Toast helper
+function showGhostToast(msg) {
+  var t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:90px;left:50%;transform:translateX(-50%);' +
+    'background:rgba(124,58,237,0.95);color:#fff;padding:10px 20px;border-radius:20px;' +
+    'font-size:13px;font-weight:600;z-index:99999;pointer-events:none;' +
+    'box-shadow:0 4px 20px rgba(124,58,237,0.5);letter-spacing:0.3px;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ t.style.opacity='0';t.style.transition='opacity 0.4s'; setTimeout(function(){t.remove();},400); }, 2800);
+}
+window.showGhostToast = showGhostToast;
+
+// Handle page unload — leave ghost chat
+window.addEventListener('beforeunload', function(){
+  if(_inGhostChat && _ghostRoomId) {
+    socket.emit('ghostLeave', { roomId: _ghostRoomId });
+  }
+});
+
 /* ── VIDEO NOTES ── */
 var vnRecorder=null,vnChunks=[],vnInterval=null,vnSeconds=0,vnStream=null,vnFacingMode='user';
 document.getElementById('videoNoteBtn').addEventListener('click',async function(){if(vnRecorder&&vnRecorder.state==='recording')return;vnFacingMode='user';await startVNCamera();});
@@ -7556,6 +7952,7 @@ function updatePmHeaderBtns(login, nick) {
   document.getElementById('chatHeaderBtns').innerHTML =
     '<button onclick="startCall(\''+safeLogin+'\',\'video\')" title="Видео">📹</button>' +
     '<button onclick="startCall(\''+safeLogin+'\',\'audio\')" title="Аудио">📞</button>' +
+    '<button onclick="openGhostEntry()" title="Ghost Chat" style="color:#a855f7;">👻</button>' +
     '<button onclick="openPmActionSheet(\''+safeLogin+'\',\''+safeNick+'\')" title="Ещё" style="font-size:20px;font-weight:700;letter-spacing:1px;">⋯</button>';
 }
 window.updatePmHeaderBtns = updatePmHeaderBtns;
@@ -7568,6 +7965,72 @@ function leaveRoomFromList(roomId) {
 }
 window.leaveRoomFromList = leaveRoomFromList;
 </script>
+
+
+<!-- ═══ GHOST CHAT ENTRY SCREEN ═══ -->
+<div id="ghostEntryScreen" style="display:none;position:fixed;inset:0;z-index:9000;">
+  <!-- Step 1: Landing -->
+  <div class="ghost-entry-screen" id="ghostStep1">
+    <div class="ghost-logo">👻</div>
+    <div class="ghost-title">GHOST CHAT</div>
+    <div class="ghost-sub">ПОЛНАЯ АНОНИМНОСТЬ</div>
+    <div class="ghost-features">
+      <div class="ghost-feat"><span class="ghost-feat-icon">🔒</span><span class="ghost-feat-text">Оконечное шифрование — никто не видит ваш чат</span></div>
+      <div class="ghost-feat"><span class="ghost-feat-icon">💨</span><span class="ghost-feat-text">История стирается у всех при выходе любого участника</span></div>
+      <div class="ghost-feat"><span class="ghost-feat-icon">👤</span><span class="ghost-feat-text">Анонимный режим — собеседник не видит ваш профиль</span></div>
+      <div class="ghost-feat"><span class="ghost-feat-icon">🚫</span><span class="ghost-feat-text">Нельзя пересылать, копировать или делать скриншоты</span></div>
+      <div class="ghost-feat"><span class="ghost-feat-icon">🔑</span><span class="ghost-feat-text">Вход только по одноразовому коду</span></div>
+    </div>
+    <div class="ghost-btns">
+      <button class="ghost-btn-create" onclick="ghostCreateChat()">👻 Создать Ghost Chat</button>
+      <button class="ghost-btn-join" onclick="ghostShowJoin()">🔑 Войти по коду</button>
+    </div>
+    <button class="ghost-btn-back" onclick="closeGhostEntry()">✕ Закрыть</button>
+  </div>
+  <!-- Step 2a: Show generated code -->
+  <div class="ghost-entry-screen" id="ghostStep2Create" style="display:none;">
+    <div class="ghost-logo" style="font-size:56px;margin-bottom:4px;">🔑</div>
+    <div class="ghost-title" style="font-size:22px;margin-bottom:4px;">Ваш код</div>
+    <div class="ghost-code-box">
+      <div class="ghost-code" id="ghostCodeDisplay">------</div>
+      <div class="ghost-code-label">СКОПИРУЙТЕ И ОТПРАВЬТЕ ДРУГУ</div>
+    </div>
+    <div class="ghost-code-share">Отправьте этот код собеседнику. Как только он войдёт — Ghost Chat откроется у обоих.</div>
+    <div class="ghost-code-warn">⚠️ При выходе ЛЮБОГО участника — история стирается у всех навсегда.</div>
+    <div class="ghost-btns">
+      <button class="ghost-btn-create" onclick="ghostCopyCode()">📋 Скопировать код</button>
+    </div>
+    <div id="ghostWaitingLabel" style="margin-top:14px;font-size:13px;color:rgba(255,255,255,0.4);animation:ghostPulse 1.5s infinite;">⏳ Ожидаем собеседника...</div>
+    <button class="ghost-btn-back" onclick="ghostCancelCreate()">✕ Отменить</button>
+  </div>
+  <!-- Step 2b: Enter code -->
+  <div class="ghost-entry-screen" id="ghostStep2Join" style="display:none;">
+    <div class="ghost-logo" style="font-size:56px;margin-bottom:4px;">🔑</div>
+    <div class="ghost-title" style="font-size:22px;margin-bottom:4px;">Введите код</div>
+    <div class="ghost-code-share">Введите 6-значный код от собеседника, чтобы войти в Ghost Chat.</div>
+    <input class="ghost-input" id="ghostCodeInput" maxlength="6" placeholder="000000" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')ghostJoinByCode()">
+    <div id="ghostJoinError" style="color:#e74c3c;font-size:13px;margin-bottom:10px;min-height:18px;text-align:center;"></div>
+    <div class="ghost-btns">
+      <button class="ghost-btn-create" onclick="ghostJoinByCode()">Войти в Ghost Chat</button>
+    </div>
+    <button class="ghost-btn-back" onclick="ghostBackToMain()">← Назад</button>
+  </div>
+</div>
+
+<!-- Ghost Chat Settings -->
+<div class="secret-modal" id="ghostSettingsModal" style="display:none;">
+  <div class="secret-modal-box">
+    <h3 style="margin:0 0 4px;">👻 Ghost Chat — Настройки</h3>
+    <p style="font-size:13px;color:var(--text-secondary);margin:0 0 16px;">Настройки анонимности и выход</p>
+    <div class="ghost-anon-toggle" onclick="ghostToggleAnon()">
+      <span>👤 Анонимный режим</span>
+      <div class="ghost-toggle-sw" id="ghostAnonToggleSw"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;padding:0 4px;">В анонимном режиме вы отображаетесь как «Ghost #XXXX» без имени и фото.</div>
+    <button onclick="ghostLeaveChat()" style="background:#e74c3c;border:none;border-radius:10px;padding:12px;color:#fff;font-weight:700;cursor:pointer;font-size:14px;width:100%;margin-bottom:8px;">💨 Выйти и стереть историю</button>
+    <button onclick="document.getElementById('ghostSettingsModal').style.display='none'" style="background:var(--bg-input);border:none;border-radius:10px;padding:10px;color:var(--text-secondary);cursor:pointer;font-weight:600;width:100%;">Закрыть</button>
+  </div>
+</div>
 
 <!-- Action sheet for PM options -->
 <div class="action-sheet-overlay" id="pmActionSheet">
