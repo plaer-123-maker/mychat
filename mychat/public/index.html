@@ -2,6 +2,9 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<link rel="dns-prefetch" href="https://fonts.googleapis.com">
+<link rel="dns-prefetch" href="https://fonts.gstatic.com">
+<link rel="dns-prefetch" href="https://accounts.google.com">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <title>MyChat</title>
@@ -57,7 +60,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 </script>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"></noscript>
 <style>
 /* ═══════════════ THEMES ═══════════════ */
 :root{
@@ -357,7 +363,7 @@ body.theme-light .glass{
   padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:12px;
   transition:var(--transition);position:relative;
   margin:1px 8px;border-radius:16px;
-}
+transform:translateZ(0);}
 .chat-item:hover{
   background:var(--bg-hover);transform:translateX(3px);
   box-shadow:0 2px 12px rgba(0,0,0,0.15);
@@ -1790,7 +1796,7 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   color:#a855f7;letter-spacing:0.5px;
 }
 /* Ghost chat messages style */
-.ghost-msg-bg #messages{background:radial-gradient(ellipse at top,#0d0d1a,#000);}
+.ghost-msg-bg #messages{background:radial-gradient(ellipse at top,#0d0d1a,#000);will-change:transform;}
 .ghost-chat-watermark{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   font-size:80px;opacity:0.04;pointer-events:none;user-select:none;z-index:0;
@@ -2088,6 +2094,27 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
   box-shadow:0 4px 20px rgba(0,0,0,0.4);
 }
 .toast-msg.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ── Mobile performance: disable expensive backdrop-filter on small screens ── */
+@media (max-width: 768px) {
+  *, *::before, *::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Compensate with solid backgrounds where blur was decorative */
+  .glass { background: var(--bg-panel) !important; }
+  #emojiPanel { background: var(--bg-sidebar) !important; }
+}
+</style>
+<style>
+/* ── Mobile: reduce animation cost ── */
+@media (max-width: 768px) {
+  * { animation-duration: 0.15s !important; transition-duration: 0.15s !important; }
+  .message { animation: none !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
 </style>
 </head>
 <body>
@@ -3172,7 +3199,7 @@ window.doLogout = doLogout;
 var myAuthMethod=null,myGoogleEmail=null;
 var myAvatar=null,myUsername=null;
 var avatarCache={};
-var socket=io(),isLoginMode=true,myNickname='',myRole='user',myLogin='',
+var socket=io({transports:['websocket'],upgrade:false}),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,_pmToken=0,_roomToken=0,
 _expectedPmLogin=null,_expectedPmToken=-1,_expectedRoomId=null,_expectedRoomToken=-1,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
