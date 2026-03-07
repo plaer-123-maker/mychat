@@ -1520,10 +1520,10 @@ io.on('connection', (socket) => {
       const before_id = opts && opts.before_id ? parseInt(opts.before_id) : null;
       let result;
       if (before_id) {
-        result = await pool.query('SELECT id,username,user_login,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
+        result = await pool.query('SELECT * FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
         result = { rows: result.rows.reverse() };
       } else {
-        result = await pool.query('SELECT id,username,user_login,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM messages ORDER BY id DESC LIMIT 50');
+        result = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
         result = { rows: result.rows.reverse() };
       }
       socket.emit('messageHistory', { msgs: result.rows.map(fixMsgImages), has_more: result.rows.length === 50 });
@@ -1755,10 +1755,10 @@ io.on('connection', (socket) => {
     try {
       let res;
       if (before_id) {
-        const r = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
+        const r = await pool.query('SELECT * FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
         res = { rows: r.rows.reverse() };
       } else {
-        res = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
+        res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
       }
       const now = Date.now();
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
@@ -1827,7 +1827,7 @@ io.on('connection', (socket) => {
   socket.on('deletePrivateMessage', async (id) => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE id=$1', [id]);
+      const res = await pool.query('SELECT * FROM private_messages WHERE id=$1', [id]);
       if (res.rows.length === 0) return;
       var msg = res.rows[0];
       if (msg.from_login !== socket.userLogin && !isAdmin(socket)) return;
@@ -1911,10 +1911,10 @@ io.on('connection', (socket) => {
       const room_before_id = (typeof data === 'object' && data && data.before_id) ? parseInt(data.before_id) : null;
       let msgs;
       if (room_before_id) {
-        const rm = await pool.query('SELECT id,room_id,from_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM room_messages WHERE room_id=$1 AND id < $2 ORDER BY id DESC LIMIT 50', [roomId, room_before_id]);
+        const rm = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 AND id < $2 ORDER BY id DESC LIMIT 50', [roomId, room_before_id]);
         msgs = { rows: rm.rows.reverse() };
       } else {
-        msgs = await pool.query('SELECT id,room_id,from_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM room_messages WHERE room_id=$1 ORDER BY id ASC LIMIT 50', [roomId]);
+        msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY id ASC LIMIT 50', [roomId]);
       }
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
       socket.join('room_' + roomId);
@@ -2362,11 +2362,11 @@ io.on('connection', (socket) => {
         if (!r.rows.length) return;
         const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
       } else if (msgType === 'pm') {
-        const r = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE id=$1 AND (from_login=$2 OR to_login=$2)', [msgId, socket.userLogin]);
+        const r = await pool.query('SELECT * FROM private_messages WHERE id=$1 AND (from_login=$2 OR to_login=$2)', [msgId, socket.userLogin]);
         if (!r.rows.length) return;
         const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
       } else if (msgType === 'room') {
-        const r = await pool.query('SELECT id,room_id,from_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM room_messages WHERE id=$1', [msgId]);
+        const r = await pool.query('SELECT * FROM room_messages WHERE id=$1', [msgId]);
         if (!r.rows.length) return;
         const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
       }
