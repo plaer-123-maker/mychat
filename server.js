@@ -1745,11 +1745,9 @@ io.on('connection', (socket) => {
   socket.on('getStartupData', async () => {
     if (!socket.userLogin) return;
     try {
-      const [histRes, chatsRes, roomsRes] = await Promise.all([
-        // 1. General history (последние 50 сообщений)
-        pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50'),
-        // 2. My chats (последнее сообщение на диалог)
-        pool.query(`
+      // Запускаем все запросы ПАРАЛЛЕЛЬНО но messageHistory отправляем сразу
+      const histPromise = pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
+      const chatsPromise = pool.query(`
           SELECT DISTINCT ON (LEAST(from_login,to_login), GREATEST(from_login,to_login))
             CASE WHEN from_login=$1 THEN to_login ELSE from_login END AS other_login,
             from_login, text, type, timestamp
@@ -1757,9 +1755,8 @@ io.on('connection', (socket) => {
           WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login
           ORDER BY LEAST(from_login,to_login), GREATEST(from_login,to_login), timestamp DESC
           LIMIT 100
-        `, [socket.userLogin]),
-        // 3. My rooms
-        pool.query(`
+        `, [socket.userLogin]);
+      const roomsPromise = pool.query(`
           SELECT r.id, r.name, r.type, r.owner_login, r.comments_enabled, r.timestamp,
             rm.role as my_role,
             mc.member_count
@@ -1767,10 +1764,10 @@ io.on('connection', (socket) => {
           JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
           JOIN (SELECT room_id, COUNT(*)::int AS member_count FROM room_members GROUP BY room_id) mc ON mc.room_id = r.id
           ORDER BY r.timestamp DESC
-        `, [socket.userLogin]),
-      ]);
+        `, [socket.userLogin]);
 
-      // General history
+      // Отправляем историю чата КАК ТОЛЬКО она готова — не ждём chats/rooms
+      const histRes = await histPromise;
       const msgs = histRes.rows.reverse();
       socket.emit('messageHistory', { msgs: msgs.map(fixMsgImages), has_more: msgs.length === 50 });
 
