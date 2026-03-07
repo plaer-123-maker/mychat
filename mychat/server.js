@@ -81,40 +81,9 @@ try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { c
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
+const io = new Server(server, { maxHttpBufferSize: 25e6, pingTimeout: 20000, pingInterval: 10000, transports: ['websocket', 'polling'] }); // 25MB max (was 100MB)
 
-// ── Gzip compression: HTML 438KB→90KB, 5x faster on mobile ──────────────
-const zlib = require('zlib');
-app.use((req, res, next) => {
-  const ae = req.headers['accept-encoding'] || '';
-  if (!ae.includes('gzip')) return next();
-  const origSend = res.send.bind(res);
-  res.send = function(body) {
-    if (typeof body !== 'string' && !Buffer.isBuffer(body)) return origSend(body);
-    const ct = res.get('Content-Type') || '';
-    const compressible = ct.includes('html') || ct.includes('javascript') || ct.includes('css') || ct.includes('json') || ct.includes('text');
-    if (!compressible) return origSend(body);
-    const buf = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
-    if (buf.length < 1024) return origSend(body); // skip tiny responses
-    res.set('Content-Encoding', 'gzip');
-    res.removeHeader('Content-Length');
-    zlib.gzip(buf, { level: 6 }, (err, gz) => {
-      if (err) { res.removeHeader('Content-Encoding'); return origSend(body); }
-      origSend(gz);
-    });
-  };
-  next();
-});
-// Cache static assets aggressively (1 week), HTML never cached
-app.use(express.static('public', {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.html')) {
-      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
-    } else if (path.match(/\.(js|css|png|jpg|jpeg|gif|ico|woff2?)$/)) {
-      res.set('Cache-Control', 'public, max-age=604800, immutable');
-    }
-  }
-}));
+app.use(express.static('public'));
 app.use(express.json({ limit: '1mb' })); // limit JSON body size
 
 // ── HTTP Security Headers ──────────────────────────────────
@@ -377,6 +346,7 @@ async function initDB() {
     created_at BIGINT DEFAULT 0
   )`);
 
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_users_token ON users(token)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_id ON private_messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_id ON room_messages(room_id, id DESC)'); } catch(e) {}
@@ -683,7 +653,7 @@ io.on('connection', (socket) => {
   socket.on('autoLogin', async (token) => {
     if (!token) return socket.emit('authError', 'Нет токена');
     try {
-      const res = await pool.query('SELECT * FROM users WHERE token=$1', [token]);
+      const res = await pool.query('SELECT login,nickname,role,banned,token,username,vip_until,vip_emoji,verified FROM users WHERE token=$1', [token]);
       if (res.rows.length === 0) return socket.emit('authError', 'Токен недействителен');
       const user = res.rows[0];
       if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
@@ -692,8 +662,12 @@ io.on('connection', (socket) => {
       socket.userRole = user.login === ADMIN_LOGIN ? 'admin' : (user.role || 'user');
       onlineUsers.set(socket.id, { nickname: user.nickname, login: user.login, ip });
       socketUsers.set(socket.id, socket);
-      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: user.avatar || null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
+      socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
       sendOnlineToAll();
+      // Send avatar separately after auth (avoids blocking auth with large base64)
+      pool.query('SELECT avatar FROM users WHERE login=$1', [user.login]).then(av => {
+        if (av.rows[0] && av.rows[0].avatar) socket.emit('avatarChanged', av.rows[0].avatar);
+      }).catch(()=>{});
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
 
@@ -1065,7 +1039,7 @@ io.on('connection', (socket) => {
     try {
       if (!login || !password) return socket.emit('authError', 'Заполни все поля');
       login = sanitize(login, 50); password = sanitize(password, 200);
-      const res = await pool.query('SELECT * FROM users WHERE login=$1', [login]);
+      const res = await pool.query('SELECT login,password,nickname,role,banned,token,username,vip_until,vip_emoji,verified FROM users WHERE login=$1', [login]);
       if (res.rows.length === 0) return socket.emit('authError', 'Неверный логин или пароль');
       const user = res.rows[0];
       if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
@@ -1546,10 +1520,10 @@ io.on('connection', (socket) => {
       const before_id = opts && opts.before_id ? parseInt(opts.before_id) : null;
       let result;
       if (before_id) {
-        result = await pool.query('SELECT * FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
+        result = await pool.query('SELECT id,username,user_login,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
         result = { rows: result.rows.reverse() };
       } else {
-        result = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
+        result = await pool.query('SELECT id,username,user_login,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM messages ORDER BY id DESC LIMIT 50');
         result = { rows: result.rows.reverse() };
       }
       socket.emit('messageHistory', { msgs: result.rows.map(fixMsgImages), has_more: result.rows.length === 50 });
@@ -1781,10 +1755,10 @@ io.on('connection', (socket) => {
     try {
       let res;
       if (before_id) {
-        const r = await pool.query('SELECT * FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
+        const r = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
         res = { rows: r.rows.reverse() };
       } else {
-        res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
+        res = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
       }
       const now = Date.now();
       const unreadRes = await pool.query('SELECT id FROM private_messages WHERE from_login=$1 AND to_login=$2 AND read=false', [otherLogin, socket.userLogin]);
@@ -1853,7 +1827,7 @@ io.on('connection', (socket) => {
   socket.on('deletePrivateMessage', async (id) => {
     if (!socket.userLogin) return;
     try {
-      const res = await pool.query('SELECT * FROM private_messages WHERE id=$1', [id]);
+      const res = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE id=$1', [id]);
       if (res.rows.length === 0) return;
       var msg = res.rows[0];
       if (msg.from_login !== socket.userLogin && !isAdmin(socket)) return;
@@ -1937,10 +1911,10 @@ io.on('connection', (socket) => {
       const room_before_id = (typeof data === 'object' && data && data.before_id) ? parseInt(data.before_id) : null;
       let msgs;
       if (room_before_id) {
-        const rm = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 AND id < $2 ORDER BY id DESC LIMIT 50', [roomId, room_before_id]);
+        const rm = await pool.query('SELECT id,room_id,from_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM room_messages WHERE room_id=$1 AND id < $2 ORDER BY id DESC LIMIT 50', [roomId, room_before_id]);
         msgs = { rows: rm.rows.reverse() };
       } else {
-        msgs = await pool.query('SELECT * FROM room_messages WHERE room_id=$1 ORDER BY id ASC LIMIT 50', [roomId]);
+        msgs = await pool.query('SELECT id,room_id,from_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM room_messages WHERE room_id=$1 ORDER BY id ASC LIMIT 50', [roomId]);
       }
       var members = await pool.query('SELECT rm.user_login, rm.role, u.nickname FROM room_members rm JOIN users u ON rm.user_login = u.login WHERE rm.room_id=$1 ORDER BY rm.role, u.nickname', [roomId]);
       socket.join('room_' + roomId);
@@ -2388,11 +2362,11 @@ io.on('connection', (socket) => {
         if (!r.rows.length) return;
         const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
       } else if (msgType === 'pm') {
-        const r = await pool.query('SELECT * FROM private_messages WHERE id=$1 AND (from_login=$2 OR to_login=$2)', [msgId, socket.userLogin]);
+        const r = await pool.query('SELECT id,from_login,to_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,read,reply_to,reply_user,reply_text,reactions FROM private_messages WHERE id=$1 AND (from_login=$2 OR to_login=$2)', [msgId, socket.userLogin]);
         if (!r.rows.length) return;
         const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
       } else if (msgType === 'room') {
-        const r = await pool.query('SELECT * FROM room_messages WHERE id=$1', [msgId]);
+        const r = await pool.query('SELECT id,room_id,from_login,from_nickname,text,image,voice,file_url,file_name,file_size,type,timestamp,reply_to,reply_user,reply_text,reactions,vip_emoji FROM room_messages WHERE id=$1', [msgId]);
         if (!r.rows.length) return;
         const m = r.rows[0]; origText = m.text; origImage = m.image; origVoice = m.voice; origMsgType = m.type;
       }
