@@ -1694,6 +1694,78 @@ io.on('connection', (socket) => {
     } catch(e) { socket.emit('roomSearchResults', []); }
   });
 
+  
+  // ══ STARTUP: один round-trip вместо 3 (getGeneralHistory + getMyChats + getMyRooms) ══
+  socket.on('getStartupData', async () => {
+    if (!socket.userLogin) return;
+    try {
+      const [histRes, chatsRes, roomsRes] = await Promise.all([
+        // 1. General history (последние 50 сообщений)
+        pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50'),
+        // 2. My chats (последнее сообщение на диалог)
+        pool.query(`
+          SELECT DISTINCT ON (LEAST(from_login,to_login), GREATEST(from_login,to_login))
+            CASE WHEN from_login=$1 THEN to_login ELSE from_login END AS other_login,
+            from_login, text, type, timestamp
+          FROM private_messages
+          WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login
+          ORDER BY LEAST(from_login,to_login), GREATEST(from_login,to_login), timestamp DESC
+          LIMIT 100
+        `, [socket.userLogin]),
+        // 3. My rooms
+        pool.query(`
+          SELECT r.id, r.name, r.type, r.owner_login, r.comments_enabled, r.timestamp,
+            rm.role as my_role,
+            mc.member_count
+          FROM rooms r
+          JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
+          JOIN (SELECT room_id, COUNT(*)::int AS member_count FROM room_members GROUP BY room_id) mc ON mc.room_id = r.id
+          ORDER BY r.timestamp DESC
+        `, [socket.userLogin]),
+      ]);
+
+      // General history
+      const msgs = histRes.rows.reverse();
+      socket.emit('messageHistory', { msgs: msgs.map(fixMsgImages), has_more: msgs.length === 50 });
+
+      // My chats
+      if (chatsRes.rows.length > 0) {
+        const logins = chatsRes.rows.map(r => r.other_login);
+        const [unreadRes, usersRes] = await Promise.all([
+          pool.query('SELECT from_login, COUNT(*)::int AS c FROM private_messages WHERE to_login=$1 AND read=false GROUP BY from_login', [socket.userLogin]),
+          pool.query('SELECT login, nickname, username, vip_emoji, vip_until, verified FROM users WHERE login = ANY($1)', [logins]),
+        ]);
+        const unreadMap = {};
+        unreadRes.rows.forEach(r => { unreadMap[r.from_login] = r.c; });
+        const userMap = {};
+        usersRes.rows.forEach(u => { userMap[u.login] = u; });
+        const chats = chatsRes.rows.map(row => {
+          const u = userMap[row.other_login] || { login: row.other_login, nickname: row.other_login };
+          let lastText = row.text;
+          if (lastText) {
+            try { lastText = decryptText(lastText); } catch(e) {}
+            if (lastText && lastText.startsWith('{') && lastText.includes('callType')) {
+              try { const p = JSON.parse(lastText); lastText = p.answered ? '📞 Звонок' : '📞 Пропущенный звонок'; } catch(e) {}
+            }
+          }
+          return { login: u.login, nickname: u.nickname, username: u.username || null, avatar: null,
+            lastMsg: { text: lastText, type: row.type, timestamp: row.timestamp, from_login: row.from_login },
+            unread: unreadMap[row.other_login] || 0,
+            vip_emoji: (u.vip_until > Date.now() ? u.vip_emoji : null) || null,
+            vip_until: u.vip_until || 0, verified: u.verified || false };
+        });
+        chats.sort((a, b) => (b.lastMsg ? b.lastMsg.timestamp : 0) - (a.lastMsg ? a.lastMsg.timestamp : 0));
+        socket.emit('myChats', chats);
+      } else {
+        socket.emit('myChats', []);
+      }
+
+      // My rooms
+      socket.emit('myRooms', roomsRes.rows);
+
+    } catch(e) { console.error('getStartupData error:', e); }
+  });
+
   socket.on('getMyChats', async () => {
     if (!socket.userLogin) return;
     try {

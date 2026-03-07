@@ -3575,8 +3575,7 @@ socket.on('authSuccess',function(d){
   if (window.isCapacitorApp) initCapacitorPush();
   if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
   switchToGeneral();
-  emitGetMyChats(true);
-  emitGetMyRooms(true);
+  socket.emit('getStartupData');
   socket.emit('getMyEmail');
 });
 socket.on('authError',function(m){
