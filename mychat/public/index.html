@@ -2,8 +2,6 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<link rel="dns-prefetch" href="https://fonts.googleapis.com">
-<link rel="dns-prefetch" href="https://fonts.gstatic.com">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="mobile-web-app-capable" content="yes">
 <title>MyChat</title>
@@ -2090,12 +2088,56 @@ body.theme-light .message.other{box-shadow:0 1px 4px rgba(0,0,0,0.08);}
 }
 .toast-msg.show{opacity:1;transform:translateX(-50%) translateY(0);}
 </style>
+
+<style id="progressStyle">
+
+#loadProgressWrap {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 99999;
+  height: 3px; background: transparent; pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#loadProgressBar {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, #7c3aed, #a78bfa, #3b82f6);
+  border-radius: 0 2px 2px 0;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 8px rgba(124,58,237,0.6);
+}
+#loadProgressLabel {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+  background: rgba(13,13,22,0.92); color: #a78bfa;
+  font-size: 12px; font-weight: 700; padding: 4px 14px;
+  border-radius: 20px; z-index: 99999; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s;
+  border: 1px solid rgba(124,58,237,0.3);
+  letter-spacing: 0.5px; white-space: nowrap;
+}
+#loadProgressWrap.hidden { opacity: 0; }
+
+
+.msg-skeleton {
+  display: flex; gap: 10px; padding: 4px 2px; animation: skPulse 1.4s ease-in-out infinite;
+}
+.msg-skeleton.mine { flex-direction: row-reverse; }
+.sk-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-hover); flex-shrink: 0; }
+.sk-bubble { height: 44px; border-radius: 14px; background: var(--bg-hover); }
+.msg-skeleton.other .sk-bubble { width: 55%; border-bottom-left-radius: 4px; }
+.msg-skeleton.mine .sk-bubble { width: 45%; border-bottom-right-radius: 4px; }
+@keyframes skPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}
+</style>
 <style>
 @media(max-width:768px){*,*::before,*::after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;}.glass{background:var(--bg-panel)!important;}#emojiPanel{background:var(--bg-sidebar)!important;}.message{animation:none!important;}}
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
 </style>
 </head>
 <body>
+
+<div id="loadProgressWrap">
+  <div id="loadProgressBar"></div>
+</div>
+<div id="loadProgressLabel"></div>
 
 <!-- ══════════════ AUTH ══════════════ -->
 <div class="auth-overlay" id="authOverlay">
@@ -2675,6 +2717,68 @@ fetch('/config').then(function(r){ return r.json(); }).then(function(cfg){
 });
 </script>
 <script>
+var _loadSteps = {
+  socket:    { w: 15, done: false, label: 'Подключение...' },
+  auth:      { w: 30, done: false, label: 'Авторизация...' },
+  chats:     { w: 20, done: false, label: 'Загрузка чатов...' },
+  messages:  { w: 35, done: false, label: 'Загрузка сообщений...' },
+};
+var _loadVisible = false;
+
+function showProgress(label) {
+  var wrap = document.getElementById('loadProgressWrap');
+  var lbl = document.getElementById('loadProgressLabel');
+  if (!wrap) return;
+  _loadVisible = true;
+  wrap.classList.remove('hidden');
+  if (lbl && label) { lbl.textContent = label; lbl.style.opacity = '1'; }
+  _updateProgressBar();
+}
+
+function _updateProgressBar() {
+  var bar = document.getElementById('loadProgressBar');
+  if (!bar) return;
+  var total = 0;
+  Object.values(_loadSteps).forEach(function(s) { if (s.done) total += s.w; });
+  bar.style.width = Math.min(total, 97) + '%';
+}
+
+function completeProgress(step) {
+  if (_loadSteps[step]) { _loadSteps[step].done = true; _updateProgressBar(); }
+}
+
+function hideProgress() {
+  var bar = document.getElementById('loadProgressBar');
+  var wrap = document.getElementById('loadProgressWrap');
+  var lbl = document.getElementById('loadProgressLabel');
+  if (bar) bar.style.width = '100%';
+  setTimeout(function() {
+    if (wrap) wrap.classList.add('hidden');
+    if (lbl) lbl.style.opacity = '0';
+  }, 400);
+}
+
+showProgress('Подключение...');
+
+function showMsgSkeletons(count) {
+  var md = document.getElementById('messages');
+  if (!md) return;
+  var html = '';
+  for (var i = 0; i < count; i++) {
+    var side = i % 3 === 2 ? 'mine' : 'other';
+    html += '<div class="msg-skeleton ' + side + '"><div class="sk-avatar"></div><div class="sk-bubble"></div></div>';
+  }
+  md.innerHTML = html;
+}
+
+function clearMsgSkeletons() {
+  var md = document.getElementById('messages');
+  if (!md) return;
+  var skels = md.querySelectorAll('.msg-skeleton');
+  skels.forEach(function(el) { el.remove(); });
+}
+
+
 /* THEME & BACKGROUND SYSTEM */
 var THEMES = {
   dark:    { name:'Тёмная', colors:['#17212b','#2ea9df'], class:'' },
@@ -3170,7 +3274,12 @@ window.doLogout = doLogout;
 var myAuthMethod=null,myGoogleEmail=null;
 var myAvatar=null,myUsername=null;
 var avatarCache={};
-var socket=io({transports:['websocket'],upgrade:false}),isLoginMode=true,myNickname='',myRole='user',myLogin='',
+var socket=io({transports:['websocket'],upgrade:false});
+socket.on('connect', function() {
+  completeProgress('socket');
+  showProgress('Авторизация...');
+});
+var _socketDummy = null,isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,_pmToken=0,_roomToken=0,
 _expectedPmLogin=null,_expectedPmToken=-1,_expectedRoomId=null,_expectedRoomToken=-1,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,
@@ -3579,6 +3688,8 @@ socket.on('authSuccess',function(d){
   if (!localStorage.getItem('notif_dismissed')) initNotifications();
   if (window.isCapacitorApp) initCapacitorPush();
   if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
+  completeProgress('auth');
+  showProgress('Загрузка чатов...');
   switchToGeneral();
   emitGetMyChats(true);
   emitGetMyRooms(true);
@@ -3901,6 +4012,8 @@ function renderChatList() {
 }
 
 socket.on('myChats',function(chats){
+  completeProgress('chats');
+  showProgress('Загрузка сообщений...');
   latestChats=chats;
   window._myChatsCache = chats; // cache for forward modal
   if(currentView==='private'||currentView==='pm'||currentView==='all'){
@@ -3972,6 +4085,7 @@ function openGeneral(){
   document.getElementById('inputArea').style.display='flex';
   var _mdg=document.getElementById('messages');
   _mdg.innerHTML='';
+  showMsgSkeletons(8);
   _mdg.dataset.loading='general';
   _mdg._loadingMore=false;_mdg._allLoaded=false;
   if(window.innerWidth<=640)document.getElementById('mobileBackBtn').style.display='flex';
@@ -4343,6 +4457,8 @@ window.closeAllModals=closeAllModals;
 
 /* ── PRIVATE MESSAGES ── */
 socket.on('privateHistory',function(d){
+  clearMsgSkeletons();
+  hideProgress();
   if(currentView !== 'pm') return;
   if(currentPrivateLogin !== d.otherLogin) return;
   var msgs = d.messages || [];
@@ -4540,10 +4656,24 @@ socket.on('messageHistory',function(data){
   md.innerHTML='';
   if(!msgs||msgs.length===0){
     _generalInitialLoading=false;
+    completeProgress('messages');
+    hideProgress();
     md.innerHTML='<div class="empty-list">Пока нет сообщений</div>';return;
   }
-  msgs.forEach(function(m){addMsg(m);});
-  md.scrollTop=md.scrollHeight;
+  var _renderIdx = 0;
+  function _renderChunk() {
+    var end = Math.min(_renderIdx + 15, msgs.length);
+    for (var _i = _renderIdx; _i < end; _i++) { addMsg(msgs[_i]); }
+    _renderIdx = end;
+    if (_renderIdx < msgs.length) {
+      requestAnimationFrame(_renderChunk);
+    } else {
+      md.scrollTop = md.scrollHeight;
+      completeProgress('messages');
+      hideProgress();
+    }
+  }
+  _renderChunk();
   if(msgs[0])_generalOldestId=msgs[0].id;
   _generalAllLoaded=!hasMore;
   _generalInitialLoading=false; // разблокируем скролл-пагинацию
