@@ -85,6 +85,30 @@ const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
 
 app.use(express.static('public'));
+
+// Serve app.js from root with long cache (content changes on deploy)
+app.get('/app.js', (req, res) => {
+  const fs = require('fs');
+  const zlib = require('zlib');
+  const path = require('path');
+  const filePath = path.join(__dirname, 'app.js');
+  try {
+    const content = fs.readFileSync(filePath);
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    if (acceptEncoding.includes('gzip')) {
+      res.setHeader('Content-Encoding', 'gzip');
+      zlib.gzip(content, (err, compressed) => {
+        if (err) { res.send(content); } else { res.send(compressed); }
+      });
+    } else {
+      res.send(content);
+    }
+  } catch(e) {
+    res.status(404).send('Not found');
+  }
+});
 app.use(express.json({ limit: '1mb' })); // limit JSON body size
 
 // ── HTTP Security Headers ──────────────────────────────────
@@ -116,6 +140,28 @@ app.use((req, res, next) => {
 });
 
 // Config endpoint — tells frontend what features are enabled
+// Serve index.html with gzip compression
+app.get('/', (req, res) => {
+  const fs = require('fs');
+  const zlib = require('zlib');
+  const path = require('path');
+  const filePath = path.join(__dirname, 'index.html');
+  try {
+    const content = fs.readFileSync(filePath);
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    if (acceptEncoding.includes('gzip')) {
+      res.setHeader('Content-Encoding', 'gzip');
+      zlib.gzip(content, (err, compressed) => {
+        if (err) { res.send(content); } else { res.send(compressed); }
+      });
+    } else {
+      res.send(content);
+    }
+  } catch(e) { res.status(500).send('Server error'); }
+});
+
 app.get('/config', (req, res) => {
   res.json({
     googleClientId: process.env.GOOGLE_CLIENT_ID || null,
