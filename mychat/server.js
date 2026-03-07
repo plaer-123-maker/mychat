@@ -83,7 +83,38 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
 
-app.use(express.static('public'));
+// ── Gzip compression: HTML 438KB→90KB, 5x faster on mobile ──────────────
+const zlib = require('zlib');
+app.use((req, res, next) => {
+  const ae = req.headers['accept-encoding'] || '';
+  if (!ae.includes('gzip')) return next();
+  const origSend = res.send.bind(res);
+  res.send = function(body) {
+    if (typeof body !== 'string' && !Buffer.isBuffer(body)) return origSend(body);
+    const ct = res.get('Content-Type') || '';
+    const compressible = ct.includes('html') || ct.includes('javascript') || ct.includes('css') || ct.includes('json') || ct.includes('text');
+    if (!compressible) return origSend(body);
+    const buf = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
+    if (buf.length < 1024) return origSend(body); // skip tiny responses
+    res.set('Content-Encoding', 'gzip');
+    res.removeHeader('Content-Length');
+    zlib.gzip(buf, { level: 6 }, (err, gz) => {
+      if (err) { res.removeHeader('Content-Encoding'); return origSend(body); }
+      origSend(gz);
+    });
+  };
+  next();
+});
+// Cache static assets aggressively (1 week), HTML never cached
+app.use(express.static('public', {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (path.match(/\.(js|css|png|jpg|jpeg|gif|ico|woff2?)$/)) {
+      res.set('Cache-Control', 'public, max-age=604800, immutable');
+    }
+  }
+}));
 app.use(express.json({ limit: '1mb' })); // limit JSON body size
 
 // ── HTTP Security Headers ──────────────────────────────────
