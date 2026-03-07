@@ -1,8 +1,15 @@
+
+// ══ TIMING DIAGNOSTICS ══
+var _t0 = performance.now();
+console.log('[TIMING] app.js start parse:', _t0.toFixed(0), 'ms');
+window._perf = { start: _t0 };
 /* SOCKET & APP */
 
 var myAuthMethod=null,myGoogleEmail=null;
 var myAvatar=null,myUsername=null;
 var avatarCache={};
+var _tSocket = performance.now();
+console.log('[TIMING] socket init:', (_tSocket - window._perf.start).toFixed(0), 'ms after app.js start');
 var socket=io({transports:['websocket'],upgrade:false}),isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,_pmToken=0,_roomToken=0,
 _expectedPmLogin=null,_expectedPmToken=-1,_expectedRoomId=null,_expectedRoomToken=-1,
@@ -400,6 +407,7 @@ function initGoogleAuth(){
 setTimeout(initGoogleAuth,1000);
 
 socket.on('authSuccess',function(d){
+  console.log('[TIMING] authSuccess received:', (performance.now()-window._perf.start).toFixed(0),'ms');
   myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
   myAvatar=d.avatar||null;myUsername=d.username||null;
   myVipUntil=d.vip_until||0;myVipEmoji=d.vip_emoji||null;myVerified=d.verified||false;
@@ -418,6 +426,7 @@ socket.on('authSuccess',function(d){
   if (window.isCapacitorApp) initCapacitorPush();
   if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
   switchToGeneral();
+  console.log('[TIMING] getStartupData emit:', (performance.now()-window._perf.start).toFixed(0),'ms');
   socket.emit('getStartupData');
 });
 socket.on('authError',function(m){
@@ -1339,6 +1348,7 @@ window.delPM=delPM;
 
 /* ── GENERAL CHAT ── */
 socket.on('messageHistory',function(data){
+  console.log('[TIMING] messageHistory received:', (performance.now()-window._perf.start).toFixed(0),'ms — CHAT LOADED');
   var msgs = Array.isArray(data) ? data : (data.msgs || data);
   var hasMore = Array.isArray(data) ? (msgs.length>=50) : (data.has_more !== false);
   if(currentView!=='general')return;
