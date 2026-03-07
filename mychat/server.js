@@ -137,7 +137,10 @@ app.get('/tg-callback', (req, res) => {
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  max: 20,              // max connections in pool
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 3000,
 });
 
 const ADMIN_LOGIN = 'pekka';
@@ -352,6 +355,8 @@ async function initDB() {
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_from_to_ts ON private_messages(from_login, to_login, timestamp DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_unread ON private_messages(to_login, read) WHERE read=false'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_members ON room_members(user_login)'); } catch(e) {}
+  // Index for DISTINCT ON pattern (LEAST/GREATEST pair + timestamp)
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_least_greatest ON private_messages(LEAST(from_login,to_login), GREATEST(from_login,to_login), timestamp DESC)'); } catch(e) {}
   // === NEW FEATURES ===
   // Verification badge
   try { await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false'); } catch(e) {}
@@ -1678,36 +1683,30 @@ io.on('connection', (socket) => {
   socket.on('getMyChats', async () => {
     if (!socket.userLogin) return;
     try {
-      // Single query: get last message + unread count per conversation
-      const res = await pool.query(`
-        SELECT
-          other_login,
-          text, type, timestamp, from_login,
-          unread_count
-        FROM (
-          SELECT
-            CASE WHEN from_login=$1 THEN to_login ELSE from_login END AS other_login,
-            text, type, timestamp, from_login,
-            COUNT(*) FILTER (WHERE to_login=$1 AND read=false) OVER (
-              PARTITION BY LEAST(from_login,to_login), GREATEST(from_login,to_login)
-            ) AS unread_count,
-            ROW_NUMBER() OVER (
-              PARTITION BY LEAST(from_login,to_login), GREATEST(from_login,to_login)
-              ORDER BY timestamp DESC
-            ) AS rn
-          FROM private_messages
-          WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login
-        ) t
-        WHERE rn = 1
-        ORDER BY timestamp DESC
+      // Query 1: last message per conversation using DISTINCT ON (fast with index)
+      const lastMsgs = await pool.query(`
+        SELECT DISTINCT ON (LEAST(from_login,to_login), GREATEST(from_login,to_login))
+          CASE WHEN from_login=$1 THEN to_login ELSE from_login END AS other_login,
+          from_login, text, type, timestamp
+        FROM private_messages
+        WHERE (from_login=$1 OR to_login=$1) AND from_login != to_login
+        ORDER BY LEAST(from_login,to_login), GREATEST(from_login,to_login), timestamp DESC
         LIMIT 100
       `, [socket.userLogin]);
 
-      if (res.rows.length === 0) return socket.emit('myChats', []);
+      if (lastMsgs.rows.length === 0) return socket.emit('myChats', []);
 
-      const logins = res.rows.map(r => r.other_login);
+      const logins = lastMsgs.rows.map(r => r.other_login);
 
-      // Fetch user info WITHOUT avatar (avatars sent separately via getUserProfile)
+      // Query 2: unread counts (fast with partial index on read=false)
+      const unreadRes = await pool.query(
+        'SELECT from_login, COUNT(*)::int AS c FROM private_messages WHERE to_login=$1 AND read=false GROUP BY from_login',
+        [socket.userLogin]
+      );
+      const unreadMap = {};
+      unreadRes.rows.forEach(r => { unreadMap[r.from_login] = r.c; });
+
+      // Query 3: user info (no avatar — sent lazily)
       const users = await pool.query(
         'SELECT login, nickname, username, vip_emoji, vip_until, verified FROM users WHERE login = ANY($1)',
         [logins]
@@ -1715,10 +1714,9 @@ io.on('connection', (socket) => {
       const userMap = {};
       users.rows.forEach(u => { userMap[u.login] = u; });
 
-      const chats = res.rows.map(row => {
+      const chats = lastMsgs.rows.map(row => {
         const u = userMap[row.other_login] || { login: row.other_login, nickname: row.other_login };
         let lastText = row.text;
-        // Decrypt last message text
         if (lastText) {
           try { lastText = decryptText(lastText); } catch(e) {}
           if (lastText && lastText.startsWith('{') && lastText.includes('callType')) {
@@ -1729,15 +1727,17 @@ io.on('connection', (socket) => {
           login: u.login,
           nickname: u.nickname,
           username: u.username || null,
-          avatar: null, // NOT sent here — client uses avatarCache or requests separately
+          avatar: null,
           lastMsg: { text: lastText, type: row.type, timestamp: row.timestamp, from_login: row.from_login },
-          unread: parseInt(row.unread_count) || 0,
+          unread: unreadMap[row.other_login] || 0,
           vip_emoji: (u.vip_until > Date.now() ? u.vip_emoji : null) || null,
           vip_until: u.vip_until || 0,
           verified: u.verified || false
         };
       });
 
+      // Sort by last message time
+      chats.sort((a, b) => (b.lastMsg ? b.lastMsg.timestamp : 0) - (a.lastMsg ? a.lastMsg.timestamp : 0));
       socket.emit('myChats', chats);
     } catch(e) { console.error(e); socket.emit('myChats', []); }
   });
@@ -1852,10 +1852,15 @@ io.on('connection', (socket) => {
     try {
       const res = await pool.query(`
         SELECT r.id, r.name, r.type, r.owner_login, r.comments_enabled, r.timestamp,
-        rm.role as my_role,
-        (SELECT COUNT(*)::int FROM room_members WHERE room_id=r.id) as member_count
+          rm.role as my_role,
+          mc.member_count
         FROM rooms r
         JOIN room_members rm ON r.id = rm.room_id AND rm.user_login = $1
+        JOIN (
+          SELECT room_id, COUNT(*)::int AS member_count
+          FROM room_members
+          GROUP BY room_id
+        ) mc ON mc.room_id = r.id
         ORDER BY r.timestamp DESC
       `, [socket.userLogin]);
       socket.emit('myRooms', res.rows);
