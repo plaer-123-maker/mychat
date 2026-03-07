@@ -11,9 +11,10 @@ const crypto = require('crypto');
 const MSG_SECRET = process.env.MSG_SECRET || null;
 const ENCRYPT_ENABLED = !!MSG_SECRET;
 
+var _derivedKey = null;
 function deriveKey() {
-  // Derive a 32-byte key from the secret using SHA-256
-  return crypto.createHash('sha256').update(MSG_SECRET).digest();
+  if (!_derivedKey) _derivedKey = crypto.createHash('sha256').update(MSG_SECRET).digest();
+  return _derivedKey;
 }
 
 function encryptText(text) {
@@ -347,6 +348,8 @@ async function initDB() {
   )`);
 
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_users_token ON users(token)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_stories_expires ON stories(expires_at DESC)'); } catch(e) {}
+  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_stories_login ON stories(user_login)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_id ON private_messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_id ON room_messages(room_id, id DESC)'); } catch(e) {}
@@ -667,6 +670,16 @@ io.on('connection', (socket) => {
       // Send avatar separately after auth (avoids blocking auth with large base64)
       pool.query('SELECT avatar FROM users WHERE login=$1', [user.login]).then(av => {
         if (av.rows[0] && av.rows[0].avatar) socket.emit('avatarChanged', av.rows[0].avatar);
+      }).catch(()=>{});
+      // Batch: pinned + muted + email одним Promise.all вместо 3 round-trips
+      Promise.all([
+        pool.query('SELECT * FROM pinned_chats WHERE user_login=$1 ORDER BY pinned_at DESC', [user.login]),
+        pool.query('SELECT * FROM muted_chats WHERE user_login=$1 AND muted_until>$2', [user.login, Date.now()]),
+        pool.query('SELECT email FROM users WHERE login=$1', [user.login]),
+      ]).then(([pinned, muted, emailRes]) => {
+        socket.emit('pinnedChats', pinned.rows);
+        socket.emit('mutedChats', muted.rows);
+        if (emailRes.rows[0]) socket.emit('myEmail', { email: emailRes.rows[0].email || null });
       }).catch(()=>{});
     } catch(e) { console.error(e); socket.emit('authError', 'Ошибка авто-входа'); }
   });
@@ -1520,10 +1533,22 @@ io.on('connection', (socket) => {
       const before_id = opts && opts.before_id ? parseInt(opts.before_id) : null;
       let result;
       if (before_id) {
-        result = await pool.query('SELECT * FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
+        result = await pool.query(`
+          SELECT id, username, user_login, text, type, timestamp,
+            reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size,
+            vip_emoji, reactions,
+            CASE WHEN type='image' THEN image ELSE NULL END as image,
+            CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice
+          FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50`, [before_id]);
         result = { rows: result.rows.reverse() };
       } else {
-        result = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
+        result = await pool.query(`
+          SELECT id, username, user_login, text, type, timestamp,
+            reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size,
+            vip_emoji, reactions,
+            CASE WHEN type='image' THEN image ELSE NULL END as image,
+            CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice
+          FROM messages ORDER BY id DESC LIMIT 50`);
         result = { rows: result.rows.reverse() };
       }
       socket.emit('messageHistory', { msgs: result.rows.map(fixMsgImages), has_more: result.rows.length === 50 });
@@ -1755,7 +1780,7 @@ io.on('connection', (socket) => {
     try {
       let res;
       if (before_id) {
-        const r = await pool.query('SELECT * FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
+        const r = await pool.query(`SELECT id,from_login,to_login,from_nickname,text,type,timestamp,read,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,reactions,CASE WHEN type='image' THEN image ELSE NULL END as image,CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50`, [socket.userLogin, otherLogin, before_id]);
         res = { rows: r.rows.reverse() };
       } else {
         res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
