@@ -82,7 +82,7 @@ try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { c
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 25e6, pingTimeout: 20000, pingInterval: 10000, transports: ['websocket', 'polling'] }); // 25MB max (was 100MB)
+const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
 
 app.use(express.static('public'));
 app.use(express.json({ limit: '1mb' })); // limit JSON body size
@@ -348,8 +348,6 @@ async function initDB() {
   )`);
 
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_users_token ON users(token)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_stories_expires ON stories(expires_at DESC)'); } catch(e) {}
-  try { await pool.query('CREATE INDEX IF NOT EXISTS idx_stories_login ON stories(user_login)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_messages_id ON messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_pm_id ON private_messages(id DESC)'); } catch(e) {}
   try { await pool.query('CREATE INDEX IF NOT EXISTS idx_rm_id ON room_messages(room_id, id DESC)'); } catch(e) {}
@@ -667,11 +665,9 @@ io.on('connection', (socket) => {
       socketUsers.set(socket.id, socket);
       socket.emit('authSuccess', { nickname: user.nickname, role: socket.userRole, login: user.login, token: token, avatar: null, username: user.username || null, verified: user.verified || false, vip_until: user.vip_until || 0, vip_emoji: user.vip_emoji || null });
       sendOnlineToAll();
-      // Send avatar separately after auth (avoids blocking auth with large base64)
       pool.query('SELECT avatar FROM users WHERE login=$1', [user.login]).then(av => {
         if (av.rows[0] && av.rows[0].avatar) socket.emit('avatarChanged', av.rows[0].avatar);
       }).catch(()=>{});
-      // Batch: pinned + muted + email одним Promise.all вместо 3 round-trips
       Promise.all([
         pool.query('SELECT * FROM pinned_chats WHERE user_login=$1 ORDER BY pinned_at DESC', [user.login]),
         pool.query('SELECT * FROM muted_chats WHERE user_login=$1 AND muted_until>$2', [user.login, Date.now()]),
@@ -1052,7 +1048,7 @@ io.on('connection', (socket) => {
     try {
       if (!login || !password) return socket.emit('authError', 'Заполни все поля');
       login = sanitize(login, 50); password = sanitize(password, 200);
-      const res = await pool.query('SELECT login,password,nickname,role,banned,token,username,vip_until,vip_emoji,verified FROM users WHERE login=$1', [login]);
+      const res = await pool.query('SELECT * FROM users WHERE login=$1', [login]);
       if (res.rows.length === 0) return socket.emit('authError', 'Неверный логин или пароль');
       const user = res.rows[0];
       if (user.banned) return socket.emit('authError', 'Ваш аккаунт заблокирован');
@@ -1533,22 +1529,10 @@ io.on('connection', (socket) => {
       const before_id = opts && opts.before_id ? parseInt(opts.before_id) : null;
       let result;
       if (before_id) {
-        result = await pool.query(`
-          SELECT id, username, user_login, text, type, timestamp,
-            reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size,
-            vip_emoji, reactions,
-            CASE WHEN type='image' THEN image ELSE NULL END as image,
-            CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice
-          FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50`, [before_id]);
+        result = await pool.query('SELECT * FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
         result = { rows: result.rows.reverse() };
       } else {
-        result = await pool.query(`
-          SELECT id, username, user_login, text, type, timestamp,
-            reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size,
-            vip_emoji, reactions,
-            CASE WHEN type='image' THEN image ELSE NULL END as image,
-            CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice
-          FROM messages ORDER BY id DESC LIMIT 50`);
+        result = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
         result = { rows: result.rows.reverse() };
       }
       socket.emit('messageHistory', { msgs: result.rows.map(fixMsgImages), has_more: result.rows.length === 50 });
@@ -1780,7 +1764,7 @@ io.on('connection', (socket) => {
     try {
       let res;
       if (before_id) {
-        const r = await pool.query(`SELECT id,from_login,to_login,from_nickname,text,type,timestamp,read,reply_to_id,reply_to_text,reply_to_user,file_url,file_name,file_size,reactions,CASE WHEN type='image' THEN image ELSE NULL END as image,CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50`, [socket.userLogin, otherLogin, before_id]);
+        const r = await pool.query('SELECT * FROM private_messages WHERE ((from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1)) AND id < $3 ORDER BY id DESC LIMIT 50', [socket.userLogin, otherLogin, before_id]);
         res = { rows: r.rows.reverse() };
       } else {
         res = await pool.query('SELECT * FROM private_messages WHERE (from_login=$1 AND to_login=$2) OR (from_login=$2 AND to_login=$1) ORDER BY id ASC LIMIT 50', [socket.userLogin, otherLogin]);
