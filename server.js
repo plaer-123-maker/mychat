@@ -3014,6 +3014,11 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log('Server running on port ' + PORT));
+
+// ── DB KEEP-ALIVE: пингуем каждые 4 минуты чтобы Postgres не засыпал ──
+setInterval(async () => {
+  try { await pool.query('SELECT 1'); } catch(e) {}
+}, 4 * 60 * 1000);
 // ── SCHEDULED MESSAGES ──────────────────────────────────
 async function initScheduledTables(pool) {
   await pool.query(`CREATE TABLE IF NOT EXISTS scheduled_messages (
