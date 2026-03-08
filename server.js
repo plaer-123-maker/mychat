@@ -1771,6 +1771,9 @@ io.on('connection', (socket) => {
       const msgs = histRes.rows.reverse();
       socket.emit('messageHistory', { msgs: msgs.map(fixMsgImages), has_more: msgs.length === 50 });
 
+      // Теперь ждём chats и rooms (они уже выполняются параллельно)
+      const [chatsRes, roomsRes] = await Promise.all([chatsPromise, roomsPromise]);
+
       // My chats
       if (chatsRes.rows.length > 0) {
         const logins = chatsRes.rows.map(r => r.other_login);
@@ -2578,7 +2581,7 @@ io.on('connection', (socket) => {
               SELECT DISTINCT to_login FROM private_messages WHERE from_login=$2
             )
           )
-        ORDER BY s.created_at DESC
+        ORDER BY s.timestamp DESC
       `, [Date.now(), socket.userLogin]);
       socket.emit('stories', res.rows);
     } catch(e) { console.error(e); socket.emit('stories', []); }
