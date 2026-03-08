@@ -10,7 +10,17 @@ var myAvatar=null,myUsername=null;
 var avatarCache={};
 var _tSocket = performance.now();
 console.log('[TIMING] socket init:', (_tSocket - window._perf.start).toFixed(0), 'ms after app.js start');
-var socket=io({transports:['websocket'],upgrade:false}),isLoginMode=true,myNickname='',myRole='user',myLogin='',
+var socket=io({transports:['websocket'],upgrade:false});
+socket.on('connect', function(){
+  console.log('[TIMING] socket CONNECTED:', (performance.now()-window._perf.start).toFixed(0),'ms');
+});
+socket.on('disconnect', function(reason){
+  console.log('[TIMING] DISCONNECT:', reason, 'at', (performance.now()-window._perf.start).toFixed(0),'ms');
+});
+socket.on('connect_error', function(err){
+  console.log('[TIMING] CONNECT ERROR:', err.message);
+});
+var _socketVars=isLoginMode=true,myNickname='',myRole='user',myLogin='',
 currentView='none',currentPrivateLogin=null,currentRoomId=null,currentRoomData=null,_pmToken=0,_roomToken=0,
 _expectedPmLogin=null,_expectedPmToken=-1,_expectedRoomId=null,_expectedRoomToken=-1,
 mediaRecorder=null,audioChunks=[],recInterval=null,recSeconds=0,

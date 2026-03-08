@@ -82,7 +82,7 @@ try { OAuth2Client = require('google-auth-library').OAuth2Client; } catch(e) { c
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { maxHttpBufferSize: 25e6 }); // 25MB max (was 100MB)
+const io = new Server(server, { maxHttpBufferSize: 25e6, pingTimeout: 60000, pingInterval: 25000, connectTimeout: 45000 }); // 25MB max (was 100MB)
 
 app.use(express.static('public'));
 
