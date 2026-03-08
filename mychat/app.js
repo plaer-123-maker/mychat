@@ -416,6 +416,7 @@ function initGoogleAuth(){
 }
 setTimeout(initGoogleAuth,1000);
 
+var _startupDataSent = false;
 socket.on('authSuccess',function(d){
   console.log('[TIMING] authSuccess received:', (performance.now()-window._perf.start).toFixed(0),'ms');
   myNickname=d.nickname;myRole=d.role||'user';myLogin=d.login;
@@ -436,8 +437,11 @@ socket.on('authSuccess',function(d){
   if (window.isCapacitorApp) initCapacitorPush();
   if (window._pushToken && window.socket) window.socket.emit('registerPushToken', { token: window._pushToken, platform: 'android' });
   switchToGeneral();
-  console.log('[TIMING] getStartupData emit:', (performance.now()-window._perf.start).toFixed(0),'ms');
-  socket.emit('getStartupData');
+  if (!_startupDataSent) {
+    _startupDataSent = true;
+    console.log('[TIMING] getStartupData emit:', (performance.now()-window._perf.start).toFixed(0),'ms');
+    socket.emit('getStartupData');
+  }
 });
 socket.on('authError',function(m){
   localStorage.removeItem('mychat_token');

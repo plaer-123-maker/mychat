@@ -1575,10 +1575,18 @@ io.on('connection', (socket) => {
       const before_id = opts && opts.before_id ? parseInt(opts.before_id) : null;
       let result;
       if (before_id) {
-        result = await pool.query('SELECT * FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50', [before_id]);
+        result = await pool.query(`SELECT id, username, user_login, text, type, timestamp,
+            reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size,
+            CASE WHEN type='image' THEN image ELSE NULL END as image,
+            CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice
+          FROM messages WHERE id < $1 ORDER BY id DESC LIMIT 50`, [before_id]);
         result = { rows: result.rows.reverse() };
       } else {
-        result = await pool.query('SELECT * FROM messages ORDER BY id DESC LIMIT 50');
+        result = await pool.query(`SELECT id, username, user_login, text, type, timestamp,
+            reply_to_id, reply_to_text, reply_to_user, file_url, file_name, file_size,
+            CASE WHEN type='image' THEN image ELSE NULL END as image,
+            CASE WHEN type IN ('voice','video_note') THEN voice ELSE NULL END as voice
+          FROM messages ORDER BY id DESC LIMIT 50`);
         result = { rows: result.rows.reverse() };
       }
       socket.emit('messageHistory', { msgs: result.rows.map(fixMsgImages), has_more: result.rows.length === 50 });
